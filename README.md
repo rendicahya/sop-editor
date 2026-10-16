@@ -9,15 +9,33 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, dan vite-plugin-pwa.
 
 ## Fitur
 
-- Editor identitas SOP (logo, nomor, tanggal pembuatan/efektif dengan date picker, pengesahan + gambar tanda tangan/stempel).
-- Bagian Dasar Hukum, Kualifikasi Pelaksana, Keterkaitan, Peralatan, Peringatan, Pencatatan.
-- Daftar pelaksana (kolom diagram) dan langkah kegiatan dengan simbol Mulai/Selesai, Proses, Keputusan.
-- Konektor otomatis termasuk cabang "tidak" pada keputusan dan konektor antarhalaman (A, B, …).
-- Pratinjau langsung yang identik dengan hasil PDF (tata letak yang sama dipakai untuk keduanya).
-- Teks dokumen memakai font [Carlito](https://github.com/googlefonts/carlito), pengganti Calibri dengan metrik identik
-  (file Calibri asli tidak boleh didistribusikan ulang). Font disematkan ke PDF.
-- Simpan/buka JSON (Ctrl+S / Ctrl+O, juga seret-lepas berkas), simpan otomatis ke browser, Undo/Redo.
-- Bisa dipasang sebagai aplikasi (PWA) dan bekerja offline.
+- Editor identitas SOP: logo, nama instansi, nomor, tanggal pembuatan/efektif (date picker), tanggal revisi,
+  pengesahan, serta gambar tanda tangan/stempel.
+- Bagian Dasar Hukum, Kualifikasi Pelaksana, Keterkaitan, Peralatan/Perlengkapan, Peringatan, serta
+  Pencatatan dan Pendataan, masing-masing bisa bernomor atau tidak.
+- Daftar pelaksana (kolom diagram) dan langkah kegiatan dengan simbol Mulai/Selesai, Proses, dan Keputusan,
+  plus kolom Mutu Baku (Kelengkapan, Waktu, Output) dan Keterangan.
+- Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …).
+- Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
+- PDF vektor (teks bisa diseleksi). Teks dokumen memakai font [Carlito](https://github.com/googlefonts/carlito),
+  pengganti Calibri dengan metrik identik (file Calibri asli tidak boleh didistribusikan ulang). Font disematkan ke PDF.
+- Simpan/buka JSON, seret-lepas berkas JSON ke jendela, simpan otomatis ke browser, Undo/Redo.
+- Bisa dipasang sebagai aplikasi (PWA), bekerja offline, dan membuka berkas `.json` lewat "Buka dengan".
+- Tampilan responsif (beralih Edit/Pratinjau di layar kecil).
+
+## Penggunaan
+
+| Pintasan | Aksi |
+| --- | --- |
+| Ctrl+S / Ctrl+Shift+S | Simpan JSON / Simpan sebagai |
+| Ctrl+O | Buka JSON |
+| Ctrl+Shift+P | Ekspor PDF |
+| Ctrl+Z / Ctrl+Y | Urungkan / Ulangi (saat fokus di luar kolom teks) |
+
+Di Chrome/Edge, "Simpan" berikutnya langsung menimpa berkas yang sama (File System Access API).
+Di browser lain, berkas diunduh.
+
+Tombol **Contoh** memuat contoh SOP Skripsi untuk melihat semua fitur.
 
 ## Pengembangan
 
@@ -28,6 +46,17 @@ npm run build     # hasil di dist/
 npm run preview
 npm run icons     # buat ulang ikon PWA dari public/favicon.svg
 ```
+
+Struktur utama:
+
+| Berkas | Isi |
+| --- | --- |
+| `src/lib/model.js` | Struktur dokumen, contoh, validasi/normalisasi JSON, format tanggal |
+| `src/lib/layout.js` | Mesin tata letak: dokumen → halaman berisi primitif (rect, poly, text, image, …) |
+| `src/lib/PageSvg.svelte` | Renderer pratinjau (SVG) |
+| `src/lib/pdf.js` | Renderer PDF (jsPDF) |
+| `src/lib/fonts.js` | Pemuatan & registrasi font Carlito |
+| `src/lib/editors/` | Komponen form editor |
 
 ## Deploy ke GitHub Pages
 
@@ -58,6 +87,40 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
   }]
 }
 ```
+
+## Rencana Pengembangan (Future Works)
+
+**Diagram alir**
+- Penyesuaian manual jalur konektor (geser titik belok, pilih sisi keluar/masuk) bila jalur otomatis bersilangan.
+- Latar putih di belakang label cabang agar tidak tertimpa garis tabel.
+- Satu langkah dengan lebih dari satu pelaksana (aktivitas paralel / bersama).
+- Simbol tambahan: dokumen, data/arsip, dan sub-proses yang merujuk ke SOP lain.
+- Klik simbol di pratinjau untuk langsung membuka langkah terkait di editor.
+- Peringatan validasi: langkah yang tidak terjangkau, keputusan tanpa cabang "tidak", alur tanpa titik akhir.
+
+**Dokumen & tata letak**
+- Pilihan ukuran kertas (A4/F4/Letter), margin, dan ukuran font.
+- Nomor halaman dan footer (mis. "Halaman 1 dari 3", nomor SOP) di setiap halaman.
+- Pemenggalan kata yang lebih baik untuk nama pelaksana yang panjang di kolom sempit.
+- Format teks sederhana (tebal/miring) di Keterangan dan Dasar Hukum.
+- Riwayat revisi (daftar tanggal dan ringkasan perubahan) dan date picker untuk tanggal revisi.
+- QR code verifikasi atau tanda tangan digital pada bagian pengesahan.
+
+**Pengelolaan berkas**
+- Pustaka multi-dokumen di browser (IndexedDB): daftar, cari, duplikasi, dan templat SOP.
+- Keterkaitan antar-SOP yang bisa ditautkan ke dokumen lain di pustaka.
+- Berbagi via tautan (JSON terkompresi di URL) tanpa server.
+- Ekspor tambahan: PNG/SVG per halaman dan DOCX; impor langkah dari Excel/CSV.
+
+**Editor**
+- Seret-lepas untuk mengurutkan langkah, butir, dan pelaksana.
+- Mode gelap dan antarmuka dwibahasa (Indonesia/Inggris).
+
+**Kualitas & infrastruktur**
+- Uji otomatis untuk mesin tata letak (snapshot primitif per halaman) dan normalisasi JSON.
+- `svelte-check` dan lint di CI sebelum deploy.
+- Memperbarui GitHub Actions ke versi berbasis Node 24.
+- Subset font Carlito untuk memperkecil ukuran cache PWA.
 
 ## Lisensi
 
