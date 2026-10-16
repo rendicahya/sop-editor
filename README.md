@@ -5,13 +5,17 @@ Aplikasi web (front-end saja, PWA) untuk membuat dan mengedit dokumen SOP berfor
 
 Dibangun dengan Svelte 5 + Vite, jsPDF, dan vite-plugin-pwa.
 
+**Demo:** https://rendicahya.github.io/sop-editor/
+
 ## Fitur
 
-- Editor identitas SOP (logo, nomor, tanggal, pengesahan + gambar tanda tangan/stempel).
+- Editor identitas SOP (logo, nomor, tanggal pembuatan/efektif dengan date picker, pengesahan + gambar tanda tangan/stempel).
 - Bagian Dasar Hukum, Kualifikasi Pelaksana, Keterkaitan, Peralatan, Peringatan, Pencatatan.
 - Daftar pelaksana (kolom diagram) dan langkah kegiatan dengan simbol Mulai/Selesai, Proses, Keputusan.
 - Konektor otomatis termasuk cabang "tidak" pada keputusan dan konektor antarhalaman (A, B, …).
 - Pratinjau langsung yang identik dengan hasil PDF (tata letak yang sama dipakai untuk keduanya).
+- Teks dokumen memakai font [Carlito](https://github.com/googlefonts/carlito), pengganti Calibri dengan metrik identik
+  (file Calibri asli tidak boleh didistribusikan ulang). Font disematkan ke PDF.
 - Simpan/buka JSON (Ctrl+S / Ctrl+O, juga seret-lepas berkas), simpan otomatis ke browser, Undo/Redo.
 - Bisa dipasang sebagai aplikasi (PWA) dan bekerja offline.
 
@@ -38,7 +42,12 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
 {
   "format": "sop-editor",
   "version": 1,
-  "header": { "namaSop": "...", "nomor": "...", "logo": { "src": "data:image/png;base64,...", "width": 0, "height": 0 }, ... },
+  "header": {
+    "namaSop": "...", "nomor": "...",
+    "tglPembuatan": "2023-08-07", "tglEfektif": "2023-10-20", // ISO, dicetak "07 Agustus 2023"
+    "tglRevisi": "teks bebas",
+    "logo": { "src": "data:image/png;base64,...", "width": 0, "height": 0 }, ...
+  },
   "sections": { "dasarHukum": { "numbered": true, "items": ["..."] }, ... },
   "actors": [{ "id": "a1", "name": "Mahasiswa" }],
   "steps": [{
@@ -49,3 +58,7 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
   }]
 }
 ```
+
+## Lisensi
+
+Kode aplikasi: lihat [LICENSE](LICENSE). Font Carlito: SIL Open Font License 1.1 (`public/fonts/Carlito-OFL.txt`).
