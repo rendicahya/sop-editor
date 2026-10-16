@@ -1,11 +1,13 @@
 import { jsPDF } from 'jspdf';
 import { layoutDocument, baseline, PAGE } from './layout.js';
+import { FONT, registerFonts } from './fonts.js';
 
 export function exportPdf(doc) {
   const pages = layoutDocument(doc);
   const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true });
   pdf.setProperties({ title: `SOP ${doc.header.namaSop || ''}`.trim(), creator: 'SOP Editor' });
   pdf.setLineJoin('miter');
+  registerFonts(pdf);
 
   pages.forEach((page, i) => {
     if (i > 0) pdf.addPage('a4', 'landscape');
@@ -43,7 +45,7 @@ function drawItem(pdf, it) {
       pdf.circle(it.cx, it.cy, it.r, style(pdf, it));
       break;
     case 'text':
-      pdf.setFont('helvetica', it.bold ? 'bold' : 'normal');
+      pdf.setFont(FONT, it.bold ? 'bold' : 'normal');
       pdf.setFontSize(it.size);
       pdf.setTextColor(it.color ?? '#000000');
       it.lines.forEach((line, i) => pdf.text(line, it.x, baseline(it, i), { align: it.align ?? 'left' }));

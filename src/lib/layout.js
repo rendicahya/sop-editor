@@ -2,26 +2,32 @@
 // (rect, poly, circle, text, image). Hasil yang sama dirender ke SVG (pratinjau) dan
 // ke jsPDF (ekspor), sehingga pratinjau identik dengan PDF. Semua satuan dalam mm.
 import { jsPDF } from 'jspdf';
+import { FONT, registerFonts } from './fonts.js';
+import { formatTanggal } from './model.js';
 
 export const PAGE = { w: 297, h: 210, m: 10 };
 export const PT = 25.4 / 72;
-const LH = 1.18;
+const LH = 1.2;
 
 const INK = '#000000';
 const FLOW = '#2f5597';
 const BORDER = 0.25;
 const BAND = 7; // pita untuk konektor antarhalaman
 
-const measurer = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+let measurer = null;
 
 export const lineHeight = (size) => size * PT * LH;
 /** Posisi baseline baris ke-i dari item teks (dipakai kedua renderer). */
-export const baseline = (item, i) => item.y + i * lineHeight(item.size) + item.size * PT * 0.89;
+export const baseline = (item, i) => item.y + i * lineHeight(item.size) + item.size * PT * 0.86;
 
 function wrap(text, size, bold, width) {
   const t = String(text ?? '').replace(/\r/g, '');
   if (!t.trim()) return [];
-  measurer.setFont('helvetica', bold ? 'bold' : 'normal');
+  if (!measurer) {
+    measurer = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+    registerFonts(measurer);
+  }
+  measurer.setFont(FONT, bold ? 'bold' : 'normal');
   measurer.setFontSize(size);
   return measurer.splitTextToSize(t, Math.max(width, 2));
 }
@@ -61,7 +67,7 @@ function layoutIdentity(doc, pages) {
   const valW = W - leftW - labelW;
   const xLab = m + leftW;
   const xVal = xLab + labelW;
-  const S = 8.5;
+  const S = 10;
   const pad = 1.4;
   const hd = doc.header;
 
@@ -72,7 +78,7 @@ function layoutIdentity(doc, pages) {
   const simple = (label, value, bold = false) => {
     const lines = wrap(value, S, bold, valW - 2 * pad);
     const labLines = wrap(label, S, true, labelW - 2 * pad);
-    const h = Math.max(6, Math.max(textH(lines, S), textH(labLines, S)) + 2 * pad);
+    const h = Math.max(7, Math.max(textH(lines, S), textH(labLines, S)) + 2 * pad);
     return { h, draw: (yy) => {
       page.items.push(rect(xLab, yy, labelW, h), rect(xVal, yy, valW, h));
       page.items.push(text(xLab + pad, yy + pad, labLines, S, { bold: true }));
@@ -106,9 +112,9 @@ function layoutIdentity(doc, pages) {
 
   const rightRows = [
     simple('NOMOR SOP', hd.nomor),
-    simple('TGL PEMBUATAN', hd.tglPembuatan),
+    simple('TGL PEMBUATAN', formatTanggal(hd.tglPembuatan)),
     simple('TGL REVISI', hd.tglRevisi),
-    simple('TGL EFEKTIF', hd.tglEfektif),
+    simple('TGL EFEKTIF', formatTanggal(hd.tglEfektif)),
     signRow,
     simple('NAMA SOP', hd.namaSop, true)
   ];
@@ -116,8 +122,8 @@ function layoutIdentity(doc, pages) {
 
   // Blok kiri: logo + nama instansi
   page.items.push(rect(m, y, leftW, blockH));
-  const inst = wrap(hd.institution, 9, true, leftW - 8);
-  const instH = textH(inst, 9);
+  const inst = wrap(hd.institution, 11, true, leftW - 8);
+  const instH = textH(inst, 11);
   const logoAreaTop = y + 3;
   const logoAreaBottom = y + blockH - instH - 4;
   const logoMaxH = Math.min(44, logoAreaBottom - logoAreaTop);
@@ -128,7 +134,7 @@ function layoutIdentity(doc, pages) {
     const s = Math.min(30, logoMaxH);
     page.items.push({ t: 'placeholder', x: m + (leftW - s) / 2, y: logoAreaTop + (logoAreaBottom - logoAreaTop - s) / 2, w: s, h: s, label: 'Logo' });
   }
-  page.items.push(text(m + leftW / 2, y + blockH - instH - 2, inst, 9, { bold: true, align: 'center' }));
+  page.items.push(text(m + leftW / 2, y + blockH - instH - 2, inst, 11, { bold: true, align: 'center' }));
 
   let yy = y;
   for (const r of rightRows) {
@@ -147,7 +153,7 @@ function layoutIdentity(doc, pages) {
   for (const [lk, lt, rk, rt] of pairs) {
     const L = listBlock(doc.sections[lk], leftW, S);
     const R = listBlock(doc.sections[rk], rightW, S);
-    const headH = 6;
+    const headH = 7;
     const bodyH = Math.max(8, L.h, R.h);
     const h = headH + bodyH;
     if (y + h > PH - m && y > m + 1) {
@@ -155,7 +161,7 @@ function layoutIdentity(doc, pages) {
       y = m;
     }
     page.items.push(rect(m, y, leftW, headH), rect(xLab, y, rightW, headH));
-    page.items.push(text(m + pad, y + 1.2, [lt], S, { bold: true }), text(xLab + pad, y + 1.2, [rt], S, { bold: true }));
+    page.items.push(text(m + pad, y + 1.4, [lt], S, { bold: true }), text(xLab + pad, y + 1.4, [rt], S, { bold: true }));
     page.items.push(rect(m, y + headH, leftW, bodyH), rect(xLab, y + headH, rightW, bodyH));
     L.draw(page, m, y + headH);
     R.draw(page, xLab, y + headH);
@@ -192,8 +198,8 @@ function layoutFlow(doc, pages) {
   const W = PW - 2 * m;
   const actors = doc.actors;
   const n = Math.max(1, actors.length);
-  const TS = 7.5;
-  const HS = 7.5;
+  const TS = 9;
+  const HS = 9;
   const pad = 1.2;
 
   // Lebar kolom
@@ -220,7 +226,7 @@ function layoutFlow(doc, pages) {
 
   // Header tabel
   const actorLines = actors.map((a) => wrap(a.name, HS, true, actW - 2));
-  const H1 = 6;
+  const H1 = 6.5;
   const H2 = Math.max(8, Math.max(0, ...actorLines.map((l) => textH(l, HS))) + 2 * pad);
   const headerH = H1 + H2;
   const drawHeader = (page) => {
@@ -267,7 +273,7 @@ function layoutFlow(doc, pages) {
     };
     const size = shapeSize(s.shape);
     const textNeed = Math.max(...Object.values(cells).map((l) => textH(l, TS))) + 2 * pad;
-    return { step: s, cells, size, col: actorIdx.get(s.actor) ?? 0, h: Math.max(textNeed, size.h + 6, 12) };
+    return { step: s, cells, size, col: actorIdx.get(s.actor) ?? 0, h: Math.max(textNeed, size.h + 7, 12.5) };
   });
 
   // Paginasi (selalu sisakan ruang untuk dua pita konektor)
@@ -372,8 +378,8 @@ function layoutFlow(doc, pages) {
     const backX = sameCol ? s.lane : d.cx + (s.col > d.col ? 1 : -1) * backOff;
 
     if (e.label) {
-      if (sideExit) labels[ps].push(text(P[0] + dir * 0.8, P[1] - 0.6 - lineHeight(6), [e.label], 6, { align: dir > 0 ? 'left' : 'right', color: FLOW }));
-      else labels[ps].push(text(P[0] + 1, P[1] + 0.4, [e.label], 6, { color: FLOW }));
+      if (sideExit) labels[ps].push(text(P[0] + dir * 0.8, P[1] - 0.6 - lineHeight(7), [e.label], 7, { align: dir > 0 ? 'left' : 'right', color: FLOW }));
+      else labels[ps].push(text(P[0] + 1, P[1] + 0.4, [e.label], 7, { color: FLOW }));
     }
 
     if (ps === pd) {
@@ -445,7 +451,7 @@ function arrowLine(pts) {
 function connector(cx, cy, r, tag) {
   return [
     { t: 'circle', cx, cy, r, stroke: FLOW, fill: '#ffffff', lw: 0.3 },
-    text(cx, cy - lineHeight(6) / 2, [tag], 6, { bold: true, align: 'center', color: FLOW })
+    text(cx, cy - lineHeight(7) / 2, [tag], 7, { bold: true, align: 'center', color: FLOW })
   ];
 }
 

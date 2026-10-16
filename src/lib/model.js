@@ -18,6 +18,24 @@ export const SECTION_DEFS = [
   { key: 'pencatatan', title: 'PENCATATAN DAN PENDATAAN' }
 ];
 
+const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** "2023-08-07" → "07 Agustus 2023". */
+export function formatTanggal(iso) {
+  const m = ISO.exec(iso || '');
+  return m ? `${m[3]} ${BULAN[+m[2] - 1] ?? ''} ${m[1]}` : '';
+}
+
+/** Menerima tanggal ISO atau teks "07 Agustus 2023" (format lama) dan mengembalikan ISO. */
+function toIsoDate(v) {
+  if (typeof v !== 'string') return '';
+  if (ISO.test(v)) return v;
+  const m = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(v.trim());
+  const mi = m ? BULAN.findIndex((b) => b.toLowerCase() === m[2].toLowerCase()) : -1;
+  return mi < 0 ? '' : `${m[3]}-${String(mi + 1).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+
 export function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -115,9 +133,9 @@ export function sampleDocument() {
       logo: null,
       institution: 'KEMENTERIAN PENDIDIKAN, KEBUDAYAAN,\nRISET DAN TEKNOLOGI\nFAKULTAS ILMU KOMPUTER\nUNIVERSITAS BRAWIJAYA',
       nomor: 'UN10/F15/05/1/HK.01.02.a/126',
-      tglPembuatan: '07 Agustus 2023',
+      tglPembuatan: '2023-08-07',
       tglRevisi: '',
-      tglEfektif: '20 Oktober 2023',
+      tglEfektif: '2023-10-20',
       disahkanJabatan: 'DEKAN FAKULTAS ILMU KOMPUTER',
       disahkanNama: 'Prof. Ir. Wayan Firdaus Mahmudy, S.Si., M.T., Ph.D.',
       disahkanNip: 'NIP. 197209191997021001',
@@ -160,6 +178,8 @@ export function normalizeDocument(raw) {
     if (k === 'logo' || k === 'signature') header[k] = isImage(raw.header?.[k]) ? raw.header[k] : null;
     else header[k] = str(raw.header?.[k]);
   }
+  header.tglPembuatan = toIsoDate(header.tglPembuatan);
+  header.tglEfektif = toIsoDate(header.tglEfektif);
 
   const sections = {};
   for (const s of SECTION_DEFS) {

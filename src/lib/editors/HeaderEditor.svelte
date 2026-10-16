@@ -27,7 +27,7 @@
   <div class="grid3">
     <label class="field">
       <span class="label">Tgl pembuatan</span>
-      <input bind:value={h.tglPembuatan} placeholder="07 Agustus 2023" />
+      <input type="date" bind:value={h.tglPembuatan} />
     </label>
     <label class="field">
       <span class="label">Tgl revisi</span>
@@ -35,7 +35,7 @@
     </label>
     <label class="field">
       <span class="label">Tgl efektif</span>
-      <input bind:value={h.tglEfektif} />
+      <input type="date" bind:value={h.tglEfektif} />
     </label>
   </div>
 </section>

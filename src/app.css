@@ -1,3 +1,15 @@
+/* Font dokumen (pratinjau): Carlito, metrik identik dengan Calibri. */
+@font-face {
+  font-family: 'Carlito';
+  src: url('/fonts/Carlito-Regular.ttf') format('truetype');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Carlito';
+  src: url('/fonts/Carlito-Bold.ttf') format('truetype');
+  font-weight: 700;
+}
+
 :root {
   --bg: #eef0f4;
   --surface: #ffffff;
