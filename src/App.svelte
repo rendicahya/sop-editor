@@ -1,7 +1,7 @@
 <script>
   import { onMount, tick } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
-  import { app, persist } from './lib/store.svelte.js';
+  import { app, persist, tabs, stash, newTabId } from './lib/store.svelte.js';
   import { emptyDocument, sampleDocument, parseDocumentText } from './lib/model.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf } from './lib/pdf.js';
@@ -148,9 +148,93 @@
     clearTimeout(timer);
     past.push(current);
     future = [];
-    restore(json);
     app.fileName = name;
     app.fileHandle = handle;
+    restore(json);
+  }
+
+  // Tab: beberapa SOP terbuka sekaligus. Tab aktif ada di app.doc; tab lain (beserta riwayat undo-nya) di stash.
+  const activeTab = $derived(tabs.list.find((t) => t.id === tabs.active));
+  const tabTitle = (t) => (t.id === tabs.active ? app.doc.header.namaSop : t.title) || 'SOP tanpa judul';
+
+  function stashActive() {
+    clearTimeout(timer);
+    const json = JSON.stringify(app.doc);
+    if (json !== current) {
+      past.push(current);
+      future = [];
+      current = json;
+    }
+    stash.set(tabs.active, { json, handle: app.fileHandle, past, future });
+    Object.assign(activeTab, { title: app.doc.header.namaSop, fileName: app.fileName });
+  }
+
+  function activate(id) {
+    const s = stash.get(id);
+    tabs.active = id;
+    past = s.past;
+    future = s.future;
+    app.fileHandle = s.handle;
+    app.fileName = activeTab.fileName;
+    restore(s.json);
+  }
+
+  // Ruang kolaborasi terikat pada tab yang sedang aktif.
+  function canLeaveTab() {
+    if (collab.status === 'off') return true;
+    if (!confirm('Dokumen ini sedang dibuka di ruang kolaborasi. Keluar dari ruang untuk berpindah tab?')) return false;
+    Collab.leaveRoom();
+    return true;
+  }
+
+  function switchTab(id) {
+    if (id === tabs.active || !canLeaveTab()) return;
+    stashActive();
+    activate(id);
+  }
+
+  // Tab aktif yang masih kosong (dokumen baru tanpa isi) dipakai ulang, bukan ditambah tab baru.
+  const pristine = () =>
+    !app.fileName &&
+    !past.length &&
+    !app.doc.header.namaSop &&
+    app.doc.steps.length <= 2 &&
+    Object.values(app.doc.sections).every((s) => !s.items.length);
+
+  /** Membuka dokumen di tab baru (atau, di ruang kolaborasi, mengganti dokumen ruang). */
+  function openInTab(doc, name = null, handle = null) {
+    if (collab.status !== 'off' || pristine()) return replaceDocument(doc, name, handle);
+    addTab(doc, name, handle);
+  }
+
+  function addTab(doc, name = null, handle = null) {
+    stashActive();
+    const id = newTabId();
+    tabs.list.splice(tabs.list.indexOf(activeTab) + 1, 0, { id, title: doc.header.namaSop, fileName: name });
+    stash.set(id, { json: JSON.stringify(doc), handle, past: [], future: [] });
+    activate(id);
+  }
+
+  function closeTab(id) {
+    const tab = tabs.list.find((t) => t.id === id);
+    if (!confirm(`Tutup "${tabTitle(tab)}"? Perubahan yang belum disimpan ke JSON akan hilang.`)) return;
+    if (tabs.list.length === 1) {
+      if (!canLeaveTab()) return;
+      past = [];
+      future = [];
+      return replaceDocument(emptyDocument());
+    }
+    const i = tabs.list.indexOf(tab);
+    if (id === tabs.active) {
+      if (!canLeaveTab()) return;
+      tabs.list.splice(i, 1);
+      stash.delete(id);
+      activate(tabs.list[Math.min(i, tabs.list.length - 1)].id);
+    } else {
+      tabs.list.splice(i, 1);
+      stash.delete(id);
+      persist(current);
+    }
   }
 
   function notify(msg) {
@@ -184,18 +268,20 @@
   }
 
   function newDoc() {
-    if (!confirm(`Buat dokumen baru${shared}? Perubahan yang belum disimpan ke JSON tetap bisa dibatalkan dengan Undo.`)) return;
-    replaceDocument(emptyDocument());
+    if (shared && !confirm(`Ganti dokumen${shared} dengan dokumen baru? (bisa di-Undo)`)) return;
+    openInTab(emptyDocument());
   }
 
   function loadSample() {
-    if (!confirm(`Muat contoh SOP Skripsi? Dokumen saat ini akan diganti${shared} (bisa di-Undo).`)) return;
-    replaceDocument(sampleDocument());
+    if (shared && !confirm(`Ganti dokumen${shared} dengan contoh SOP Skripsi? (bisa di-Undo)`)) return;
+    openInTab(sampleDocument());
   }
 
   function loadText(text, name, handle) {
     try {
-      replaceDocument(parseDocumentText(text), name, handle);
+      const doc = parseDocumentText(text);
+      if (shared && !confirm(`Ganti dokumen${shared} dengan ${name}? (bisa di-Undo)`)) return false;
+      openInTab(doc, name, handle);
       notify(`Dibuka: ${name}`);
       return true;
     } catch (e) {
@@ -209,7 +295,7 @@
   function loadPasted(text) {
     if (shared && !confirm(`Ganti dokumen${shared} dengan jawaban AI ini?`)) return false;
     try {
-      replaceDocument(parseDocumentText(text));
+      openInTab(parseDocumentText(text));
       notify('Dokumen dari AI dibuka — periksa kembali isinya sebelum diekspor');
       return true;
     } catch (e) {
@@ -239,6 +325,7 @@
       if (handle) {
         app.fileHandle = handle;
         app.fileName = handle.name;
+        persist(current);
       }
       notify('Tersimpan sebagai ' + (handle?.name ?? name));
     } catch (e) {
@@ -286,8 +373,7 @@
   async function onDrop(e) {
     e.preventDefault();
     dragging = false;
-    const file = e.dataTransfer?.files?.[0];
-    if (file) loadText(await file.text(), file.name, null);
+    for (const file of e.dataTransfer?.files ?? []) loadText(await file.text(), file.name, null);
   }
 
   onMount(() => {
@@ -297,10 +383,10 @@
     document.addEventListener('fullscreenchange', onFs);
     if ('launchQueue' in window) {
       window.launchQueue.setConsumer(async (params) => {
-        const handle = params.files?.[0];
-        if (!handle) return;
-        const file = await handle.getFile();
-        loadText(await file.text(), file.name, handle);
+        for (const handle of params.files ?? []) {
+          const file = await handle.getFile();
+          loadText(await file.text(), file.name, handle);
+        }
       });
     }
     return () => {
@@ -375,6 +461,23 @@
       <button class="btn primary" onclick={pdf} title="Pratinjau lalu ekspor PDF (Ctrl+Shift+P)">Ekspor PDF</button>
     </nav>
   </header>
+
+  <div class="tabbar" role="tablist" aria-label="Dokumen terbuka">
+    {#each tabs.list as t (t.id)}
+      <div class="doc-tab" class:active={t.id === tabs.active} title={(t.id === tabs.active ? app.fileName : t.fileName) ?? 'Belum disimpan ke berkas'}>
+        <button
+          role="tab"
+          aria-selected={t.id === tabs.active}
+          onclick={() => switchTab(t.id)}
+          onauxclick={(e) => e.button === 1 && closeTab(t.id)}
+        >
+          {tabTitle(t)}
+        </button>
+        <button class="close" onclick={() => closeTab(t.id)} title="Tutup tab" aria-label="Tutup {tabTitle(t)}">×</button>
+      </div>
+    {/each}
+    <button class="add" onclick={() => addTab(emptyDocument())} disabled={collab.status !== 'off'} title={collab.status !== 'off' ? 'Keluar dari ruang kolaborasi untuk membuka tab baru' : 'Tab baru'} aria-label="Tab baru">+</button>
+  </div>
 
   <div class="mobile-switch">
     <button class:active={mobileView === 'edit'} onclick={() => (mobileView = 'edit')}>Edit</button>
