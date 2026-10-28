@@ -19,9 +19,13 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   plus kolom Mutu Baku (Kelengkapan, Waktu, Output) dan Keterangan.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …).
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
-- PDF vektor (teks bisa diseleksi). Teks dokumen memakai font [Carlito](https://github.com/googlefonts/carlito),
-  pengganti Calibri dengan metrik identik (file Calibri asli tidak boleh didistribusikan ulang). Font disematkan ke PDF.
-  Antarmuka memakai Calibri bila terpasang di perangkat, dengan Carlito sebagai cadangan.
+- PDF vektor (teks bisa diseleksi). Dokumen SOP wajib memakai **Calibri**, yang disematkan ke PDF. Karena file Calibri
+  tidak boleh didistribusikan ulang, font diambil dari perangkat pengguna: tombol **Pakai Calibri perangkat**
+  (Local Font Access API, Chrome/Edge desktop) atau **Pilih file Calibri…** (`calibri.ttf` + `calibrib.ttf`, di Windows
+  ada di `C:\Windows\Fonts`). Cukup sekali; font disimpan di IndexedDB browser tersebut. Selama Calibri belum tersedia
+  dipakai [Carlito](https://github.com/googlefonts/carlito) (metrik identik, jadi tata letak tidak berubah) dan muncul
+  peringatan di atas pratinjau.
+- Antarmuka memakai font [Inter](https://rsms.me/inter/).
 - Simpan/buka JSON, seret-lepas berkas JSON ke jendela, simpan otomatis ke browser, Undo/Redo.
 - **Kolaborasi real-time** tanpa server: edit satu dokumen bersama lewat tautan undangan, lihat siapa sedang
   mengedit bagian mana, dan ketik bersamaan di kolom yang sama tanpa saling menimpa.
@@ -108,7 +112,7 @@ Struktur utama:
 | `src/lib/PageFields.svelte` | Lapisan isian edit-langsung di atas halaman identitas (posisi dari `page.fields`) |
 | `src/assets/logo-ub.png` | Logo Universitas Brawijaya yang disematkan ke setiap dokumen |
 | `src/lib/pdf.js` | Renderer PDF (jsPDF) |
-| `src/lib/fonts.js` | Pemuatan & registrasi font Carlito |
+| `src/lib/fonts.js` | Font dokumen: Calibri dari perangkat (disimpan di IndexedDB) atau Carlito sebagai pengganti |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
 | `src/lib/findReplace.js` | Daftar kolom teks dokumen, pencarian, dan penggantian |
 | `src/lib/collab.svelte.js` | Ruang kolaborasi: Yjs, koneksi P2P (Trystero), kehadiran, undo per pengguna |
@@ -193,4 +197,4 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
 
 ## Lisensi
 
-Kode aplikasi: lihat [LICENSE](LICENSE). Font Carlito: SIL Open Font License 1.1 (`public/fonts/Carlito-OFL.txt`).
+Kode aplikasi: lihat [LICENSE](LICENSE). Font Carlito: SIL Open Font License 1.1 (`public/fonts/Carlito-OFL.txt`). Inter: SIL Open Font License 1.1.

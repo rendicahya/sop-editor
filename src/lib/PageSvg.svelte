@@ -22,7 +22,7 @@
       <circle cx={it.cx} cy={it.cy} r={it.r} fill={it.fill ?? 'none'} stroke={it.stroke} stroke-width={it.lw} />
     {:else if it.t === 'text'}
       <text
-        font-family="Carlito, Calibri, sans-serif"
+        font-family="SOPDoc, Calibri, Carlito, sans-serif"
         font-size={it.size * PT}
         font-weight={it.bold ? 700 : 400}
         fill={it.color}

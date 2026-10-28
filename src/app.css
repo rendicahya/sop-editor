@@ -1,16 +1,6 @@
-/* Carlito: metrik identik dengan Calibri. Dipakai dokumen (agar sama dengan PDF) dan sebagai cadangan antarmuka. */
-@font-face {
-  font-family: 'Carlito';
-  src: url('/fonts/Carlito-Regular.ttf') format('truetype');
-  font-weight: 400;
-}
-@font-face {
-  font-family: 'Carlito';
-  src: url('/fonts/Carlito-Bold.ttf') format('truetype');
-  font-weight: 700;
-}
-
+/* Font halaman dokumen (Calibri) dipasang lewat FontFace di lib/fonts.js; antarmuka memakai Inter. */
 :root {
+  --ui-font: 'Inter Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
   --bg: #eef0f4;
   --surface: #ffffff;
   --surface-2: #f5f7fa;
@@ -29,9 +19,8 @@
   --drop-bg: rgb(229 237 248 / 0.85);
   --radius: 10px;
   color-scheme: light;
-  /* Calibri bila terpasang (Windows/Office), selain itu Carlito yang metriknya identik. */
-  font-family: Calibri, Carlito, sans-serif;
-  font-size: 16px;
+  font-family: var(--ui-font);
+  font-size: 15px;
   color: var(--text);
   background: var(--bg);
 }
@@ -528,6 +517,26 @@ button:disabled {
 .waiting p {
   margin: 0.3rem 0 0.6rem;
   color: var(--muted);
+}
+.font-warn {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.9rem;
+  background: var(--warn-bg);
+  border-bottom: 1px solid var(--warn-line);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.font-warn .actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+.font-warn code {
+  font-size: 0.95em;
 }
 .editor-body[inert] {
   opacity: 0.5;

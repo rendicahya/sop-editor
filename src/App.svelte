@@ -5,6 +5,7 @@
   import { emptyDocument, sampleDocument, parseDocumentText } from './lib/model.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf } from './lib/pdf.js';
+  import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
   import { saveJson, openJsonFile, slug } from './lib/files.js';
   import Preview from './lib/Preview.svelte';
   import ActorsEditor from './lib/editors/ActorsEditor.svelte';
@@ -63,8 +64,22 @@
 
   let findOpen = $state(false);
 
-  // Pratinjau: tata letak dihitung ulang setiap dokumen berubah.
-  const pages = $derived(layoutDocument(app.doc));
+  // Font dokumen wajib Calibri; Carlito hanya pengganti sementara bila Calibri belum diambil dari perangkat.
+  let docFont = $state(fontSource());
+  let fontFiles;
+  const canQueryFonts = 'queryLocalFonts' in window;
+  async function setCalibri(load) {
+    try {
+      await load();
+      docFont = fontSource();
+      notify('Dokumen sekarang memakai Calibri.');
+    } catch (e) {
+      alert('Gagal memakai Calibri: ' + e.message);
+    }
+  }
+
+  // Pratinjau: tata letak dihitung ulang setiap dokumen (atau font) berubah.
+  const pages = $derived((docFont, layoutDocument(app.doc)));
 
   // Riwayat undo/redo + simpan otomatis ke localStorage.
   let past = [];
@@ -241,6 +256,7 @@
   }
 
   function pdf() {
+    if (docFont !== 'calibri' && !confirm('Calibri belum tersedia, sehingga PDF akan memakai Carlito (pengganti dengan ukuran identik). Tetap ekspor?')) return;
     try {
       exportPdf(app.doc).save(`SOP-${slug(app.doc.header.namaSop)}.pdf`);
     } catch (e) {
@@ -408,7 +424,7 @@
           <button class="icon sidebar-toggle" onclick={toggleSidebar} title={sidebar ? 'Tutup panel editor (Ctrl+B)' : 'Buka panel editor (Ctrl+B)'} aria-label="Panel editor" aria-expanded={sidebar}>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />{#if sidebar}<path d="m15 10-2 2 2 2" stroke-linecap="round" />{:else}<path d="m13 10 2 2-2 2" stroke-linecap="round" />{/if}</svg>
           </button>
-          Pratinjau · A4 lanskap · {pages.length} halaman
+          Pratinjau · A4 lanskap · {pages.length} halaman · {docFont === 'calibri' ? 'Calibri' : 'Carlito (pengganti Calibri)'}
         </span>
         <label>
           Zoom
@@ -416,6 +432,32 @@
           <span class="zoom-val">{zoom}%</span>
         </label>
       </div>
+      {#if docFont !== 'calibri'}
+        <div class="font-warn">
+          <span>
+            <strong>Dokumen SOP wajib memakai Calibri.</strong> Calibri belum tersedia di browser ini, jadi sementara dipakai
+            Carlito (ukuran identik).
+            {#if canQueryFonts}Ambil Calibri yang terpasang di perangkat,{/if} atau pilih file <code>calibri.ttf</code> dan
+            <code>calibrib.ttf</code> (di Windows: <code>C:\Windows\Fonts</code>). Cukup sekali; font disimpan di browser ini.
+          </span>
+          <span class="actions">
+            {#if canQueryFonts}<button class="btn small primary" onclick={() => setCalibri(useSystemCalibri)}>Pakai Calibri perangkat</button>{/if}
+            <button class="btn small" onclick={() => fontFiles.click()}>Pilih file Calibri…</button>
+          </span>
+          <input
+            bind:this={fontFiles}
+            type="file"
+            accept=".ttf,.otf,font/ttf,font/otf"
+            multiple
+            hidden
+            onchange={(e) => {
+              const files = [...e.currentTarget.files];
+              e.currentTarget.value = '';
+              if (files.length) setCalibri(() => useCalibriFiles(files));
+            }}
+          />
+        </div>
+      {/if}
       <div class="preview-scroll">
         <Preview {pages} {zoom} editable={collab.status !== 'connecting'} />
       </div>

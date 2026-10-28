@@ -2,7 +2,7 @@
 // (rect, poly, circle, text, image). Hasil yang sama dirender ke SVG (pratinjau) dan
 // ke jsPDF (ekspor), sehingga pratinjau identik dengan PDF. Semua satuan dalam mm.
 import { jsPDF } from 'jspdf';
-import { FONT, registerFonts } from './fonts.js';
+import { pdfFont, registerFonts, fontRevision } from './fonts.js';
 import { formatTanggal } from './model.js';
 import logoSrc from '../assets/logo-ub.png?inline';
 
@@ -18,6 +18,7 @@ const BORDER = 0.25;
 const BAND = 7; // pita untuk konektor antarhalaman
 
 let measurer = null;
+let measuredWith = -1;
 
 export const lineHeight = (size) => size * PT * LH;
 /** Posisi baseline baris ke-i dari item teks (dipakai kedua renderer). */
@@ -26,11 +27,12 @@ export const baseline = (item, i) => item.y + i * lineHeight(item.size) + item.s
 function wrap(text, size, bold, width) {
   const t = String(text ?? '').replace(/\r/g, '');
   if (!t.trim()) return [];
-  if (!measurer) {
+  if (measuredWith !== fontRevision()) {
     measurer = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
     registerFonts(measurer);
+    measuredWith = fontRevision();
   }
-  measurer.setFont(FONT, bold ? 'bold' : 'normal');
+  measurer.setFont(pdfFont(), bold ? 'bold' : 'normal');
   measurer.setFontSize(size);
   return measurer.splitTextToSize(t, Math.max(width, 2));
 }
