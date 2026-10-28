@@ -75,8 +75,7 @@ atau ganda dibuat ulang, `next`/`alt` boleh berisi nomor urut atau nama kegiatan
 
 1. Klik **Kolaborasi**, isi nama, lalu **Buat ruang**. Dokumen yang sedang terbuka menjadi isi ruang.
 2. Salin tautan undangan dan bagikan. Penerima mengisi nama lalu **Gabung**; dokumennya diganti dengan dokumen ruang.
-3. Semua perubahan langsung tersinkron. Avatar peserta tampil di toolbar, titik berwarna di tab menunjukkan posisi
-   mereka, dan kartu langkah yang sedang diedit orang lain diberi bingkai berwarna beserta namanya.
+3. Semua perubahan langsung tersinkron. Avatar peserta tampil di toolbar, dan kartu langkah yang sedang diedit orang lain diberi bingkai berwarna beserta namanya.
 4. Undo/Redo di dalam ruang hanya membatalkan perubahan Anda sendiri.
 
 Cara kerjanya:

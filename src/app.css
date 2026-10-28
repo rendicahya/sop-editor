@@ -150,27 +150,6 @@ textarea {
   background: var(--bg);
 }
 
-.tabs {
-  display: flex;
-  gap: 0.2rem;
-  padding: 0.5rem 0.75rem 0;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-}
-.tabs button {
-  border: 0;
-  background: none;
-  padding: 0.55rem 0.8rem;
-  border-bottom: 2px solid transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-weight: 500;
-}
-.tabs button.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-
 .editor-body {
   flex: 1;
   overflow: auto;
@@ -497,14 +476,6 @@ button:disabled {
 }
 .live.on {
   background: #12b76a;
-}
-.peer-dot {
-  display: inline-block;
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  margin-left: 0.25rem;
-  vertical-align: middle;
 }
 .waiting {
   margin: 0.75rem 0.75rem 0;

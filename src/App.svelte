@@ -16,12 +16,6 @@
   import * as Collab from './lib/collab.svelte.js';
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
 
-  // Halaman identitas (kop, pengesahan, ketentuan) diedit langsung di pratinjau.
-  const TABS = [
-    { id: 'pelaksana', label: 'Pelaksana' },
-    { id: 'langkah', label: 'Langkah' }
-  ];
-  let tab = $state('pelaksana');
   let mobileView = $state('edit');
   let zoom = $state(100);
   let toast = $state('');
@@ -181,19 +175,16 @@
   }
 
   $effect(() => {
-    if (collab.status === 'ready') Collab.setFocus({ tab, step: tab === 'langkah' ? focusStep : null });
+    if (collab.status === 'ready') Collab.setFocus({ step: focusStep });
   });
 
   function onFocusIn(e) {
     focusStep = e.target.closest?.('[data-step]')?.dataset.step ?? null;
   }
 
-  const tabPeers = (id) => collab.peers.filter((p) => p.focus?.tab === id);
-
   function newDoc() {
     if (!confirm(`Buat dokumen baru${shared}? Perubahan yang belum disimpan ke JSON tetap bisa dibatalkan dengan Undo.`)) return;
     replaceDocument(emptyDocument());
-    tab = 'pelaksana';
   }
 
   function loadSample() {
@@ -218,7 +209,6 @@
     if (shared && !confirm(`Ganti dokumen${shared} dengan jawaban AI ini?`)) return false;
     try {
       replaceDocument(parseDocumentText(text));
-      tab = 'langkah';
       notify('Dokumen dari AI dibuka — periksa kembali isinya sebelum diekspor');
       return true;
     } catch (e) {
@@ -391,14 +381,6 @@
 
   <main class="workspace" class:collapsed={!sidebar} data-view={mobileView}>
     <aside class="editor">
-      <div class="tabs" role="tablist">
-        {#each TABS as t (t.id)}
-          <button role="tab" aria-selected={tab === t.id} class:active={tab === t.id} onclick={() => (tab = t.id)}>
-            {t.label}
-            {#each tabPeers(t.id) as p (p.id)}<span class="peer-dot" style:background={p.color} title={p.name}></span>{/each}
-          </button>
-        {/each}
-      </div>
       {#if collab.status === 'connecting'}
         <div class="waiting">
           <strong>Menunggu dokumen ruang…</strong>
@@ -410,11 +392,8 @@
       {/if}
       <div class="editor-body" inert={collab.status === 'connecting'} onfocusin={onFocusIn}>
         <p class="inplace-hint">Kop, tanggal, pengesahan, dan ketentuan diisi langsung pada halaman 1 di pratinjau.</p>
-        {#if tab === 'pelaksana'}
-          <ActorsEditor />
-        {:else}
-          <StepsEditor />
-        {/if}
+        <ActorsEditor />
+        <StepsEditor />
       </div>
     </aside>
 
@@ -484,9 +463,11 @@
     onnotify={notify}
     onjump={async (f) => {
       if (f.tab) {
-        tab = f.tab;
         if (!sidebar) toggleSidebar();
         mobileView = 'edit';
+        await tick();
+        const el = document.querySelector(f.tab === 'langkah' ? `[data-step="${f.obj.id}"]` : '[data-actors]');
+        el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
         return;
       }
       mobileView = 'preview';

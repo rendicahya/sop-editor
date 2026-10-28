@@ -24,7 +24,7 @@
   }
 </script>
 
-<section class="panel">
+<section class="panel" data-actors>
   <h2>Pelaksana (kolom diagram alir)</h2>
   <p class="hint">Urutan di sini menentukan urutan kolom pada tabel diagram alir.</p>
   {#each actors as a, i (a.id)}
