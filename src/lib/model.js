@@ -48,8 +48,8 @@ export const DEFAULT_INSTITUTION = 'KEMENTERIAN PENDIDIKAN TINGGI, SAINS, DAN TE
 // Pengesah default SOP FILKOM: dekan yang sedang menjabat.
 export const DEFAULT_PENGESAH = {
   disahkanJabatan: 'DEKAN FAKULTAS ILMU KOMPUTER',
-  disahkanNama: 'Prof. Ir. Wayan Firdaus Mahmudy, S.Si., M.T., Ph.D.',
-  disahkanNip: 'NIP. 197209191997021001'
+  disahkanNama: 'Ir. Tri Astoto Kurniawan, S.T., M.T., Ph.D., IPM.',
+  disahkanNip: 'NIP. '
 };
 
 export function uid() {
