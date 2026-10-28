@@ -49,7 +49,7 @@ export const DEFAULT_INSTITUTION = 'KEMENTERIAN PENDIDIKAN TINGGI, SAINS, DAN TE
 export const DEFAULT_PENGESAH = {
   disahkanJabatan: 'DEKAN FAKULTAS ILMU KOMPUTER',
   disahkanNama: 'Ir. Tri Astoto Kurniawan, S.T., M.T., Ph.D., IPM.',
-  disahkanNip: 'NIP. '
+  disahkanNip: 'NIP. 197105182003121001'
 };
 
 export function uid() {
