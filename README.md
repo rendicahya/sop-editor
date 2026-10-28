@@ -128,7 +128,8 @@ Struktur utama:
 | `src/lib/fonts.js` | Font dokumen: Calibri dari perangkat (disimpan di IndexedDB) atau Carlito sebagai pengganti |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
 | `src/lib/findReplace.js` | Daftar kolom teks dokumen, pencarian, dan penggantian |
-| `src/lib/collab.svelte.js` | Ruang kolaborasi: Yjs, koneksi P2P (Trystero), kehadiran, undo per pengguna |
+| `src/lib/collab.svelte.js` | State ruang kolaborasi (status, peserta, tautan); memuat mesinnya saat pertama kali masuk ruang |
+| `src/lib/collabSession.js` | Mesin kolaborasi (dimuat terpisah): Yjs, koneksi P2P (Trystero), kehadiran, undo per pengguna |
 | `src/lib/ysync.js` | Selisih dua arah antara dokumen JSON dan struktur Yjs |
 
 ## Deploy ke GitHub Pages
