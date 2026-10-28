@@ -29,6 +29,11 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
 - **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Buat dengan AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab tersimpan otomatis di browser; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
+- **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
+  halaman diagram alir menjadi tabel dengan kolom/baris berukuran sama persis seperti pratinjau. Teks semua sel bisa
+  diedit di Word, sedangkan diagramnya (simbol, garis, label, konektor) disisipkan sebagai gambar vektor (SVG, dengan
+  cadangan PNG untuk Word lama) di belakang tabel. Tinggi baris diagram dikunci agar tetap sejajar dengan gambar, jadi
+  perubahan besar (teks bertambah banyak, langkah baru) sebaiknya dilakukan di aplikasi lalu diekspor ulang.
 - PDF vektor (teks bisa diseleksi). Dokumen SOP wajib memakai **Calibri**, yang disematkan ke PDF. Karena file Calibri
   tidak boleh didistribusikan ulang, font diambil dari perangkat pengguna: tombol **Pakai Calibri perangkat**
   (Local Font Access API, Chrome/Edge desktop) atau **Pilih file Calibri…** (`calibri.ttf` + `calibrib.ttf`, di Windows
@@ -119,6 +124,7 @@ Struktur utama:
 | `src/lib/PageFields.svelte` | Lapisan isian edit-langsung di atas halaman identitas dan diagram alir (posisi dari `page.fields`) |
 | `src/assets/logo-ub.png` | Logo Universitas Brawijaya yang disematkan ke setiap dokumen |
 | `src/lib/pdf.js` | Renderer PDF (jsPDF) |
+| `src/lib/docx.js` | Ekspor DOCX: WordprocessingML ditulis langsung lalu dikemas dengan fflate |
 | `src/lib/fonts.js` | Font dokumen: Calibri dari perangkat (disimpan di IndexedDB) atau Carlito sebagai pengganti |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
 | `src/lib/findReplace.js` | Daftar kolom teks dokumen, pencarian, dan penggantian |
@@ -176,7 +182,8 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
 - Pustaka multi-dokumen di browser (IndexedDB): daftar, cari, duplikasi, dan templat SOP.
 - Keterkaitan antar-SOP yang bisa ditautkan ke dokumen lain di pustaka.
 - Berbagi via tautan (JSON terkompresi di URL) tanpa server.
-- Ekspor tambahan: PNG/SVG per halaman dan DOCX; impor langkah dari Excel/CSV.
+- Ekspor tambahan: PNG/SVG per halaman; impor langkah dari Excel/CSV.
+- Diagram di DOCX sebagai bentuk Word yang bisa diedit (saat ini berupa gambar).
 
 **Kolaborasi**
 - Konfigurasi server TURN (mis. dari layanan pihak ketiga) agar tetap tersambung di jaringan yang ketat.

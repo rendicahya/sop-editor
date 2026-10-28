@@ -78,6 +78,7 @@ function layoutIdentity(doc, pages) {
   const hd = doc.header;
 
   let page = newPage(pages);
+  page.identity = { leftW, labelW, valW, sigW: valW - 10, logo: fit(LOGO, 52, 38), logoSrc: LOGO.src };
   let y = m;
 
   // Area isian teks: kotak (x, y, w, h) dengan jarak dalam `pad`; tinggi minimal satu baris.
@@ -519,7 +520,13 @@ function layoutFlow(doc, pages) {
     }
   }
 
+  // Metadata untuk ekspor DOCX: struktur tabel per halaman dan awal item diagram (garis, bentuk, label).
   pageObjs.forEach((page, q) => {
+    page.flow = {
+      widths: colBounds.map(([, w]) => w), H1, H2, band: BAND, pad, size: TS, top: top[q], bot: bot[q],
+      rows: rows.map((r, i) => ({ index: i, h: r.h })).filter((r) => pageOf[r.index] === q)
+    };
+    page.diagram = page.items.length;
     for (const pts of lines[q]) page.items.push(...arrowLine(pts));
   });
   rows.forEach((r, i) => pageObjs[pageOf[i]].items.push(shapeItem(box[i])));

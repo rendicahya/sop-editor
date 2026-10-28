@@ -6,7 +6,7 @@
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf } from './lib/pdf.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
-  import { saveJson, openJsonFile, slug } from './lib/files.js';
+  import { saveJson, openJsonFile, slug, downloadBlob } from './lib/files.js';
   import Preview from './lib/Preview.svelte';
   import CollabDialog from './lib/CollabDialog.svelte';
   import AiDialog from './lib/AiDialog.svelte';
@@ -346,6 +346,20 @@
     }
   }
 
+  // Ekspor DOCX dimuat terpisah agar tidak memperbesar muatan awal.
+  let docxBusy = $state(false);
+  async function docx() {
+    docxBusy = true;
+    try {
+      const { exportDocx } = await import('./lib/docx.js');
+      downloadBlob(await exportDocx(app.doc), `SOP-${slug(app.doc.header.namaSop)}.docx`);
+    } catch (e) {
+      alert('Gagal membuat DOCX: ' + e.message);
+    } finally {
+      docxBusy = false;
+    }
+  }
+
   function onKey(e) {
     if (!(e.ctrlKey || e.metaKey)) return;
     const k = e.key.toLowerCase();
@@ -458,6 +472,7 @@
         <button class="btn ghost" onclick={() => (collabOpen = true)} title="Edit bersama secara real-time">Kolaborasi</button>
       {/if}
       <button class="btn ghost" onclick={loadSample} title="Muat contoh SOP Skripsi">Contoh</button>
+      <button class="btn ghost" onclick={docx} disabled={docxBusy} title="Unduh dokumen Word (.docx) yang bisa diedit">Ekspor DOCX</button>
       <button class="btn primary" onclick={pdf} title="Pratinjau lalu ekspor PDF (Ctrl+Shift+P)">Ekspor PDF</button>
     </nav>
   </header>
