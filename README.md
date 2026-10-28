@@ -10,7 +10,8 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 ## Fitur
 
 - Format baku SOP Universitas Brawijaya: logo UB selalu tercetak; dokumen baru otomatis berisi kop kementerian sampai
-  "UNIVERSITAS BRAWIJAYA" (tetap bisa diubah) dan tanggal pembuatan hari ini.
+  "UNIVERSITAS BRAWIJAYA" (kementerian, Fakultas Ilmu Komputer, UB), awalan nomor SOP `UN10/F15/`, pengesah Dekan FILKOM beserta nama dan NIP-nya,
+  serta tanggal pembuatan dan tanggal efektif hari ini. Semuanya tetap bisa diubah.
 - **Halaman 1 diedit langsung di pratinjau (WYSIWYG)**: klik teks di halaman untuk mengetik nama instansi, nomor,
   tanggal pembuatan/revisi/efektif (date picker), pengesahan, gambar tanda tangan/stempel, dan setiap butir ketentuan.
 - Bagian Dasar Hukum, Kualifikasi Pelaksana, Keterkaitan, Peralatan/Perlengkapan, Peringatan, serta

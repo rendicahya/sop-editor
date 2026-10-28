@@ -43,7 +43,14 @@ export function todayIso() {
 }
 
 /** Kop baku SOP di lingkungan UB (logo UB selalu dicetak, lihat layout.js). */
-export const DEFAULT_INSTITUTION = 'KEMENTERIAN PENDIDIKAN TINGGI, SAINS,\nDAN TEKNOLOGI\nUNIVERSITAS BRAWIJAYA';
+export const DEFAULT_INSTITUTION = 'KEMENTERIAN PENDIDIKAN TINGGI, SAINS, DAN TEKNOLOGI\nFAKULTAS ILMU KOMPUTER\nUNIVERSITAS BRAWIJAYA';
+
+// Pengesah default SOP FILKOM: dekan yang sedang menjabat.
+export const DEFAULT_PENGESAH = {
+  disahkanJabatan: 'DEKAN FAKULTAS ILMU KOMPUTER',
+  disahkanNama: 'Prof. Ir. Wayan Firdaus Mahmudy, S.Si., M.T., Ph.D.',
+  disahkanNip: 'NIP. 197209191997021001'
+};
 
 export function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -77,13 +84,11 @@ export function emptyDocument() {
     version: VERSION,
     header: {
       institution: DEFAULT_INSTITUTION,
-      nomor: '',
+      nomor: 'UN10/F15/',
       tglPembuatan: todayIso(),
       tglRevisi: '',
-      tglEfektif: '',
-      disahkanJabatan: '',
-      disahkanNama: '',
-      disahkanNip: '',
+      tglEfektif: todayIso(),
+      ...DEFAULT_PENGESAH,
       signature: null,
       namaSop: ''
     },
