@@ -481,7 +481,17 @@
   </header>
 
   <div class="tabbar">
-    <div class="tabs" role="tablist" aria-label="Dokumen terbuka">
+    <div
+      class="tabs"
+      role="tablist"
+      aria-label="Dokumen terbuka"
+      onwheel={(e) => {
+        // Roda vertikal menggeser deretan tab ke samping.
+        if (!e.deltaY || e.currentTarget.scrollWidth <= e.currentTarget.clientWidth) return;
+        e.preventDefault();
+        e.currentTarget.scrollLeft += e.deltaY;
+      }}
+    >
       {#each tabs.list as t (t.id)}
         <div
           class="doc-tab"

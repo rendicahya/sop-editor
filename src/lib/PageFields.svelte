@@ -4,7 +4,7 @@
   import { readImage } from './files.js';
   import { PT } from './layout.js';
 
-  // Lapisan isian di atas halaman identitas: teks diketik langsung pada posisinya di dokumen.
+  // Lapisan isian di atas halaman (identitas dan diagram alir): teks diketik langsung pada posisinya di dokumen.
   // Teks isian dibuat transparan sehingga yang terlihat tetap hasil render SVG (sama dengan PDF);
   // hanya kursor dan seleksi yang berasal dari elemen isian.
   let { fields, editable = true } = $props();
@@ -12,10 +12,25 @@
   const h = $derived(app.doc.header);
   const items = (key) => app.doc.sections[key].items;
 
-  const value = (f) => (f.kind === 'item' ? items(f.key)[f.index] : h[f.key]) ?? '';
+  /** Objek pemilik isian beserta kuncinya: langkah, pelaksana, butir bagian, atau kop. */
+  function target(f) {
+    if (f.step) return [app.doc.steps.find((s) => s.id === f.step), f.key];
+    if (f.actor) return [app.doc.actors.find((a) => a.id === f.actor), f.key];
+    if (f.kind === 'item') return [items(f.key), f.index];
+    return [h, f.key];
+  }
+  const value = (f) => {
+    const [o, k] = target(f);
+    return o?.[k] ?? '';
+  };
   function setValue(f, v) {
-    if (f.kind === 'item') items(f.key)[f.index] = v;
-    else h[f.key] = v;
+    const [o, k] = target(f);
+    if (o) o[k] = v;
+  }
+
+  function moveStep(f) {
+    const s = app.doc.steps.find((s) => s.id === f.step);
+    if (s) s.actor = f.actor;
   }
 
   /** Fokus ke isian `id` setelah tata letak diperbarui, dengan kursor di posisi `caret`. */
@@ -179,6 +194,16 @@
           <button onclick={() => addItem(f.key)}>+ Butir</button>
         </span>
       </div>
+    {:else if f.kind === 'lane'}
+      <button
+        class="f-lane"
+        style={box(f)}
+        data-field={f.id}
+        tabindex="-1"
+        title="Pindahkan langkah ini ke {f.name || 'pelaksana ini'}"
+        aria-label="Pindahkan langkah ke {f.name || 'pelaksana ini'}"
+        onclick={() => moveStep(f)}
+      ></button>
     {:else if f.kind === 'empty'}
       <button class="f-empty f-hint" style={box(f)} onclick={() => addItem(f.key)}>+ Tambah butir {f.title.toLowerCase()}</button>
     {/if}
@@ -360,6 +385,27 @@
   .f-empty:hover {
     background: rgb(var(--edit) / 0.06);
     box-shadow: inset 0 0 0 1px rgb(var(--edit) / 0.35);
+  }
+  .f-lane {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .f-lane:hover {
+    background: rgb(var(--edit) / 0.06);
+    box-shadow: inset 0 0 0 1px rgb(var(--edit) / 0.35);
+  }
+  .f-lane:hover::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: calc(14 * var(--mm));
+    height: calc(5.5 * var(--mm));
+    transform: translate(-50%, -50%);
+    border: 1.5px dashed rgb(var(--edit) / 0.6);
   }
   .err {
     font: 11px var(--ui-font);

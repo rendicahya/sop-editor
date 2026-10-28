@@ -132,8 +132,15 @@ textarea {
   display: flex;
   align-items: flex-end;
   gap: 2px;
+  /* Tab yang meluap digeser dengan roda mouse; scrollbar disembunyikan. Margin -1px menutup
+     garis bawah bar tepat di bawah tab aktif tanpa membuat luapan vertikal. */
   overflow-x: auto;
-  scrollbar-width: thin;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  margin-bottom: -1px;
+}
+.tabbar .tabs::-webkit-scrollbar {
+  display: none;
 }
 .tabbar .zoom {
   flex: none;
@@ -168,8 +175,6 @@ textarea {
   background: var(--surface);
   border-color: var(--line);
   color: var(--text);
-  margin-bottom: -1px;
-  padding-bottom: 1px;
 }
 .doc-tab button {
   border: 0;

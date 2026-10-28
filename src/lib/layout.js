@@ -273,7 +273,15 @@ function layoutFlow(doc, pages) {
     cell(x.no, y, col.no, headerH, 'No.');
     cell(x.keg, y, col.keg, headerH, 'Kegiatan');
     cell(x.act, y, actW * n, H1, 'Pelaksana');
-    actors.forEach((a, i) => cell(x.act + i * actW, y + H1, actW, H2, actorLines[i]));
+    actors.forEach((a, i) => {
+      const cx = x.act + i * actW;
+      cell(cx, y + H1, actW, H2, actorLines[i]);
+      const fh = Math.max(1, actorLines[i].length) * lineHeight(HS);
+      page.fields.push({
+        id: 'a:' + a.id, kind: 'text', actor: a.id, key: 'name', x: cx + 1, y: y + H1 + (H2 - fh) / 2, w: actW - 2, h: fh,
+        pad: 0, size: HS, bold: true, align: 'center', label: `Pelaksana ${i + 1}`, placeholder: 'Pelaksana'
+      });
+    });
     cell(x.kel, y, col.kel + col.wkt + col.out, H1, 'Mutu Baku');
     cell(x.kel, y + H1, col.kel, H2, 'Kelengkapan');
     cell(x.wkt, y + H1, col.wkt, H2, 'Waktu');
@@ -378,6 +386,18 @@ function layoutFlow(doc, pages) {
     put('wkt', x.wkt);
     put('out', x.out);
     put('ket', x.ket);
+
+    // Isian langsung: sel teks langkah, dan sel lajur pelaksana lain untuk memindahkan bentuk.
+    const sid = r.step.id;
+    for (const [c, key, label] of CELL_FIELDS) {
+      page.fields.push({
+        id: `st:${sid}:${key}`, kind: 'text', step: sid, key, x: x[c] + pad, y: y + pad, w: col[c] - 2 * pad, h: r.h - 2 * pad,
+        pad: 0, size: TS, bold: false, align: 'left', multiline: true, label: `Langkah ${i + 1} · ${label}`
+      });
+    }
+    actors.forEach((a, j) => {
+      if (j !== r.col) page.fields.push({ id: `ln:${sid}:${a.id}`, kind: 'lane', step: sid, actor: a.id, name: a.name, x: x.act + j * actW, y, w: actW, h: r.h });
+    });
   });
 
   // Kotak bentuk
@@ -457,6 +477,14 @@ function layoutFlow(doc, pages) {
   rows.forEach((r, i) => pageObjs[pageOf[i]].items.push(shapeItem(box[i])));
   pageObjs.forEach((page, q) => page.items.push(...labels[q]));
 }
+
+const CELL_FIELDS = [
+  ['keg', 'kegiatan', 'Kegiatan'],
+  ['kel', 'kelengkapan', 'Kelengkapan'],
+  ['wkt', 'waktu', 'Waktu'],
+  ['out', 'output', 'Output'],
+  ['ket', 'keterangan', 'Keterangan']
+];
 
 function zDown(P, Q) {
   if (Math.abs(P[0] - Q[0]) < 0.01) return [P, Q];

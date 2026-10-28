@@ -18,6 +18,9 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   Pencatatan dan Pendataan, masing-masing bisa bernomor atau tidak (tombol muncul saat judul bagian disorot).
 - Daftar pelaksana (kolom diagram) dan langkah kegiatan dengan simbol Mulai/Selesai, Proses, dan Keputusan,
   plus kolom Mutu Baku (Kelengkapan, Waktu, Output) dan Keterangan.
+- **Halaman diagram alir juga bisa diedit langsung**: nama pelaksana di kepala tabel serta kolom Kegiatan,
+  Kelengkapan, Waktu, Output, dan Keterangan tiap langkah. Klik sel lajur pelaksana lain untuk memindahkan
+  simbol langkah ke pelaksana itu.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …).
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
 - **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Buat dengan AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab tersimpan otomatis di browser; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
@@ -111,7 +114,7 @@ Struktur utama:
 | `src/lib/model.js` | Struktur dokumen, contoh, validasi/normalisasi JSON, format tanggal |
 | `src/lib/layout.js` | Mesin tata letak: dokumen → halaman berisi primitif (rect, poly, text, image, …) |
 | `src/lib/PageSvg.svelte` | Renderer pratinjau (SVG) |
-| `src/lib/PageFields.svelte` | Lapisan isian edit-langsung di atas halaman identitas (posisi dari `page.fields`) |
+| `src/lib/PageFields.svelte` | Lapisan isian edit-langsung di atas halaman identitas dan diagram alir (posisi dari `page.fields`) |
 | `src/assets/logo-ub.png` | Logo Universitas Brawijaya yang disematkan ke setiap dokumen |
 | `src/lib/pdf.js` | Renderer PDF (jsPDF) |
 | `src/lib/fonts.js` | Font dokumen: Calibri dari perangkat (disimpan di IndexedDB) atau Carlito sebagai pengganti |
