@@ -416,6 +416,12 @@ function layoutFlow(doc, pages) {
     const { w, h } = r.size;
     return { cx, cy, w, h, top: cy - h / 2, bottom: cy + h / 2, col: r.col, shape: r.step.shape, lane: cx + Math.max(w / 2 + 1.5, actW / 2 - 1.5) };
   });
+  // Isian bentuk: diklik untuk mengganti simbol dan tujuan alurnya.
+  rows.forEach((r, i) => {
+    const b = box[i];
+    const sid = r.step.id;
+    pageObjs[pageOf[i]].fields.push({ id: `sy:${sid}`, kind: 'shape', hot: 'r:' + sid, step: sid, index: i, x: b.cx - b.w / 2 - 1, y: b.top - 1, w: b.w + 2, h: b.h + 2 });
+  });
   const entryBottomY = (b, ex) => (b.shape === 'decision' ? b.cy + (b.h / 2) * (1 - (2 * Math.abs(ex - b.cx)) / b.w) : b.bottom);
 
   // Konektor

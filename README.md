@@ -22,6 +22,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   Kelengkapan, Waktu, Output, dan Keterangan tiap langkah. Klik sel lajur pelaksana lain untuk memindahkan
   simbol langkah ke pelaksana itu. Sorot kepala kolom pelaksana untuk menggeser, menambah, atau menghapus
   pelaksana (hanya bila tidak ada langkah di lajurnya); sorot baris langkah untuk menambah/menghapus kegiatan.
+  Klik simbol untuk mengganti jenisnya dan tujuan alurnya (untuk Keputusan: cabang ya/tidak beserta labelnya).
 - Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …).
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.

@@ -3,7 +3,7 @@
   import { app } from './store.svelte.js';
   import { readImage } from './files.js';
   import { PT } from './layout.js';
-  import { newStep, removeStep, uid } from './model.js';
+  import { newStep, removeStep, uid, SHAPES } from './model.js';
 
   // Lapisan isian di atas halaman (identitas dan diagram alir): teks diketik langsung pada posisinya di dokumen.
   // Teks isian dibuat transparan sehingga yang terlihat tetap hasil render SVG (sama dengan PDF);
@@ -65,6 +65,13 @@
     const s = newStep(steps[i]?.actor ?? actors[0].id);
     steps.splice(i + 1, 0, s);
     focusField(`st:${s.id}:kegiatan`);
+  }
+
+  // Menu simbol: id langkah yang menunya sedang terbuka.
+  let menu = $state(null);
+  const short = (s, i) => `${i + 1}. ${s.kegiatan.length > 36 ? s.kegiatan.slice(0, 36) + '…' : s.kegiatan || '(tanpa nama)'}`;
+  function closeMenu(e) {
+    if (menu && !e.target.closest?.('.f-shape')) menu = null;
   }
 
   /** Fokus ke isian `id` setelah tata letak diperbarui, dengan kursor di posisi `caret`. */
@@ -160,6 +167,7 @@
     (f.pad ? `padding:calc(${f.pad} * var(--mm));` : '');
 </script>
 
+<svelte:window onpointerdown={closeMenu} onkeydown={(e) => e.key === 'Escape' && (menu = null)} />
 <div
   class="fields"
   inert={!editable}
@@ -271,6 +279,58 @@
           <button tabindex="-1" title="Tambah kegiatan di bawah" aria-label="Tambah kegiatan di bawah" onclick={() => addStep(f.index)}>＋</button>
           <button tabindex="-1" class="danger" title="Hapus kegiatan" aria-label="Hapus kegiatan" onclick={() => removeStep(steps, f.index)}>✕</button>
         </span>
+      </div>
+    {:else if f.kind === 'shape'}
+      {@const s = steps[f.index]}
+      {@const open = menu === f.step && s}
+      <div class="f-shape" class:open style={box(f)} data-hot={f.hot}>
+        <button
+          class="f-shape-btn"
+          tabindex="-1"
+          title="Ubah simbol"
+          aria-label="Ubah simbol langkah {f.index + 1}"
+          aria-expanded={!!open}
+          onclick={() => (menu = open ? null : f.step)}
+        ></button>
+        {#if open}
+          {@const dec = s.shape === 'decision'}
+          <div class="shape-menu" class:up={f.y > 115} role="dialog" aria-label="Simbol langkah {f.index + 1}">
+            <div class="seg" role="group" aria-label="Simbol">
+              {#each SHAPES as sh (sh.value)}
+                <button class:on={s.shape === sh.value} aria-pressed={s.shape === sh.value} onclick={() => (s.shape = sh.value)}>{sh.label}</button>
+              {/each}
+            </div>
+            <label>
+              <span>{dec ? 'Jika ya, lanjut ke' : 'Lanjut ke'}</span>
+              <select value={s.next} onchange={(e) => (s.next = e.currentTarget.value)}>
+                <option value="auto">Langkah berikutnya{f.index + 1 < steps.length ? ` (${f.index + 2})` : ' (tidak ada)'}</option>
+                <option value="none">Tidak ada (akhir alur)</option>
+                {#each steps as t, j (t.id)}
+                  {#if j !== f.index}<option value={t.id}>{short(t, j)}</option>{/if}
+                {/each}
+              </select>
+            </label>
+            {#if dec}
+              <label>
+                <span>Label ya</span>
+                <input value={s.yesLabel} oninput={(e) => (s.yesLabel = e.currentTarget.value)} />
+              </label>
+              <label>
+                <span>Jika tidak, ke</span>
+                <select value={s.alt ?? ''} onchange={(e) => (s.alt = e.currentTarget.value || null)}>
+                  <option value="">—</option>
+                  {#each steps as t, j (t.id)}
+                    {#if j !== f.index}<option value={t.id}>{short(t, j)}</option>{/if}
+                  {/each}
+                </select>
+              </label>
+              <label>
+                <span>Label tidak</span>
+                <input value={s.noLabel} oninput={(e) => (s.noLabel = e.currentTarget.value)} />
+              </label>
+            {/if}
+          </div>
+        {/if}
       </div>
     {:else if f.kind === 'add-step'}
       <button class="f-empty f-hint" style={box(f)} onclick={() => addStep(-1)}>+ Tambah kegiatan</button>
@@ -537,6 +597,84 @@
     background: #fff;
     color: #888;
     border-color: #bbb;
+  }
+  .f-shape.open {
+    z-index: 5;
+  }
+  .f-shape-btn {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .f-shape-btn:hover,
+  .f-shape.open .f-shape-btn {
+    box-shadow: 0 0 0 1.5px rgb(var(--edit) / 0.7);
+    background: rgb(var(--edit) / 0.06);
+  }
+  .shape-menu {
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 4px);
+    transform: translateX(-50%);
+    width: 250px;
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    font: 12px/1.2 var(--ui-font);
+    color: #1f2633;
+    background: #fff;
+    border: 1px solid rgb(var(--edit) / 0.4);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+  }
+  .shape-menu.up {
+    top: auto;
+    bottom: calc(100% + 4px);
+  }
+  .seg {
+    display: flex;
+    border: 1px solid rgb(var(--edit) / 0.5);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .seg button {
+    flex: 1;
+    padding: 5px 4px;
+    border: 0;
+    background: #fff;
+    color: rgb(var(--edit));
+    font: 600 11px/1.1 var(--ui-font);
+    cursor: pointer;
+  }
+  .seg button + button {
+    border-left: 1px solid rgb(var(--edit) / 0.5);
+  }
+  .seg button.on {
+    background: rgb(var(--edit));
+    color: #fff;
+  }
+  .shape-menu label {
+    display: grid;
+    gap: 2px;
+  }
+  .shape-menu label span {
+    font-size: 11px;
+    color: #5b6577;
+  }
+  .shape-menu select,
+  .shape-menu input {
+    width: 100%;
+    box-sizing: border-box;
+    font: 12px var(--ui-font);
+    padding: 3px 5px;
+    border: 1px solid #c5cbd6;
+    border-radius: 5px;
+    background: #fff;
+    color: #1f2633;
   }
   .err {
     font: 11px var(--ui-font);
