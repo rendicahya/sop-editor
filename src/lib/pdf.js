@@ -48,7 +48,10 @@ function drawItem(pdf, it) {
       pdf.setFont(pdfFont(), it.bold ? 'bold' : 'normal');
       pdf.setFontSize(it.size);
       pdf.setTextColor(it.color ?? '#000000');
-      it.lines.forEach((line, i) => pdf.text(line, it.x, baseline(it, i), { align: it.align ?? 'left' }));
+      it.lines.forEach((line, i) => {
+        const y = baseline(it, i);
+        pdf.text(line, it.x, y, { align: it.align ?? 'left', ...(it.italic && { angle: oblique(pdf, y) }) });
+      });
       break;
     case 'image': {
       const fmt = it.src.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
@@ -56,6 +59,14 @@ function drawItem(pdf, it) {
       break;
     }
   }
+}
+
+// Miring tiruan (tanpa file font italic), sudut sama dengan italic sintetis browser di pratinjau.
+// jsPDF ikut memiringkan posisi teks, jadi geser balik sebesar kemiringan pada baseline-nya.
+const SLANT = 0.25;
+function oblique(pdf, y) {
+  const k = pdf.internal.scaleFactor;
+  return new pdf.Matrix(1, 0, SLANT, 1, -SLANT * (pdf.internal.pageSize.getHeight() - y) * k, 0);
 }
 
 export { PAGE };

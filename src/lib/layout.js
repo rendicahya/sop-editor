@@ -265,10 +265,10 @@ function layoutFlow(doc, pages) {
   const drawHeader = (page) => {
     const y = m;
     const it = page.items;
-    const cell = (cx, cy, w, h, label) => {
+    const cell = (cx, cy, w, h, label, italic = false) => {
       it.push(rect(cx, cy, w, h));
       const lines = Array.isArray(label) ? label : wrap(label, HS, true, w - 2);
-      it.push(text(cx + w / 2, cy + (h - textH(lines, HS)) / 2, lines, HS, { bold: true, align: 'center' }));
+      it.push(text(cx + w / 2, cy + (h - textH(lines, HS)) / 2, lines, HS, { bold: true, italic, align: 'center' }));
     };
     cell(x.no, y, col.no, headerH, 'No.');
     cell(x.keg, y, col.keg, headerH, 'Kegiatan');
@@ -277,7 +277,7 @@ function layoutFlow(doc, pages) {
     cell(x.kel, y, col.kel + col.wkt + col.out, H1, 'Mutu Baku');
     cell(x.kel, y + H1, col.kel, H2, 'Kelengkapan');
     cell(x.wkt, y + H1, col.wkt, H2, 'Waktu');
-    cell(x.out, y + H1, col.out, H2, 'Output');
+    cell(x.out, y + H1, col.out, H2, 'Output', true); // istilah asing ditulis miring
     cell(x.ket, y, col.ket, headerH, 'Keterangan');
   };
   const colBounds = [

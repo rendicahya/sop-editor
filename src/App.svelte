@@ -237,6 +237,24 @@
     }
   }
 
+  // Urutan tab bisa diubah dengan diseret; posisi berpindah langsung saat melewati tengah tab lain.
+  let draggedTab = $state(null);
+  function moveTab(id, overId, e) {
+    if (id === overId) return;
+    const from = tabs.list.findIndex((t) => t.id === id);
+    const over = tabs.list.findIndex((t) => t.id === overId);
+    const r = e.currentTarget.getBoundingClientRect();
+    const after = e.clientX > r.left + r.width / 2;
+    // Tunggu sampai kursor melewati tengah tab tujuan agar tidak bolak-balik.
+    if ((from < over && !after) || (from > over && after)) return;
+    const [tab] = tabs.list.splice(from, 1);
+    tabs.list.splice(over, 0, tab);
+  }
+  function endTabDrag() {
+    draggedTab = null;
+    persist(current);
+  }
+
   function notify(msg) {
     toast = msg;
     clearTimeout(toastTimer);
@@ -462,21 +480,53 @@
     </nav>
   </header>
 
-  <div class="tabbar" role="tablist" aria-label="Dokumen terbuka">
-    {#each tabs.list as t (t.id)}
-      <div class="doc-tab" class:active={t.id === tabs.active} title={(t.id === tabs.active ? app.fileName : t.fileName) ?? 'Belum disimpan ke berkas'}>
-        <button
-          role="tab"
-          aria-selected={t.id === tabs.active}
-          onclick={() => switchTab(t.id)}
-          onauxclick={(e) => e.button === 1 && closeTab(t.id)}
+  <div class="tabbar">
+    <div class="tabs" role="tablist" aria-label="Dokumen terbuka">
+      {#each tabs.list as t (t.id)}
+        <div
+          class="doc-tab"
+          class:active={t.id === tabs.active}
+          class:dragged={t.id === draggedTab}
+          title={(t.id === tabs.active ? app.fileName : t.fileName) ?? 'Belum disimpan ke berkas'}
+          role="presentation"
+          draggable="true"
+          ondragstart={(e) => {
+            draggedTab = t.id;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', tabTitle(t));
+          }}
+          ondragover={(e) => {
+            if (!draggedTab) return;
+            e.preventDefault();
+            moveTab(draggedTab, t.id, e);
+          }}
+          ondrop={(e) => {
+            if (!draggedTab) return;
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          ondragend={endTabDrag}
+          onmousedown={(e) => e.button === 1 && e.preventDefault()}
+          onauxclick={(e) => {
+            if (e.button === 1) {
+              e.preventDefault();
+              closeTab(t.id);
+            }
+          }}
         >
-          {tabTitle(t)}
-        </button>
-        <button class="close" onclick={() => closeTab(t.id)} title="Tutup tab" aria-label="Tutup {tabTitle(t)}">×</button>
-      </div>
-    {/each}
-    <button class="add" onclick={() => addTab(emptyDocument())} disabled={collab.status !== 'off'} title={collab.status !== 'off' ? 'Keluar dari ruang kolaborasi untuk membuka tab baru' : 'Tab baru'} aria-label="Tab baru">+</button>
+          <button role="tab" aria-selected={t.id === tabs.active} onclick={() => switchTab(t.id)}>
+            {tabTitle(t)}
+          </button>
+          <button class="close" onclick={() => closeTab(t.id)} title="Tutup tab" aria-label="Tutup {tabTitle(t)}">×</button>
+        </div>
+      {/each}
+      <button class="add" onclick={() => addTab(emptyDocument())} disabled={collab.status !== 'off'} title={collab.status !== 'off' ? 'Keluar dari ruang kolaborasi untuk membuka tab baru' : 'Tab baru'} aria-label="Tab baru">+</button>
+    </div>
+    <label class="zoom" title="Zoom pratinjau">
+      <span class="zoom-label">Zoom</span>
+      <input type="range" min="50" max="200" step="10" bind:value={zoom} aria-label="Zoom pratinjau" />
+      <span class="zoom-val">{zoom}%</span>
+    </label>
   </div>
 
   <div class="mobile-switch">
@@ -502,19 +552,10 @@
     </aside>
 
     <section class="preview">
-      <div class="preview-bar">
-        <span class="left">
-          <button class="icon sidebar-toggle" onclick={toggleSidebar} title={sidebar ? 'Tutup panel editor (Ctrl+B)' : 'Buka panel editor (Ctrl+B)'} aria-label="Panel editor" aria-expanded={sidebar}>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />{#if sidebar}<path d="m15 10-2 2 2 2" stroke-linecap="round" />{:else}<path d="m13 10 2 2-2 2" stroke-linecap="round" />{/if}</svg>
-          </button>
-          Pratinjau · A4 lanskap · {pages.length} halaman · {docFont === 'calibri' ? 'Calibri' : 'Carlito (pengganti Calibri)'}
-        </span>
-        <label>
-          Zoom
-          <input type="range" min="50" max="200" step="10" bind:value={zoom} />
-          <span class="zoom-val">{zoom}%</span>
-        </label>
-      </div>
+      <!-- Pegangan di tepi panel editor untuk membuka/menutupnya. -->
+      <button class="sidebar-toggle" onclick={toggleSidebar} title={sidebar ? 'Tutup panel editor (Ctrl+B)' : 'Buka panel editor (Ctrl+B)'} aria-label="Panel editor" aria-expanded={sidebar}>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d={sidebar ? 'm15 6-6 6 6 6' : 'm9 6 6 6-6 6'} /></svg>
+      </button>
       {#if docFont !== 'calibri'}
         <div class="font-warn">
           <span>

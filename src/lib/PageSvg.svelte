@@ -25,6 +25,7 @@
         font-family="SOPDoc, Calibri, Carlito, sans-serif"
         font-size={it.size * PT}
         font-weight={it.bold ? 700 : 400}
+        font-style={it.italic ? 'italic' : null}
         fill={it.color}
         text-anchor={anchor[it.align]}
       >
