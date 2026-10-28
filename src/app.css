@@ -20,12 +20,44 @@
   --accent: #1f4e8c;
   --accent-soft: #e5edf8;
   --danger: #b42318;
+  --input-bg: #ffffff;
+  --preview-bg: #d9dde5;
+  --mark: #fde68a;
+  --toast-bg: #1c2330;
+  --warn-bg: #fffaeb;
+  --warn-line: #fedf89;
+  --drop-bg: rgb(229 237 248 / 0.85);
   --radius: 10px;
   color-scheme: light;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 15px;
   color: var(--text);
   background: var(--bg);
+}
+
+/* Mode gelap: hanya antarmuka; halaman dokumen di pratinjau tetap putih seperti hasil PDF. */
+:root[data-theme='dark'] {
+  --bg: #12161d;
+  --surface: #1a1f28;
+  --surface-2: #232a35;
+  --line: #333c4a;
+  --text: #e4e8ef;
+  --muted: #98a2b3;
+  --accent: #6ea3e8;
+  --accent-soft: #1e3352;
+  --danger: #f97066;
+  --input-bg: #11151b;
+  --preview-bg: #0c0f14;
+  --mark: #8a6d10;
+  --toast-bg: #2c3442;
+  --warn-bg: #2b2412;
+  --warn-line: #5c4a14;
+  --drop-bg: rgb(18 30 48 / 0.85);
+  color-scheme: dark;
+}
+:root[data-theme='dark'] .btn.primary {
+  background: #2f66b0;
+  border-color: #2f66b0;
 }
 
 * {
@@ -108,6 +140,17 @@ textarea {
   display: grid;
   grid-template-columns: minmax(360px, 520px) 1fr;
 }
+.workspace.collapsed {
+  grid-template-columns: 1fr;
+}
+.workspace.collapsed .editor {
+  display: none;
+}
+.preview-bar .left {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
 
 .editor {
   display: flex;
@@ -149,7 +192,7 @@ textarea {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: #d9dde5;
+  background: var(--preview-bg);
 }
 .preview-bar {
   display: flex;
@@ -246,7 +289,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 0.42rem 0.55rem;
-  background: #fff;
+  background: var(--input-bg);
   min-width: 0;
 }
 textarea {
@@ -358,6 +401,13 @@ textarea:focus {
   cursor: pointer;
   color: var(--muted);
   font-size: 0.95rem;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+.icon.on {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .icon:hover:not(:disabled) {
   background: var(--surface-2);
@@ -377,7 +427,7 @@ button:disabled {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  background: #1c2330;
+  background: var(--toast-bg);
   color: #fff;
   border-radius: 10px;
   padding: 0.55rem 0.9rem;
@@ -405,7 +455,7 @@ button:disabled {
   inset: 0.75rem;
   border: 3px dashed var(--accent);
   border-radius: 16px;
-  background: rgb(229 237 248 / 0.85);
+  background: var(--drop-bg);
   display: grid;
   place-items: center;
   font-size: 1.2rem;
@@ -461,8 +511,8 @@ button:disabled {
   margin: 0.75rem 0.75rem 0;
   padding: 0.8rem 0.9rem;
   border-radius: var(--radius);
-  background: #fffaeb;
-  border: 1px solid #fedf89;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
   font-size: 0.88rem;
 }
 .waiting p {
@@ -484,6 +534,13 @@ button:disabled {
   }
   .editor {
     border-right: 0;
+  }
+  /* Di layar kecil editor & pratinjau sudah bergantian; tombol sidebar tidak diperlukan. */
+  .workspace.collapsed[data-view='edit'] .editor {
+    display: flex;
+  }
+  .sidebar-toggle {
+    display: none;
   }
   .mobile-switch {
     display: flex;

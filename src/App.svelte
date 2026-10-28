@@ -13,6 +13,7 @@
   import StepsEditor from './lib/editors/StepsEditor.svelte';
   import CollabDialog from './lib/CollabDialog.svelte';
   import AiDialog from './lib/AiDialog.svelte';
+  import FindPanel from './lib/FindPanel.svelte';
   import * as Collab from './lib/collab.svelte.js';
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
 
@@ -29,6 +30,41 @@
   let toastTimer;
 
   const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW();
+
+  // Preferensi tampilan (per browser).
+  const pref = (key, fallback) => {
+    try {
+      return localStorage.getItem('sop-editor:' + key) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const setPref = (key, value) => {
+    try {
+      localStorage.setItem('sop-editor:' + key, value);
+    } catch {}
+  };
+
+  let sidebar = $state(pref('sidebar', 'open') === 'open');
+  function toggleSidebar() {
+    sidebar = !sidebar;
+    setPref('sidebar', sidebar ? 'open' : 'closed');
+  }
+
+  let theme = $state(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+  function toggleTheme() {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    setPref('theme', theme);
+  }
+
+  let fullscreen = $state(false);
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen?.().catch(() => alert('Browser ini tidak mengizinkan layar penuh.'));
+  }
+
+  let findOpen = $state(false);
 
   // Pratinjau: tata letak dihitung ulang setiap dokumen berubah.
   const pages = $derived(layoutDocument(app.doc));
@@ -227,6 +263,12 @@
     } else if (k === 'p' && e.shiftKey) {
       e.preventDefault();
       pdf();
+    } else if (k === 'f' || k === 'h') {
+      e.preventDefault();
+      findOpen = true;
+    } else if (k === 'b') {
+      e.preventDefault();
+      toggleSidebar();
     } else if ((k === 'z' || k === 'y') && !e.target.closest?.('input, textarea')) {
       e.preventDefault();
       if (k === 'y' || e.shiftKey) redo();
@@ -246,6 +288,8 @@
   onMount(() => {
     checkInvite();
     window.addEventListener('hashchange', checkInvite);
+    const onFs = () => (fullscreen = !!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFs);
     if ('launchQueue' in window) {
       window.launchQueue.setConsumer(async (params) => {
         const handle = params.files?.[0];
@@ -254,7 +298,10 @@
         loadText(await file.text(), file.name, handle);
       });
     }
-    return () => window.removeEventListener('hashchange', checkInvite);
+    return () => {
+      window.removeEventListener('hashchange', checkInvite);
+      document.removeEventListener('fullscreenchange', onFs);
+    };
   });
 </script>
 
@@ -291,6 +338,19 @@
       <span class="sep"></span>
       <button class="icon" onclick={undo} disabled={!undoable} title="Urungkan (Ctrl+Z)">↶</button>
       <button class="icon" onclick={redo} disabled={!redoable} title="Ulangi (Ctrl+Y)">↷</button>
+      <button class="icon" class:on={findOpen} onclick={() => (findOpen = !findOpen)} title="Cari & ganti (Ctrl+F)" aria-label="Cari dan ganti">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
+      </button>
+      <button class="icon" onclick={toggleFullscreen} title={fullscreen ? 'Keluar dari layar penuh' : 'Layar penuh'} aria-label="Layar penuh">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          {#if fullscreen}<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />{:else}<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />{/if}
+        </svg>
+      </button>
+      <button class="icon" onclick={toggleTheme} title={theme === 'dark' ? 'Mode terang' : 'Mode gelap'} aria-label="Ganti tema">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          {#if theme === 'dark'}<circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />{:else}<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" />{/if}
+        </svg>
+      </button>
       <span class="sep"></span>
       {#if collab.status !== 'off'}
         <button class="btn ghost collab-btn" onclick={() => (collabOpen = true)} title="Ruang kolaborasi">
@@ -316,7 +376,7 @@
     <button class:active={mobileView === 'preview'} onclick={() => (mobileView = 'preview')}>Pratinjau</button>
   </div>
 
-  <main class="workspace" data-view={mobileView}>
+  <main class="workspace" class:collapsed={!sidebar} data-view={mobileView}>
     <aside class="editor">
       <div class="tabs" role="tablist">
         {#each TABS as t (t.id)}
@@ -350,7 +410,12 @@
 
     <section class="preview">
       <div class="preview-bar">
-        <span>Pratinjau · A4 lanskap · {pages.length} halaman</span>
+        <span class="left">
+          <button class="icon sidebar-toggle" onclick={toggleSidebar} title={sidebar ? 'Tutup panel editor (Ctrl+B)' : 'Buka panel editor (Ctrl+B)'} aria-label="Panel editor" aria-expanded={sidebar}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />{#if sidebar}<path d="m15 10-2 2 2 2" stroke-linecap="round" />{:else}<path d="m13 10 2 2-2 2" stroke-linecap="round" />{/if}</svg>
+          </button>
+          Pratinjau · A4 lanskap · {pages.length} halaman
+        </span>
         <label>
           Zoom
           <input type="range" min="50" max="200" step="10" bind:value={zoom} />
@@ -378,6 +443,15 @@
 
   <CollabDialog bind:open={collabOpen} bind:invite onsave={() => save(true)} />
   <AiDialog bind:open={aiOpen} onpaste={loadPasted} onopen={open} />
+  <FindPanel
+    bind:open={findOpen}
+    onnotify={notify}
+    onjump={(t) => {
+      tab = t;
+      if (!sidebar) toggleSidebar();
+      mobileView = 'edit';
+    }}
+  />
 
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
   {#if dragging}<div class="dropzone">Lepaskan berkas JSON untuk membuka</div>{/if}

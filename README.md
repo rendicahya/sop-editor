@@ -24,6 +24,9 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   mengedit bagian mana, dan ketik bersamaan di kolom yang sama tanpa saling menimpa.
 - **Buat dengan AI**: salin prompt siap pakai ke ChatGPT, Gemini, atau Claude, lalu tempel jawabannya untuk langsung
   diedit dan diekspor.
+- **Cari & ganti** teks di seluruh dokumen (identitas, ketentuan, pelaksana, langkah), per kolom atau sekaligus.
+- Panel editor bisa ditutup agar pratinjau lebih lebar, mode layar penuh, serta mode terang/gelap (mengikuti sistem
+  secara bawaan; halaman dokumen tetap putih).
 - Bisa dipasang sebagai aplikasi (PWA), bekerja offline, dan membuka berkas `.json` lewat "Buka dengan".
 - Tampilan responsif (beralih Edit/Pratinjau di layar kecil).
 
@@ -34,6 +37,8 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 | Ctrl+S / Ctrl+Shift+S | Simpan JSON / Simpan sebagai |
 | Ctrl+O | Buka JSON |
 | Ctrl+Shift+P | Ekspor PDF |
+| Ctrl+F / Ctrl+H | Cari & ganti (Esc untuk menutup) |
+| Ctrl+B | Tutup/buka panel editor |
 | Ctrl+Z / Ctrl+Y | Urungkan / Ulangi (saat fokus di luar kolom teks) |
 
 Di Chrome/Edge, "Simpan" berikutnya langsung menimpa berkas yang sama (File System Access API).
@@ -96,6 +101,7 @@ Struktur utama:
 | `src/lib/pdf.js` | Renderer PDF (jsPDF) |
 | `src/lib/fonts.js` | Pemuatan & registrasi font Carlito |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
+| `src/lib/findReplace.js` | Daftar kolom teks dokumen, pencarian, dan penggantian |
 | `src/lib/collab.svelte.js` | Ruang kolaborasi: Yjs, koneksi P2P (Trystero), kehadiran, undo per pengguna |
 | `src/lib/ysync.js` | Selisih dua arah antara dokumen JSON dan struktur Yjs |
 | `src/lib/editors/` | Komponen form editor |
@@ -168,7 +174,8 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
 
 **Editor**
 - Seret-lepas untuk mengurutkan langkah, butir, dan pelaksana.
-- Mode gelap dan antarmuka dwibahasa (Indonesia/Inggris).
+- Antarmuka dwibahasa (Indonesia/Inggris).
+- Cari & ganti dengan ekspresi reguler dan opsi "seluruh kata".
 
 **Kualitas & infrastruktur**
 - Uji otomatis untuk mesin tata letak (snapshot primitif per halaman) dan normalisasi JSON.

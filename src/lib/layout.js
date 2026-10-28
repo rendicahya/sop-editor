@@ -237,7 +237,7 @@ function layoutFlow(doc, pages) {
       const lines = Array.isArray(label) ? label : wrap(label, HS, true, w - 2);
       it.push(text(cx + w / 2, cy + (h - textH(lines, HS)) / 2, lines, HS, { bold: true, align: 'center' }));
     };
-    cell(x.no, y, col.no, headerH, 'No');
+    cell(x.no, y, col.no, headerH, 'No.');
     cell(x.keg, y, col.keg, headerH, 'Kegiatan');
     cell(x.act, y, actW * n, H1, 'Pelaksana');
     actors.forEach((a, i) => cell(x.act + i * actW, y + H1, actW, H2, actorLines[i]));
@@ -339,7 +339,7 @@ function layoutFlow(doc, pages) {
     const y = rowY[i];
     for (const [cx, w] of colBounds) page.items.push(rect(cx, y, w, r.h));
     const put = (key, cx) => page.items.push(text(cx + pad, y + pad, r.cells[key], TS));
-    put('no', x.no);
+    page.items.push(text(x.no + col.no / 2, y + pad, r.cells.no, TS, { align: 'center' }));
     put('keg', x.keg);
     put('kel', x.kel);
     put('wkt', x.wkt);

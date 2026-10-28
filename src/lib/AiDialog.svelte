@@ -82,6 +82,7 @@
     border-radius: 14px;
     padding: 1.1rem 1.2rem;
     box-shadow: 0 20px 50px rgb(0 0 0 / 0.25);
+    background: var(--surface);
     color: var(--text);
   }
   .dialog::backdrop {
