@@ -393,7 +393,7 @@ function layoutFlow(doc, pages) {
   const lines = pageObjs.map(() => []);
   const labels = pageObjs.map(() => []);
   let letter = 0;
-  const R = 2;
+  const R = 2.5;
 
   for (const e of edges) {
     const s = box[e.from];
@@ -481,10 +481,13 @@ function arrowLine(pts) {
   ];
 }
 
+// Konektor antarhalaman: segilima menunjuk ke bawah (garis masuk di sisi atas, keluar dari ujung bawah).
 function connector(cx, cy, r, tag) {
+  const shoulder = cy + r * 0.25;
+  const pts = [[cx - r, cy - r], [cx + r, cy - r], [cx + r, shoulder], [cx, cy + r], [cx - r, shoulder]];
   return [
-    { t: 'circle', cx, cy, r, stroke: FLOW, fill: '#ffffff', lw: 0.3 },
-    text(cx, cy - lineHeight(7) / 2, [tag], 7, { bold: true, align: 'center', color: FLOW })
+    { t: 'poly', closed: true, pts, stroke: FLOW, fill: '#ffffff', lw: 0.3 },
+    text(cx, cy - r * 0.2 - lineHeight(7) / 2, [tag], 7, { bold: true, align: 'center', color: FLOW })
   ];
 }
 
