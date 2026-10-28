@@ -12,6 +12,7 @@
   import StepsEditor from './lib/editors/StepsEditor.svelte';
   import CollabDialog from './lib/CollabDialog.svelte';
   import AiDialog from './lib/AiDialog.svelte';
+  import PdfPreviewDialog from './lib/PdfPreviewDialog.svelte';
   import FindPanel from './lib/FindPanel.svelte';
   import * as Collab from './lib/collab.svelte.js';
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
@@ -245,10 +246,11 @@
     }
   }
 
+  // Ekspor PDF selalu lewat pratinjau dulu; unduhan dilakukan dari dialog.
+  let pdfDoc = $state(null);
   function pdf() {
-    if (docFont !== 'calibri' && !confirm('Calibri belum tersedia, sehingga PDF akan memakai Carlito (pengganti dengan ukuran identik). Tetap ekspor?')) return;
     try {
-      exportPdf(app.doc).save(`SOP-${slug(app.doc.header.namaSop)}.pdf`);
+      pdfDoc = exportPdf(app.doc);
     } catch (e) {
       alert('Gagal membuat PDF: ' + e.message);
     }
@@ -370,7 +372,7 @@
         <button class="btn ghost" onclick={() => (collabOpen = true)} title="Edit bersama secara real-time">Kolaborasi</button>
       {/if}
       <button class="btn ghost" onclick={loadSample} title="Muat contoh SOP Skripsi">Contoh</button>
-      <button class="btn primary" onclick={pdf} title="Ekspor PDF (Ctrl+Shift+P)">Ekspor PDF</button>
+      <button class="btn primary" onclick={pdf} title="Pratinjau lalu ekspor PDF (Ctrl+Shift+P)">Ekspor PDF</button>
     </nav>
   </header>
 
@@ -391,7 +393,6 @@
         </div>
       {/if}
       <div class="editor-body" inert={collab.status === 'connecting'} onfocusin={onFocusIn}>
-        <p class="inplace-hint">Kop, tanggal, pengesahan, dan ketentuan diisi langsung pada halaman 1 di pratinjau.</p>
         <ActorsEditor />
         <StepsEditor />
       </div>
@@ -458,6 +459,12 @@
 
   <CollabDialog bind:open={collabOpen} bind:invite onsave={() => save(true)} />
   <AiDialog bind:open={aiOpen} onpaste={loadPasted} onopen={open} />
+  <PdfPreviewDialog
+    bind:pdf={pdfDoc}
+    {pages}
+    filename={`SOP-${slug(app.doc.header.namaSop)}.pdf`}
+    fontNote={docFont === 'calibri' ? '' : 'Calibri belum tersedia, PDF memakai Carlito (ukuran identik)'}
+  />
   <FindPanel
     bind:open={findOpen}
     onnotify={notify}
