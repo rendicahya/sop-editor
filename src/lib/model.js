@@ -165,14 +165,40 @@ export function sampleDocument() {
   };
 }
 
+// Sinonim bentuk yang sering dipakai AI atau manusia.
+const SHAPE_ALIAS = {
+  start: 'terminator', end: 'terminator', mulai: 'terminator', selesai: 'terminator', terminal: 'terminator',
+  proses: 'process', activity: 'process', task: 'process',
+  keputusan: 'decision', condition: 'decision', kondisi: 'decision'
+};
+
+/**
+ * Membaca teks JSON dokumen. Toleran terhadap jawaban AI yang tersalin bersama pembungkus
+ * ```json … ``` atau kalimat pengantar: yang diambil adalah objek JSON terluar.
+ */
+export function parseDocumentText(text) {
+  const t = String(text).trim();
+  try {
+    return normalizeDocument(JSON.parse(t));
+  } catch (e) {
+    if (!(e instanceof SyntaxError)) throw e;
+  }
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(t);
+  const body = fenced ? fenced[1] : t;
+  const a = body.indexOf('{');
+  const b = body.lastIndexOf('}');
+  if (a < 0 || b <= a) throw new SyntaxError('Teks tidak berisi JSON.');
+  return normalizeDocument(JSON.parse(body.slice(a, b + 1)));
+}
+
 /** Memvalidasi & melengkapi JSON yang dibuka agar aman dipakai editor. */
 export function normalizeDocument(raw) {
   if (!raw || typeof raw !== 'object') throw new Error('Berkas bukan JSON dokumen SOP.');
-  if (raw.format !== FORMAT) throw new Error('Berkas JSON ini bukan dokumen SOP Editor.');
-  if (!Array.isArray(raw.actors) || !Array.isArray(raw.steps)) throw new Error('Struktur dokumen SOP tidak lengkap.');
+  if (raw.format != null && raw.format !== FORMAT) throw new Error('Berkas JSON ini bukan dokumen SOP Editor.');
+  if (!Array.isArray(raw.steps)) throw new Error('Struktur dokumen SOP tidak lengkap: daftar "steps" tidak ditemukan.');
 
   const base = emptyDocument();
-  const str = (v) => (typeof v === 'string' ? v : '');
+  const str = (v) => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '');
   const header = { ...base.header };
   for (const k of Object.keys(header)) {
     if (k === 'logo' || k === 'signature') header[k] = isImage(raw.header?.[k]) ? raw.header[k] : null;
@@ -184,30 +210,64 @@ export function normalizeDocument(raw) {
   const sections = {};
   for (const s of SECTION_DEFS) {
     const src = raw.sections?.[s.key];
+    const items = Array.isArray(src) ? src : src?.items;
     sections[s.key] = {
       numbered: typeof src?.numbered === 'boolean' ? src.numbered : base.sections[s.key].numbered,
-      items: Array.isArray(src?.items) ? src.items.map(str) : []
+      items: Array.isArray(items) ? items.map(str) : []
     };
   }
 
-  const actors = raw.actors.map((x) => ({ id: str(x?.id) || uid(), name: str(x?.name) }));
+  // Pelaksana boleh berupa objek {id, name} atau sekadar nama.
+  const actors = [];
+  const usedIds = new Set();
+  const freshId = (id) => {
+    let v = str(id).trim();
+    if (!v || usedIds.has(v)) v = uid();
+    usedIds.add(v);
+    return v;
+  };
+  for (const x of Array.isArray(raw.actors) ? raw.actors : []) {
+    const name = typeof x === 'string' ? x : str(x?.name);
+    actors.push({ id: freshId(typeof x === 'string' ? '' : x?.id), name });
+  }
+  // `actor` di langkah boleh berisi id atau nama pelaksana; nama yang belum ada ditambahkan.
+  const findActor = (v) => {
+    const key = str(v).trim();
+    if (!key) return null;
+    const lower = key.toLowerCase();
+    let a = actors.find((x) => x.id === key) ?? actors.find((x) => x.name.trim().toLowerCase() === lower);
+    if (!a) actors.push((a = { id: freshId(''), name: key }));
+    return a.id;
+  };
+  const stepActors = raw.steps.map((s) => findActor(s?.actor));
   if (!actors.length) actors.push(...base.actors);
-  const actorIds = new Set(actors.map((x) => x.id));
 
-  const steps = raw.steps.map((s) => {
+  usedIds.clear();
+  const steps = raw.steps.map((s, i) => {
     const d = newStep(actors[0].id);
     const step = { ...d };
-    for (const k of Object.keys(d)) if (typeof s?.[k] === 'string') step[k] = s[k];
-    if (!actorIds.has(step.actor)) step.actor = actors[0].id;
-    if (!SHAPES.some((x) => x.value === step.shape)) step.shape = 'process';
-    step.alt = typeof s?.alt === 'string' ? s.alt : null;
+    for (const k of Object.keys(d)) if (k !== 'next' && k !== 'alt' && s?.[k] != null) step[k] = str(s[k]);
+    step.id = freshId(s?.id);
+    step.actor = stepActors[i] ?? actors[0].id;
+    const shape = step.shape.trim().toLowerCase();
+    step.shape = SHAPES.some((x) => x.value === shape) ? shape : (SHAPE_ALIAS[shape] ?? 'process');
     return step;
   });
-  const stepIds = new Set(steps.map((s) => s.id));
-  for (const s of steps) {
-    if (!['auto', 'none'].includes(s.next) && !stepIds.has(s.next)) s.next = 'auto';
-    if (s.alt && !stepIds.has(s.alt)) s.alt = null;
-  }
+
+  // `next`/`alt` boleh berisi id langkah, nomor urut langkah (1, 2, …), atau nama kegiatan.
+  const ids = new Map(raw.steps.map((s, i) => [str(s?.id).trim(), steps[i].id]).filter(([k]) => k));
+  const target = (v) => {
+    if (v == null || v === '') return null;
+    const key = str(v).trim();
+    if (ids.has(key)) return ids.get(key);
+    if (/^\d+$/.test(key) && steps[+key - 1]) return steps[+key - 1].id;
+    return steps.find((t) => t.kegiatan.trim().toLowerCase() === key.toLowerCase())?.id ?? null;
+  };
+  raw.steps.forEach((s, i) => {
+    const n = str(s?.next).trim().toLowerCase();
+    steps[i].next = !n || n === 'auto' ? 'auto' : n === 'none' ? 'none' : (target(s.next) ?? 'auto');
+    steps[i].alt = target(s?.alt);
+  });
 
   return { format: FORMAT, version: VERSION, header, sections, actors, steps };
 }

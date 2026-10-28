@@ -22,6 +22,8 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - Simpan/buka JSON, seret-lepas berkas JSON ke jendela, simpan otomatis ke browser, Undo/Redo.
 - **Kolaborasi real-time** tanpa server: edit satu dokumen bersama lewat tautan undangan, lihat siapa sedang
   mengedit bagian mana, dan ketik bersamaan di kolom yang sama tanpa saling menimpa.
+- **Buat dengan AI**: salin prompt siap pakai ke ChatGPT, Gemini, atau Claude, lalu tempel jawabannya untuk langsung
+  diedit dan diekspor.
 - Bisa dipasang sebagai aplikasi (PWA), bekerja offline, dan membuka berkas `.json` lewat "Buka dengan".
 - Tampilan responsif (beralih Edit/Pratinjau di layar kecil).
 
@@ -38,6 +40,19 @@ Di Chrome/Edge, "Simpan" berikutnya langsung menimpa berkas yang sama (File Syst
 Di browser lain, berkas diunduh.
 
 Tombol **Contoh** memuat contoh SOP Skripsi untuk melihat semua fitur.
+
+### Buat dengan AI
+
+1. Klik **Buat dengan AI**, tulis deskripsi singkat prosesnya (opsional), lalu **Salin prompt**.
+2. Tempel prompt ke ChatGPT, Gemini, atau Claude. Prompt berisi aturan format dan contoh, sehingga AI menjawab
+   dengan JSON dokumen SOP.
+3. Salin jawabannya ke kolom **Tempel jawaban AI** lalu **Buka di editor**, atau unduh berkas `.json` dari AI lalu buka
+   seperti biasa. Periksa kembali isinya (terutama dasar hukum) sebelum diekspor.
+
+Pembuka JSON sengaja toleran terhadap jawaban AI: teks pengantar dan pembungkus ```` ```json ```` diabaikan,
+`format` boleh tidak ada, `actor` boleh berisi nama pelaksana (pelaksana baru ditambahkan otomatis), id yang hilang
+atau ganda dibuat ulang, `next`/`alt` boleh berisi nomor urut atau nama kegiatan, dan sinonim simbol
+("start", "keputusan", …) dikenali.
 
 ### Kolaborasi
 
@@ -80,6 +95,7 @@ Struktur utama:
 | `src/lib/PageSvg.svelte` | Renderer pratinjau (SVG) |
 | `src/lib/pdf.js` | Renderer PDF (jsPDF) |
 | `src/lib/fonts.js` | Pemuatan & registrasi font Carlito |
+| `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
 | `src/lib/collab.svelte.js` | Ruang kolaborasi: Yjs, koneksi P2P (Trystero), kehadiran, undo per pengguna |
 | `src/lib/ysync.js` | Selisih dua arah antara dokumen JSON dan struktur Yjs |
 | `src/lib/editors/` | Komponen form editor |
@@ -144,6 +160,11 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
   hak akses baca saja / edit.
 - Kursor dan sorotan teks peserta lain di dalam kolom, serta komentar per langkah.
 - Daftar ruang yang pernah diikuti dan riwayat versi (snapshot Yjs) yang bisa dipulihkan.
+
+**AI**
+- Integrasi langsung dengan API Claude/Gemini/OpenAI (kunci API milik pengguna) agar SOP dibuat tanpa salin-tempel.
+- Revisi dengan AI: kirim dokumen yang sedang dibuka beserta instruksi ("pecah langkah 3", "rapikan keterangan").
+- Buat SOP dari dokumen yang ada (PDF/DOCX SOP lama, notulen, atau peraturan).
 
 **Editor**
 - Seret-lepas untuk mengurutkan langkah, butir, dan pelaksana.

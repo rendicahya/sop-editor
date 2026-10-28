@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist } from './lib/store.svelte.js';
-  import { emptyDocument, sampleDocument, normalizeDocument } from './lib/model.js';
+  import { emptyDocument, sampleDocument, parseDocumentText } from './lib/model.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf } from './lib/pdf.js';
   import { saveJson, openJsonFile, slug } from './lib/files.js';
@@ -12,6 +12,7 @@
   import ActorsEditor from './lib/editors/ActorsEditor.svelte';
   import StepsEditor from './lib/editors/StepsEditor.svelte';
   import CollabDialog from './lib/CollabDialog.svelte';
+  import AiDialog from './lib/AiDialog.svelte';
   import * as Collab from './lib/collab.svelte.js';
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
 
@@ -154,10 +155,31 @@
 
   function loadText(text, name, handle) {
     try {
-      replaceDocument(normalizeDocument(JSON.parse(text)), name, handle);
+      replaceDocument(parseDocumentText(text), name, handle);
       notify(`Dibuka: ${name}`);
+      return true;
     } catch (e) {
       alert(e instanceof SyntaxError ? 'Berkas bukan JSON yang valid.' : e.message);
+      return false;
+    }
+  }
+
+  // Jawaban AI yang ditempel: dokumen baru tanpa berkas.
+  let aiOpen = $state(false);
+  function loadPasted(text) {
+    if (shared && !confirm(`Ganti dokumen${shared} dengan jawaban AI ini?`)) return false;
+    try {
+      replaceDocument(parseDocumentText(text));
+      tab = 'langkah';
+      notify('Dokumen dari AI dibuka — periksa kembali isinya sebelum diekspor');
+      return true;
+    } catch (e) {
+      alert(
+        e instanceof SyntaxError
+          ? 'Jawaban AI bukan JSON yang valid (mungkin terpotong). Minta AI mengulang dan menampilkan JSON secara lengkap.'
+          : e.message
+      );
+      return false;
     }
   }
 
@@ -265,6 +287,7 @@
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
       <button class="btn ghost" onclick={open} title="Buka JSON (Ctrl+O)">Buka</button>
       <button class="btn ghost" onclick={() => save(false)} title="Simpan JSON (Ctrl+S)">Simpan JSON</button>
+      <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP dengan ChatGPT, Gemini, atau Claude">Buat dengan AI</button>
       <span class="sep"></span>
       <button class="icon" onclick={undo} disabled={!undoable} title="Urungkan (Ctrl+Z)">↶</button>
       <button class="icon" onclick={redo} disabled={!redoable} title="Ulangi (Ctrl+Y)">↷</button>
@@ -354,6 +377,7 @@
   {/if}
 
   <CollabDialog bind:open={collabOpen} bind:invite onsave={() => save(true)} />
+  <AiDialog bind:open={aiOpen} onpaste={loadPasted} onopen={open} />
 
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
   {#if dragging}<div class="dropzone">Lepaskan berkas JSON untuk membuka</div>{/if}
