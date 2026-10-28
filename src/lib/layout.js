@@ -414,7 +414,7 @@ function layoutFlow(doc, pages) {
     const cx = x.act + (r.col + 0.5) * actW;
     const cy = rowY[i] + r.h / 2;
     const { w, h } = r.size;
-    return { cx, cy, w, h, top: cy - h / 2, bottom: cy + h / 2, col: r.col, shape: r.step.shape, lane: cx + Math.max(w / 2 + 1.5, actW / 2 - 1.5) };
+    return { cx, cy, w, h, top: cy - h / 2, bottom: cy + h / 2, shape: r.step.shape };
   });
   // Isian bentuk: diklik untuk mengganti simbol dan tujuan alurnya.
   rows.forEach((r, i) => {
@@ -422,67 +422,100 @@ function layoutFlow(doc, pages) {
     const sid = r.step.id;
     pageObjs[pageOf[i]].fields.push({ id: `sy:${sid}`, kind: 'shape', hot: 'r:' + sid, step: sid, index: i, x: b.cx - b.w / 2 - 1, y: b.top - 1, w: b.w + 2, h: b.h + 2 });
   });
-  const entryBottomY = (b, ex) => (b.shape === 'decision' ? b.cy + (b.h / 2) * (1 - (2 * Math.abs(ex - b.cx)) / b.w) : b.bottom);
-
-  // Konektor
+  // Konektor: tiap garis dirutekan di kisi ortogonal per halaman (lihat findPath) sehingga
+  // menghindari bentuk dan tidak menumpuk dengan garis lain.
   const lines = pageObjs.map(() => []);
   const labels = pageObjs.map(() => []);
   let letter = 0;
   const R = 2.5;
 
-  for (const e of edges) {
+  const colXs = [];
+  const connXs = [];
+  for (let j = 0; j < n; j++) {
+    const c0 = x.act + j * actW;
+    const c = c0 + actW / 2;
+    colXs.push(c, c0 + 1.2, c0 + 2.4, c0 + actW - 1.2, c0 + actW - 2.4);
+    for (const sz of [shapeSize('decision'), shapeSize('process')]) colXs.push(c - sz.w / 2 - 1, c + sz.w / 2 + 1);
+    connXs.push(c);
+    if (5.8 + R <= actW / 2 - 0.4) connXs.push(c - 5.8, c + 5.8);
+  }
+  const topPortY = bodyTop + BAND / 2 + R; // ujung bawah konektor di pita atas
+  const botPortY = (q) => bandBottomY[q] + BAND / 2 - R; // ujung atas konektor di pita bawah
+  const grids = pageObjs.map((_, q) => {
+    const ids = rows.map((_, i) => i).filter((i) => pageOf[i] === q);
+    const xs = [...colXs];
+    const ys = [];
+    for (const i of ids) {
+      const t = rowY[i];
+      const h = rows[i].h;
+      ys.push(t + 1, t + h - 1, t + h - 2, box[i].cy);
+      for (const p of [...boxPorts(box[i], true), ...boxPorts(box[i], false)]) xs.push(p.x), ys.push(p.y);
+    }
+    if (top[q]) xs.push(...connXs), ys.push(topPortY);
+    if (bot[q]) xs.push(...connXs), ys.push(botPortY(q));
+    return makeGrid(xs, ys, ids.map((i) => box[i]), ids.length ? rowY[ids[0]] : bodyTop, bandBottomY[q]);
+  });
+  const bands = pageObjs.map(() => ({ top: [], bot: [] }));
+  const connPorts = (used, y, d, prefX) => {
+    const free = connXs.filter((cx) => used.every((u) => Math.abs(u - cx) >= 2 * R + 0.8));
+    return (free.length ? free : connXs).map((cx) => ({
+      x: cx, y, d, cost: (free.length ? 0 : OVER) + (prefX == null || Math.abs(cx - prefX) < 0.01 ? 0 : 4)
+    }));
+  };
+  // Biaya titik sambung: alur utama keluar dari bawah dan masuk dari atas; cabang "tidak" keluar dari samping;
+  // garis balik keluar dari samping dan masuk dari bawah/samping.
+  const exits = (b, fwdMain) => boxPorts(b, false).map((p) => ({ ...p, cost: p.side === 'bottom' ? (fwdMain ? 0 : 6) : fwdMain ? 20 : 0 }));
+  const entries = (b, forward) => boxPorts(b, true).map((p) => ({
+    ...p, cost: p.off * 0.4 + (forward ? { top: 0, left: 14, right: 14, bottom: 20 } : { top: 15, left: 3, right: 3, bottom: 3 })[p.side]
+  }));
+
+  const order = edges.map((_, k) => k).sort((a, b) => {
+    const A = edges[a];
+    const B = edges[b];
+    return A.alt - B.alt || (A.to < A.from) - (B.to < B.from) || Math.abs(A.to - A.from) - Math.abs(B.to - B.from) || a - b;
+  });
+  for (const k of order) {
+    const e = edges[k];
     const s = box[e.from];
     const d = box[e.to];
     const ps = pageOf[e.from];
     const pd = pageOf[e.to];
     const forward = e.to > e.from;
-    const sameCol = s.col === d.col;
-    const blocked = forward && sameCol && rows.slice(e.from + 1, e.to).some((r) => r.col === s.col);
-    const sideExit = e.alt || !forward || blocked;
-    const dir = d.col < s.col ? -1 : 1;
-    const P = sideExit ? [s.cx + (dir * s.w) / 2, s.cy] : [s.cx, s.bottom];
-    // Masuk dari bawah target, sedikit bergeser ke arah sumber agar tidak menumpuk dengan garis keluar target.
-    const backOff = Math.min(d.w / 2 - 1, Math.max(d.w * 0.25, 2 * R + 0.6));
-    const backX = sameCol ? s.lane : d.cx + (s.col > d.col ? 1 : -1) * backOff;
+    const starts = exits(s, forward && !e.alt);
 
-    if (e.label) {
-      if (sideExit) labels[ps].push(text(P[0] + dir * 0.8, P[1] - 0.6 - lineHeight(7), [e.label], 7, { align: dir > 0 ? 'left' : 'right', color: FLOW }));
-      else labels[ps].push(text(P[0] + 1, P[1] + 0.4, [e.label], 7, { color: FLOW }));
-    }
-
+    let first;
     if (ps === pd) {
-      let pts;
-      if (forward && !sideExit) pts = zDown(P, [d.cx, d.top]);
-      else if (forward && !sameCol) pts = [P, [d.cx, P[1]], [d.cx, d.top]];
-      else if (sameCol) pts = [P, [s.lane, P[1]], [s.lane, d.cy], [d.cx + d.w / 2, d.cy]];
-      else pts = [P, [backX, P[1]], [backX, entryBottomY(d, backX)]];
-      lines[ps].push(pts);
-      continue;
+      first = findPath(grids[ps], starts, entries(d, forward)) ?? [[s.cx, s.bottom], [d.cx, d.top]];
+      lines[ps].push(first);
+    } else {
+      const tag = String.fromCharCode(65 + (letter++ % 26)) + (letter > 26 ? Math.floor((letter - 1) / 26) : '');
+      const [srcUsed, srcY, srcD, dstUsed, dstY, dstD] = forward
+        ? [bands[ps].bot, botPortY(ps), 1, bands[pd].top, topPortY, 1]
+        : [bands[ps].top, topPortY, 3, bands[pd].bot, botPortY(pd), 3];
+      first = findPath(grids[ps], starts, connPorts(srcUsed, srcY, srcD)) ?? [[s.cx, s.bottom], [s.cx, srcY]];
+      const x1 = first.at(-1)[0];
+      srcUsed.push(x1);
+      lines[ps].push(first);
+      labels[ps].push(...connector(x1, srcY + (forward ? R : -R), R, tag));
+      const second = findPath(grids[pd], connPorts(dstUsed, dstY, dstD, x1), entries(d, forward)) ?? [[x1, dstY], [d.cx, d.top]];
+      const x2 = second[0][0];
+      dstUsed.push(x2);
+      lines[pd].push(second);
+      labels[pd].push(...connector(x2, dstY + (forward ? -R : R), R, tag));
     }
 
-    const tag = String.fromCharCode(65 + (letter++ % 26)) + (letter > 26 ? Math.floor((letter - 1) / 26) : '');
-    if (forward) {
-      const x1 = !sideExit ? s.cx : sameCol ? s.lane : d.cx;
-      const c1 = bandBottomY[ps] + BAND / 2;
-      lines[ps].push(sideExit ? [P, [x1, P[1]], [x1, c1 - R]] : [P, [x1, c1 - R]]);
-      labels[ps].push(...connector(x1, c1, R, tag));
-      const c2 = bodyTop + BAND / 2;
-      const S0 = [x1, c2 + R];
-      let pts;
-      if (Math.abs(x1 - d.cx) < 0.01) pts = [S0, [d.cx, d.top]];
-      else if (sameCol) pts = [S0, [x1, d.cy], [d.cx + d.w / 2, d.cy]];
-      else pts = zDown(S0, [d.cx, d.top]);
-      lines[pd].push(pts);
-      labels[pd].push(...connector(x1, c2, R, tag));
-    } else {
-      const x1 = backX;
-      const c1 = bodyTop + BAND / 2;
-      lines[ps].push([P, [x1, P[1]], [x1, c1 + R]]);
-      labels[ps].push(...connector(x1, c1, R, tag));
-      const c2 = bandBottomY[pd] + BAND / 2;
-      const S0 = [x1, c2 - R];
-      lines[pd].push(sameCol ? [S0, [x1, d.cy], [d.cx + d.w / 2, d.cy]] : [S0, [x1, entryBottomY(d, x1)]]);
-      labels[pd].push(...connector(x1, c2, R, tag));
+    // Label cabang diletakkan di sisi yang tidak dilalui ruas kedua garis.
+    if (e.label) {
+      const [P, Q, T] = first;
+      const dir = Math.sign(Q[0] - P[0]);
+      const lh = lineHeight(7);
+      if (dir) {
+        const below = T && T[1] < Q[1];
+        labels[ps].push(text(P[0] + dir * 0.8, below ? P[1] + 0.6 : P[1] - 0.6 - lh, [e.label], 7, { align: dir > 0 ? 'left' : 'right', color: FLOW }));
+      } else {
+        const left = T && T[0] > Q[0] && Q[1] - P[1] < lh + 1;
+        labels[ps].push(text(P[0] + (left ? -1 : 1), P[1] + 0.4, [e.label], 7, { align: left ? 'right' : 'left', color: FLOW }));
+      }
     }
   }
 
@@ -501,10 +534,200 @@ const CELL_FIELDS = [
   ['ket', 'keterangan', 'Keterangan']
 ];
 
-function zDown(P, Q) {
-  if (Math.abs(P[0] - Q[0]) < 0.01) return [P, Q];
-  const ym = Q[1] - Math.min(2.5, (Q[1] - P[1]) / 2);
-  return [P, [P[0], ym], [Q[0], ym], Q];
+// ---------------------------------------------------------------------------
+// Perutean garis
+// ---------------------------------------------------------------------------
+// Kisi dibentuk dari koordinat penting (tengah & tepi lajur, titik sambung bentuk, celah antarbaris).
+// Jalur dicari dengan Dijkstra (biaya = panjang + belokan). Ruas atau titik belok yang sudah dipakai
+// garis lain diberi penalti besar dan setiap titik sambung hanya dipakai satu garis, sehingga garis
+// tidak menumpuk; persilangan hanya diberi penalti kecil.
+
+const BEND = 6;
+const OVER = 400;
+const CROSS = 2;
+const snap = (v) => Math.round(v * 100) / 100;
+
+function insideBox(b, px, py, mg) {
+  const dx = Math.abs(px - b.cx);
+  const dy = Math.abs(py - b.cy);
+  if (b.shape === 'decision') return dx / (b.w / 2 + mg) + dy / (b.h / 2 + mg) < 1;
+  return dx < b.w / 2 + mg && dy < b.h / 2 + mg;
+}
+
+/** Titik sambung bentuk. d = arah gerak garis di titik itu (0 kanan, 1 bawah, 2 kiri, 3 atas). */
+function boxPorts(b, entry) {
+  const dec = b.shape === 'decision';
+  const along = entry && !dec ? [0, -2, 2, -4, 4].filter((o) => Math.abs(o) <= b.w / 2 - 1.2) : [0];
+  const across = entry && !dec ? [0, -1.5, 1.5] : [0];
+  const ports = [];
+  for (const o of along) {
+    ports.push({ side: 'bottom', x: b.cx + o, y: b.bottom, d: entry ? 3 : 1, off: Math.abs(o) });
+    if (entry) ports.push({ side: 'top', x: b.cx + o, y: b.top, d: 1, off: Math.abs(o) });
+  }
+  for (const o of across) {
+    ports.push({ side: 'left', x: b.cx - b.w / 2, y: b.cy + o, d: entry ? 0 : 2, off: Math.abs(o) });
+    ports.push({ side: 'right', x: b.cx + b.w / 2, y: b.cy + o, d: entry ? 2 : 0, off: Math.abs(o) });
+  }
+  return ports;
+}
+
+function makeGrid(xsIn, ysIn, boxes, yMin, yMax) {
+  const xs = [...new Set(xsIn.map(snap))].sort((a, b) => a - b);
+  const ys = [...new Set(ysIn.map(snap))].sort((a, b) => a - b);
+  const nx = xs.length;
+  const ny = ys.length;
+  const N = nx * ny;
+  const xi = new Map(xs.map((v, i) => [v, i]));
+  const yi = new Map(ys.map((v, i) => [v, i]));
+  const hit = (px, py, mg) => boxes.some((b) => insideBox(b, px, py, mg));
+  const blocked = new Uint8Array(N);
+  const badH = new Uint8Array(N);
+  const badV = new Uint8Array(N);
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      // 2 = di dalam bentuk/di luar area baris (tak bisa dilewati; titik sambung hanya jadi awal/tujuan);
+      // 1 = terlalu dekat tepi bentuk: boleh dilewati lurus, tidak boleh berbelok.
+      blocked[k] = ys[j] < yMin || ys[j] > yMax || hit(xs[i], ys[j], 0.05) ? 2 : hit(xs[i], ys[j], 0.6) ? 1 : 0;
+      if (i + 1 < nx) badH[k] = hit((xs[i] + xs[i + 1]) / 2, ys[j], 0) ? 1 : 0;
+      if (j + 1 < ny) badV[k] = hit(xs[i], (ys[j] + ys[j + 1]) / 2, 0) ? 1 : 0;
+    }
+  }
+  return {
+    xs, ys, nx, ny, N, yMax, blocked, badH, badV,
+    edgeH: new Uint8Array(N), edgeV: new Uint8Array(N), pass: new Uint8Array(N), ports: new Set(),
+    node: (px, py) => yi.get(snap(py)) * nx + xi.get(snap(px))
+  };
+}
+
+/** Jalur termurah dari salah satu `starts` ke salah satu `goals`; ditandai terpakai pada kisi. */
+function findPath(g, starts, goals) {
+  const S = g.N * 4;
+  const avail = (list) => {
+    const free = list.filter((p) => !g.ports.has(g.node(p.x, p.y)));
+    return free.length ? free : list.map((p) => ({ ...p, cost: p.cost + OVER }));
+  };
+  starts = avail(starts);
+  goals = avail(goals);
+  const goalAt = new Map();
+  goals.forEach((p, k) => {
+    const key = g.node(p.x, p.y) * 4 + p.d;
+    if (!goalAt.has(key) || goals[goalAt.get(key)].cost > p.cost) goalAt.set(key, k);
+  });
+  const dist = new Float64Array(S + goals.length).fill(Infinity);
+  const prev = new Int32Array(S + goals.length).fill(-1);
+  const heap = new Heap();
+  for (const p of starts) {
+    const st = g.node(p.x, p.y) * 4 + p.d;
+    if (p.cost < dist[st]) (dist[st] = p.cost), heap.push(p.cost, st);
+  }
+  let end = -1;
+  while (heap.size) {
+    const [c, st] = heap.pop();
+    if (c > dist[st]) continue;
+    if (st >= S) {
+      end = st;
+      break;
+    }
+    const nd0 = st & 3;
+    const k = st >> 2;
+    const i = k % g.nx;
+    const j = (k - i) / g.nx;
+    for (let nd = 0; nd < 4; nd++) {
+      if (nd === (nd0 + 2) % 4) continue;
+      const turn = nd !== nd0;
+      if (turn && g.blocked[k]) continue;
+      let m, bad, used, len;
+      if (nd === 0) {
+        if (i + 1 >= g.nx) continue;
+        (m = k + 1), (bad = g.badH[k]), (used = g.edgeH[k]), (len = g.xs[i + 1] - g.xs[i]);
+      } else if (nd === 2) {
+        if (i === 0) continue;
+        (m = k - 1), (bad = g.badH[m]), (used = g.edgeH[m]), (len = g.xs[i] - g.xs[i - 1]);
+      } else if (nd === 1) {
+        if (j + 1 >= g.ny) continue;
+        (m = k + g.nx), (bad = g.badV[k]), (used = g.edgeV[k]), (len = g.ys[j + 1] - g.ys[j]);
+      } else {
+        if (j === 0) continue;
+        (m = k - g.nx), (bad = g.badV[m]), (used = g.edgeV[m]), (len = g.ys[j] - g.ys[j - 1]);
+      }
+      if (bad) continue;
+      let nc = c + len + (used ? OVER : 0);
+      if (turn) nc += BEND + (g.pass[k] ? OVER : 0);
+      else if (g.pass[k] & (nd % 2 ? 1 : 2)) nc += CROSS;
+      // Pemecah seri: ruas mendatar lebih disukai di bawah (belok dekat tujuan pada alur turun).
+      if (nd % 2 === 0) nc += len * (g.yMax - g.ys[j]) * 1e-4;
+      const gk = goalAt.get(m * 4 + nd);
+      if (gk !== undefined) {
+        const gc = nc + goals[gk].cost;
+        if (gc < dist[S + gk]) (dist[S + gk] = gc), (prev[S + gk] = st), heap.push(gc, S + gk);
+      }
+      if (g.blocked[m] === 2) continue;
+      if (g.blocked[m]) nc += CROSS;
+      const t = m * 4 + nd;
+      if (nc < dist[t]) (dist[t] = nc), (prev[t] = st), heap.push(nc, t);
+    }
+  }
+  if (end < 0) return null;
+
+  const goal = goals[end - S];
+  const nodes = [g.node(goal.x, goal.y)];
+  for (let st = prev[end]; st >= 0; st = prev[st]) nodes.push(st >> 2);
+  nodes.reverse();
+  const pt = (k) => [g.xs[k % g.nx], g.ys[Math.floor(k / g.nx)]];
+  const pts = [pt(nodes[0])];
+  for (let q = 1; q < nodes.length; q++) {
+    const a = nodes[q - 1];
+    const b = nodes[q];
+    const horiz = Math.abs(a - b) === 1;
+    if (horiz) g.edgeH[Math.min(a, b)] = 1;
+    else g.edgeV[Math.min(a, b)] = 1;
+    g.pass[a] |= horiz ? 1 : 2;
+    g.pass[b] |= horiz ? 1 : 2;
+    const c = nodes[q + 1];
+    if (c === undefined || (Math.abs(b - c) === 1) !== horiz) pts.push(pt(b));
+  }
+  g.ports.add(nodes[0]);
+  g.ports.add(nodes.at(-1));
+  return pts;
+}
+
+class Heap {
+  c = [];
+  v = [];
+  get size() {
+    return this.c.length;
+  }
+  push(cost, val) {
+    const { c, v } = this;
+    let i = c.length;
+    c.push(cost);
+    v.push(val);
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (c[p] <= cost) break;
+      (c[i] = c[p]), (v[i] = v[p]), (i = p);
+    }
+    (c[i] = cost), (v[i] = val);
+  }
+  pop() {
+    const { c, v } = this;
+    const top = [c[0], v[0]];
+    const lc = c.pop();
+    const lv = v.pop();
+    if (c.length) {
+      let i = 0;
+      for (;;) {
+        let s = 2 * i + 1;
+        if (s >= c.length) break;
+        if (s + 1 < c.length && c[s + 1] < c[s]) s++;
+        if (c[s] >= lc) break;
+        (c[i] = c[s]), (v[i] = v[s]), (i = s);
+      }
+      (c[i] = lc), (v[i] = lv);
+    }
+    return top;
+  }
 }
 
 function arrowLine(pts) {

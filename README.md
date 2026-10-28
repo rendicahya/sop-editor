@@ -25,7 +25,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   menduplikat, menambah, atau menghapus kegiatan.
   Klik simbol untuk mengganti jenisnya dan tujuan alurnya (untuk Keputusan: cabang ya/tidak beserta labelnya).
 - Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
-- Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …).
+- Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …). Jalur garis dicari otomatis agar tidak menembus simbol dan tidak saling menumpuk.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
 - **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Buat dengan AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab tersimpan otomatis di browser; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
