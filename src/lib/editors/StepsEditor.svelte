@@ -1,6 +1,7 @@
 <script>
   import { app } from '../store.svelte.js';
   import { newStep, SHAPES } from '../model.js';
+  import { collab } from '../collab.svelte.js';
 
   const steps = $derived(app.doc.steps);
   const actors = $derived(app.doc.actors);
@@ -42,7 +43,13 @@
 </section>
 
 {#each steps as s, i (s.id)}
-  <article class="panel step">
+  {@const editing = collab.peers.filter((p) => p.focus?.step === s.id)}
+  <article class="panel step" data-step={s.id} class:shared={editing.length} style:--peer={editing[0]?.color}>
+    {#if editing.length}
+      <div class="editing">
+        {#each editing as p (p.id)}<span style:background={p.color}>{p.name}</span>{/each}
+      </div>
+    {/if}
     <header class="step-head">
       <span class="step-no">{i + 1}</span>
       <input class="grow strong" bind:value={s.kegiatan} placeholder="Nama kegiatan" aria-label="Kegiatan" />
@@ -132,6 +139,27 @@
 {/each}
 
 <style>
+  .step {
+    position: relative;
+  }
+  .step.shared {
+    border-color: var(--peer);
+    box-shadow: 0 0 0 1px var(--peer);
+  }
+  .editing {
+    position: absolute;
+    top: -0.65rem;
+    right: 0.8rem;
+    display: flex;
+    gap: 0.25rem;
+  }
+  .editing span {
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.05rem 0.45rem;
+    border-radius: 99px;
+  }
   .step-head {
     display: flex;
     align-items: center;

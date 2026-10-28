@@ -415,6 +415,64 @@ button:disabled {
   z-index: 30;
 }
 
+/* ---------- Kolaborasi ---------- */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 2px solid var(--surface);
+  flex: none;
+}
+.avatar.more {
+  background: var(--muted);
+}
+.avatars {
+  display: inline-flex;
+}
+.avatars .avatar + .avatar {
+  margin-left: -0.45rem;
+}
+.collab-btn {
+  padding: 0.2rem 0.5rem;
+}
+.live {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: #f79009;
+}
+.live.on {
+  background: #12b76a;
+}
+.peer-dot {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  margin-left: 0.25rem;
+  vertical-align: middle;
+}
+.waiting {
+  margin: 0.75rem 0.75rem 0;
+  padding: 0.8rem 0.9rem;
+  border-radius: var(--radius);
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  font-size: 0.88rem;
+}
+.waiting p {
+  margin: 0.3rem 0 0.6rem;
+  color: var(--muted);
+}
+.editor-body[inert] {
+  opacity: 0.5;
+}
+
 /* ---------- Responsif ---------- */
 @media (max-width: 860px) {
   .workspace {

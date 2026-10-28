@@ -3,7 +3,7 @@
 Aplikasi web (front-end saja, PWA) untuk membuat dan mengedit dokumen SOP berformat standar
 (halaman identitas + diagram alir lintas pelaksana), menyimpannya sebagai JSON, dan mengekspornya ke PDF A4 lanskap.
 
-Dibangun dengan Svelte 5 + Vite, jsPDF, dan vite-plugin-pwa.
+Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero untuk kolaborasi real-time.
 
 **Demo:** https://rendicahya.github.io/sop-editor/
 
@@ -20,6 +20,8 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, dan vite-plugin-pwa.
 - PDF vektor (teks bisa diseleksi). Teks dokumen memakai font [Carlito](https://github.com/googlefonts/carlito),
   pengganti Calibri dengan metrik identik (file Calibri asli tidak boleh didistribusikan ulang). Font disematkan ke PDF.
 - Simpan/buka JSON, seret-lepas berkas JSON ke jendela, simpan otomatis ke browser, Undo/Redo.
+- **Kolaborasi real-time** tanpa server: edit satu dokumen bersama lewat tautan undangan, lihat siapa sedang
+  mengedit bagian mana, dan ketik bersamaan di kolom yang sama tanpa saling menimpa.
 - Bisa dipasang sebagai aplikasi (PWA), bekerja offline, dan membuka berkas `.json` lewat "Buka dengan".
 - Tampilan responsif (beralih Edit/Pratinjau di layar kecil).
 
@@ -36,6 +38,28 @@ Di Chrome/Edge, "Simpan" berikutnya langsung menimpa berkas yang sama (File Syst
 Di browser lain, berkas diunduh.
 
 Tombol **Contoh** memuat contoh SOP Skripsi untuk melihat semua fitur.
+
+### Kolaborasi
+
+1. Klik **Kolaborasi**, isi nama, lalu **Buat ruang**. Dokumen yang sedang terbuka menjadi isi ruang.
+2. Salin tautan undangan dan bagikan. Penerima mengisi nama lalu **Gabung**; dokumennya diganti dengan dokumen ruang.
+3. Semua perubahan langsung tersinkron. Avatar peserta tampil di toolbar, titik berwarna di tab menunjukkan posisi
+   mereka, dan kartu langkah yang sedang diedit orang lain diberi bingkai berwarna beserta namanya.
+4. Undo/Redo di dalam ruang hanya membatalkan perubahan Anda sendiri.
+
+Cara kerjanya:
+
+- Dokumen disimpan sebagai CRDT [Yjs](https://yjs.dev), sehingga suntingan bersamaan digabung otomatis
+  (teks per karakter; pilihan, tanggal, dan gambar diganti utuh).
+- Browser saling menemukan lewat relay [Nostr](https://nostr.com) publik ([Trystero](https://github.com/dmotz/trystero)),
+  lalu data dikirim langsung antar-peserta melalui WebRTC. Tidak ada server yang menyimpan dokumen.
+- Tautan berisi id ruang dan kunci acak; kunci mengenkripsi proses pencarian peer, jadi hanya pemegang tautan yang bisa
+  bergabung. Bagikan tautan hanya kepada orang yang boleh mengedit.
+- Isi ruang tersimpan di IndexedDB setiap peserta. Membuka tautan lagi (atau memuat ulang halaman) langsung masuk
+  kembali ke ruang, dan dokumen tetap bisa dibuka meski peserta lain sedang offline.
+- Keterbatasan: koneksi peer-to-peer tanpa server TURN bisa gagal di jaringan dengan NAT/firewall ketat
+  (sebagian jaringan kantor/kampus). Peserta yang bergabung baru melihat dokumen setelah tersambung dengan minimal satu
+  peserta lain yang memegang isi ruang.
 
 ## Pengembangan
 
@@ -56,6 +80,8 @@ Struktur utama:
 | `src/lib/PageSvg.svelte` | Renderer pratinjau (SVG) |
 | `src/lib/pdf.js` | Renderer PDF (jsPDF) |
 | `src/lib/fonts.js` | Pemuatan & registrasi font Carlito |
+| `src/lib/collab.svelte.js` | Ruang kolaborasi: Yjs, koneksi P2P (Trystero), kehadiran, undo per pengguna |
+| `src/lib/ysync.js` | Selisih dua arah antara dokumen JSON dan struktur Yjs |
 | `src/lib/editors/` | Komponen form editor |
 
 ## Deploy ke GitHub Pages
@@ -111,6 +137,13 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
 - Keterkaitan antar-SOP yang bisa ditautkan ke dokumen lain di pustaka.
 - Berbagi via tautan (JSON terkompresi di URL) tanpa server.
 - Ekspor tambahan: PNG/SVG per halaman dan DOCX; impor langkah dari Excel/CSV.
+
+**Kolaborasi**
+- Konfigurasi server TURN (mis. dari layanan pihak ketiga) agar tetap tersambung di jaringan yang ketat.
+- Opsi sinkronisasi lewat server (Firebase/Supabase/y-websocket) untuk dokumen terpusat, login akun institusi, dan
+  hak akses baca saja / edit.
+- Kursor dan sorotan teks peserta lain di dalam kolom, serta komentar per langkah.
+- Daftar ruang yang pernah diikuti dan riwayat versi (snapshot Yjs) yang bisa dipulihkan.
 
 **Editor**
 - Seret-lepas untuk mengurutkan langkah, butir, dan pelaksana.
