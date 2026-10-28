@@ -36,6 +36,15 @@ function toIsoDate(v) {
   return mi < 0 ? '' : `${m[3]}-${String(mi + 1).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
 }
 
+/** Tanggal hari ini (zona waktu lokal) dalam format ISO. */
+export function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Kop baku SOP di lingkungan UB (logo UB selalu dicetak, lihat layout.js). */
+export const DEFAULT_INSTITUTION = 'KEMENTERIAN PENDIDIKAN TINGGI, SAINS,\nDAN TEKNOLOGI\nUNIVERSITAS BRAWIJAYA';
+
 export function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -67,10 +76,9 @@ export function emptyDocument() {
     format: FORMAT,
     version: VERSION,
     header: {
-      logo: null,
-      institution: 'NAMA INSTANSI\nUNIT KERJA',
+      institution: DEFAULT_INSTITUTION,
       nomor: '',
-      tglPembuatan: '',
+      tglPembuatan: todayIso(),
       tglRevisi: '',
       tglEfektif: '',
       disahkanJabatan: '',
@@ -130,7 +138,6 @@ export function sampleDocument() {
     format: FORMAT,
     version: VERSION,
     header: {
-      logo: null,
       institution: 'KEMENTERIAN PENDIDIKAN, KEBUDAYAAN,\nRISET DAN TEKNOLOGI\nFAKULTAS ILMU KOMPUTER\nUNIVERSITAS BRAWIJAYA',
       nomor: 'UN10/F15/05/1/HK.01.02.a/126',
       tglPembuatan: '2023-08-07',
@@ -201,7 +208,7 @@ export function normalizeDocument(raw) {
   const str = (v) => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '');
   const header = { ...base.header };
   for (const k of Object.keys(header)) {
-    if (k === 'logo' || k === 'signature') header[k] = isImage(raw.header?.[k]) ? raw.header[k] : null;
+    if (k === 'signature') header[k] = isImage(raw.header?.[k]) ? raw.header[k] : null;
     else header[k] = str(raw.header?.[k]);
   }
   header.tglPembuatan = toIsoDate(header.tglPembuatan);

@@ -32,9 +32,6 @@
       </text>
     {:else if it.t === 'image'}
       <image href={it.src} x={it.x} y={it.y} width={it.w} height={it.h} preserveAspectRatio="none" />
-    {:else if it.t === 'placeholder'}
-      <rect x={it.x} y={it.y} width={it.w} height={it.h} fill="#f5f7fb" stroke="#b8c2d6" stroke-width="0.3" stroke-dasharray="1.2 1" />
-      <text x={it.x + it.w / 2} y={it.y + it.h / 2 + 1} font-family="Carlito, Calibri, sans-serif" font-size="3" fill="#8a94a8" text-anchor="middle">{it.label}</text>
     {/if}
   {/each}
 </svg>

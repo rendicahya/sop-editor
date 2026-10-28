@@ -55,7 +55,6 @@ function drawItem(pdf, it) {
       pdf.addImage(it.src, fmt, it.x, it.y, it.w, it.h, undefined, 'FAST');
       break;
     }
-    // 'placeholder' hanya untuk pratinjau
   }
 }
 

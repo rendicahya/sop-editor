@@ -2,7 +2,7 @@
   import { app } from './store.svelte.js';
   import { searchPattern, findMatches, replaceIn } from './findReplace.js';
 
-  /** onjump(tab) → pindah ke tab editor tempat kolom berada. */
+  /** onjump(field) → tampilkan kolom: tab editor (field.tab) atau isian di pratinjau (field.ref). */
   let { open = $bindable(false), onjump, onnotify } = $props();
 
   let query = $state('');
@@ -57,7 +57,7 @@
       <ul>
         {#each results.slice(0, MAX) as r, i (i)}
           <li>
-            <button class="hit" onclick={() => onjump(r.field.tab)} title="Buka tab {r.field.tab}">
+            <button class="hit" onclick={() => onjump(r.field)} title="Tampilkan kolom ini">
               <span class="where">{r.field.label}{r.count > 1 ? ` (${r.count})` : ''}</span>
               <span class="snippet">{#each r.parts as p, j (j)}{#if p.hit}<mark>{p.text}</mark>{:else}{p.text}{/if}{/each}</span>
             </button>

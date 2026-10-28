@@ -9,10 +9,12 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 
 ## Fitur
 
-- Editor identitas SOP: logo, nama instansi, nomor, tanggal pembuatan/efektif (date picker), tanggal revisi,
-  pengesahan, serta gambar tanda tangan/stempel.
+- Format baku SOP Universitas Brawijaya: logo UB selalu tercetak; dokumen baru otomatis berisi kop kementerian sampai
+  "UNIVERSITAS BRAWIJAYA" (tetap bisa diubah) dan tanggal pembuatan hari ini.
+- **Halaman 1 diedit langsung di pratinjau (WYSIWYG)**: klik teks di halaman untuk mengetik nama instansi, nomor,
+  tanggal (date picker), tanggal revisi, pengesahan, gambar tanda tangan/stempel, dan setiap butir ketentuan.
 - Bagian Dasar Hukum, Kualifikasi Pelaksana, Keterkaitan, Peralatan/Perlengkapan, Peringatan, serta
-  Pencatatan dan Pendataan, masing-masing bisa bernomor atau tidak.
+  Pencatatan dan Pendataan, masing-masing bisa bernomor atau tidak (tombol muncul saat judul bagian disorot).
 - Daftar pelaksana (kolom diagram) dan langkah kegiatan dengan simbol Mulai/Selesai, Proses, dan Keputusan,
   plus kolom Mutu Baku (Kelengkapan, Waktu, Output) dan Keterangan.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …).
@@ -40,6 +42,10 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 | Ctrl+F / Ctrl+H | Cari & ganti (Esc untuk menutup) |
 | Ctrl+B | Tutup/buka panel editor |
 | Ctrl+Z / Ctrl+Y | Urungkan / Ulangi (saat fokus di luar kolom teks) |
+
+Pada butir ketentuan di halaman 1: **Enter** membuat butir baru (memecah di posisi kursor), **Backspace** di awal butir
+menggabungkannya dengan butir sebelumnya, **Alt+↑/↓** memindahkan butir, dan **↑/↓** di awal/akhir butir berpindah
+antarbutir.
 
 Di Chrome/Edge, "Simpan" berikutnya langsung menimpa berkas yang sama (File System Access API).
 Di browser lain, berkas diunduh.
@@ -98,13 +104,15 @@ Struktur utama:
 | `src/lib/model.js` | Struktur dokumen, contoh, validasi/normalisasi JSON, format tanggal |
 | `src/lib/layout.js` | Mesin tata letak: dokumen → halaman berisi primitif (rect, poly, text, image, …) |
 | `src/lib/PageSvg.svelte` | Renderer pratinjau (SVG) |
+| `src/lib/PageFields.svelte` | Lapisan isian edit-langsung di atas halaman identitas (posisi dari `page.fields`) |
+| `src/assets/logo-ub.png` | Logo Universitas Brawijaya yang disematkan ke setiap dokumen |
 | `src/lib/pdf.js` | Renderer PDF (jsPDF) |
 | `src/lib/fonts.js` | Pemuatan & registrasi font Carlito |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
 | `src/lib/findReplace.js` | Daftar kolom teks dokumen, pencarian, dan penggantian |
 | `src/lib/collab.svelte.js` | Ruang kolaborasi: Yjs, koneksi P2P (Trystero), kehadiran, undo per pengguna |
 | `src/lib/ysync.js` | Selisih dua arah antara dokumen JSON dan struktur Yjs |
-| `src/lib/editors/` | Komponen form editor |
+| `src/lib/editors/` | Komponen form editor (pelaksana dan langkah) |
 
 ## Deploy ke GitHub Pages
 
@@ -123,7 +131,7 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
     "namaSop": "...", "nomor": "...",
     "tglPembuatan": "2023-08-07", "tglEfektif": "2023-10-20", // ISO, dicetak "07 Agustus 2023"
     "tglRevisi": "teks bebas",
-    "logo": { "src": "data:image/png;base64,...", "width": 0, "height": 0 }, ...
+    "signature": { "src": "data:image/png;base64,...", "width": 0, "height": 0 }, ... // logo tidak disimpan (baku)
   },
   "sections": { "dasarHukum": { "numbered": true, "items": ["..."] }, ... },
   "actors": [{ "id": "a1", "name": "Mahasiswa" }],

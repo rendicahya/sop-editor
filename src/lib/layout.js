@@ -4,6 +4,9 @@
 import { jsPDF } from 'jspdf';
 import { FONT, registerFonts } from './fonts.js';
 import { formatTanggal } from './model.js';
+import logoSrc from '../assets/logo-ub.png?inline';
+
+const LOGO = { src: logoSrc, width: 418, height: 420 };
 
 export const PAGE = { w: 297, h: 210, m: 10 };
 export const PT = 25.4 / 72;
@@ -47,7 +50,8 @@ export function layoutDocument(doc) {
 }
 
 function newPage(pages) {
-  const p = { w: PAGE.w, h: PAGE.h, items: [] };
+  // fields: area yang bisa diedit langsung di pratinjau (tidak ikut dicetak).
+  const p = { w: PAGE.w, h: PAGE.h, items: [], fields: [] };
   pages.push(p);
   return p;
 }
@@ -74,8 +78,17 @@ function layoutIdentity(doc, pages) {
   let page = newPage(pages);
   let y = m;
 
+  // Area isian teks: kotak (x, y, w, h) dengan jarak dalam `pad`; tinggi minimal satu baris.
+  const field = (key, x, y, w, lines, size, opts = {}) => {
+    const p = opts.pad ?? 0;
+    const h = opts.h ?? Math.max(1, lines.length) * lineHeight(size) + 2 * p;
+    page.fields.push({ id: 'h:' + key, kind: 'text', key, x, y, w, h, pad: p, size, bold: false, align: 'left', ...opts });
+  };
+
   // Baris-baris kanan
-  const simple = (label, value, bold = false) => {
+  const simple = (label, key, opts = {}) => {
+    const value = opts.date ? formatTanggal(hd[key]) : hd[key];
+    const bold = !!opts.bold;
     const lines = wrap(value, S, bold, valW - 2 * pad);
     const labLines = wrap(label, S, true, labelW - 2 * pad);
     const h = Math.max(7, Math.max(textH(lines, S), textH(labLines, S)) + 2 * pad);
@@ -83,6 +96,8 @@ function layoutIdentity(doc, pages) {
       page.items.push(rect(xLab, yy, labelW, h), rect(xVal, yy, valW, h));
       page.items.push(text(xLab + pad, yy + pad, labLines, S, { bold: true }));
       page.items.push(text(xVal + pad, yy + pad, lines, S, { bold }));
+      if (opts.date) page.fields.push({ id: 'd:' + key, kind: 'date', key, x: xVal, y: yy, w: valW, h, pad, size: S, label });
+      else field(key, xVal, yy, valW, lines, S, { h, pad, bold, label, placeholder: opts.placeholder });
     } };
   };
 
@@ -107,34 +122,44 @@ function layoutIdentity(doc, pages) {
       }
       page.items.push(text(cx, yy + h - pad - bottomText, nama, S, { align: 'center' }));
       page.items.push(text(cx, yy + h - pad - textH(nip, S), nip, S, { align: 'center' }));
+
+      // Isian kosong tetap mendapat satu baris agar bisa diklik.
+      const line = lineHeight(S);
+      const nipY = yy + h - pad - Math.max(1, nip.length) * line;
+      const namaY = nipY - Math.max(1, nama.length) * line;
+      const jabY = yy + pad;
+      const jabB = jabY + Math.max(1, jab.length) * line;
+      const c = { align: 'center', pad: 0 };
+      field('disahkanJabatan', xVal + 2, jabY, valW - 4, jab, S, { ...c, label: 'Jabatan pengesah', placeholder: 'Jabatan pengesah' });
+      field('disahkanNama', xVal + 2, namaY, valW - 4, nama, S, { ...c, label: 'Nama pengesah', placeholder: 'Nama pengesah' });
+      field('disahkanNip', xVal + 2, nipY, valW - 4, nip, S, { ...c, label: 'NIP pengesah', placeholder: 'NIP. …' });
+      page.fields.push({ id: 'sig', kind: 'image', key: 'signature', x: xVal + 5, y: jabB + 0.5, w: valW - 10, h: Math.max(4, namaY - jabB - 1), label: 'Tanda tangan / stempel' });
     }
   };
 
   const rightRows = [
-    simple('NOMOR SOP', hd.nomor),
-    simple('TGL PEMBUATAN', formatTanggal(hd.tglPembuatan)),
-    simple('TGL REVISI', hd.tglRevisi),
-    simple('TGL EFEKTIF', formatTanggal(hd.tglEfektif)),
+    simple('NOMOR SOP', 'nomor'),
+    simple('TGL PEMBUATAN', 'tglPembuatan', { date: true }),
+    simple('TGL REVISI', 'tglRevisi'),
+    simple('TGL EFEKTIF', 'tglEfektif', { date: true }),
     signRow,
-    simple('NAMA SOP', hd.namaSop, true)
+    simple('NAMA SOP', 'namaSop', { bold: true, placeholder: 'NAMA SOP' })
   ];
   const blockH = rightRows.reduce((a, r) => a + r.h, 0);
 
-  // Blok kiri: logo + nama instansi
+  // Blok kiri: logo UB (baku) + nama instansi
   page.items.push(rect(m, y, leftW, blockH));
   const inst = wrap(hd.institution, 11, true, leftW - 8);
   const instH = textH(inst, 11);
   const logoAreaTop = y + 3;
   const logoAreaBottom = y + blockH - instH - 4;
-  const logoMaxH = Math.min(44, logoAreaBottom - logoAreaTop);
-  if (hd.logo) {
-    const f = fit(hd.logo, 60, logoMaxH);
-    page.items.push({ t: 'image', src: hd.logo.src, x: m + (leftW - f.w) / 2, y: logoAreaTop + (logoAreaBottom - logoAreaTop - f.h) / 2, w: f.w, h: f.h });
-  } else {
-    const s = Math.min(30, logoMaxH);
-    page.items.push({ t: 'placeholder', x: m + (leftW - s) / 2, y: logoAreaTop + (logoAreaBottom - logoAreaTop - s) / 2, w: s, h: s, label: 'Logo' });
-  }
+  const f = fit(LOGO, 60, Math.min(44, logoAreaBottom - logoAreaTop));
+  page.items.push({ t: 'image', src: LOGO.src, x: m + (leftW - f.w) / 2, y: logoAreaTop + (logoAreaBottom - logoAreaTop - f.h) / 2, w: f.w, h: f.h });
   page.items.push(text(m + leftW / 2, y + blockH - instH - 2, inst, 11, { bold: true, align: 'center' }));
+  const instFieldH = Math.max(1, inst.length) * lineHeight(11);
+  field('institution', m + 4, y + blockH - 2 - instFieldH, leftW - 8, inst, 11, {
+    bold: true, align: 'center', multiline: true, label: 'Nama instansi', placeholder: 'NAMA INSTANSI'
+  });
 
   let yy = y;
   for (const r of rightRows) {
@@ -151,8 +176,8 @@ function layoutIdentity(doc, pages) {
   ];
   const rightW = labelW + valW;
   for (const [lk, lt, rk, rt] of pairs) {
-    const L = listBlock(doc.sections[lk], leftW, S);
-    const R = listBlock(doc.sections[rk], rightW, S);
+    const L = listBlock(doc.sections[lk], lk, leftW, S);
+    const R = listBlock(doc.sections[rk], rk, rightW, S);
     const headH = 7;
     const bodyH = Math.max(8, L.h, R.h);
     const h = headH + bodyH;
@@ -165,11 +190,15 @@ function layoutIdentity(doc, pages) {
     page.items.push(rect(m, y + headH, leftW, bodyH), rect(xLab, y + headH, rightW, bodyH));
     L.draw(page, m, y + headH);
     R.draw(page, xLab, y + headH);
+    for (const [key, title, x0, w] of [[lk, lt, m, leftW], [rk, rt, xLab, rightW]]) {
+      page.fields.push({ id: 'sh:' + key, kind: 'section', key, title, x: x0, y, w, h: headH });
+      if (!doc.sections[key].items.length) page.fields.push({ id: 'sb:' + key, kind: 'empty', key, title, x: x0, y: y + headH, w, h: bodyH });
+    }
     y += h;
   }
 }
 
-function listBlock(section, width, S) {
+function listBlock(section, key, width, S) {
   const pad = 1.4;
   const numW = section.numbered ? 5 : 0;
   const items = section.items.map((t) => wrap(t, S, false, width - 2 * pad - numW));
@@ -183,7 +212,9 @@ function listBlock(section, width, S) {
       items.forEach((lines, i) => {
         if (section.numbered) page.items.push(text(x + pad, yy, [String(i + 1)], S));
         page.items.push(text(x + pad + numW, yy, lines, S));
-        yy += Math.max(1, lines.length) * lineHeight(S) + gap;
+        const h = Math.max(1, lines.length) * lineHeight(S);
+        page.fields.push({ id: `s:${key}:${i}`, kind: 'item', key, index: i, x: x + pad + numW, y: yy, w: width - 2 * pad - numW, h, pad: 0, size: S, align: 'left' });
+        yy += h + gap;
       });
     }
   };

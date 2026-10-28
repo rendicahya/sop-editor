@@ -20,13 +20,16 @@ const STEP_FIELDS = [
   ['noLabel', 'Label tidak']
 ];
 
-/** Semua kolom teks dokumen yang bisa dicari: { obj, key, label, tab }. */
+/**
+ * Semua kolom teks dokumen yang bisa dicari: { obj, key, label, tab } untuk kolom di panel editor,
+ * atau { obj, key, label, ref } untuk isian halaman identitas (ref = data-field di pratinjau).
+ */
 export function textFields(doc) {
   const out = [];
-  for (const [key, label] of HEADER_FIELDS) out.push({ obj: doc.header, key, label, tab: 'identitas' });
-  for (const { key, title } of SECTION_DEFS) {
-    const items = doc.sections[key]?.items ?? [];
-    items.forEach((_, i) => out.push({ obj: items, key: i, label: `${title} · butir ${i + 1}`, tab: 'ketentuan' }));
+  for (const [key, label] of HEADER_FIELDS) out.push({ obj: doc.header, key, label, ref: 'h:' + key });
+  for (const { key: sec, title } of SECTION_DEFS) {
+    const items = doc.sections[sec]?.items ?? [];
+    items.forEach((_, i) => out.push({ obj: items, key: i, label: `${title} · butir ${i + 1}`, ref: `s:${sec}:${i}` }));
   }
   doc.actors.forEach((a, i) => out.push({ obj: a, key: 'name', label: `Pelaksana ${i + 1}`, tab: 'pelaksana' }));
   doc.steps.forEach((s, i) => {

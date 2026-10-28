@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist } from './lib/store.svelte.js';
   import { emptyDocument, sampleDocument, parseDocumentText } from './lib/model.js';
@@ -7,8 +7,6 @@
   import { exportPdf } from './lib/pdf.js';
   import { saveJson, openJsonFile, slug } from './lib/files.js';
   import Preview from './lib/Preview.svelte';
-  import HeaderEditor from './lib/editors/HeaderEditor.svelte';
-  import SectionsEditor from './lib/editors/SectionsEditor.svelte';
   import ActorsEditor from './lib/editors/ActorsEditor.svelte';
   import StepsEditor from './lib/editors/StepsEditor.svelte';
   import CollabDialog from './lib/CollabDialog.svelte';
@@ -17,13 +15,12 @@
   import * as Collab from './lib/collab.svelte.js';
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
 
+  // Halaman identitas (kop, pengesahan, ketentuan) diedit langsung di pratinjau.
   const TABS = [
-    { id: 'identitas', label: 'Identitas' },
-    { id: 'ketentuan', label: 'Ketentuan' },
     { id: 'pelaksana', label: 'Pelaksana' },
     { id: 'langkah', label: 'Langkah' }
   ];
-  let tab = $state('identitas');
+  let tab = $state('pelaksana');
   let mobileView = $state('edit');
   let zoom = $state(100);
   let toast = $state('');
@@ -181,7 +178,7 @@
   function newDoc() {
     if (!confirm(`Buat dokumen baru${shared}? Perubahan yang belum disimpan ke JSON tetap bisa dibatalkan dengan Undo.`)) return;
     replaceDocument(emptyDocument());
-    tab = 'identitas';
+    tab = 'pelaksana';
   }
 
   function loadSample() {
@@ -396,11 +393,8 @@
         </div>
       {/if}
       <div class="editor-body" inert={collab.status === 'connecting'} onfocusin={onFocusIn}>
-        {#if tab === 'identitas'}
-          <HeaderEditor />
-        {:else if tab === 'ketentuan'}
-          <SectionsEditor />
-        {:else if tab === 'pelaksana'}
+        <p class="inplace-hint">Kop, tanggal, pengesahan, dan ketentuan diisi langsung pada halaman 1 di pratinjau.</p>
+        {#if tab === 'pelaksana'}
           <ActorsEditor />
         {:else}
           <StepsEditor />
@@ -423,7 +417,7 @@
         </label>
       </div>
       <div class="preview-scroll">
-        <Preview {pages} {zoom} />
+        <Preview {pages} {zoom} editable={collab.status !== 'connecting'} />
       </div>
     </section>
   </main>
@@ -446,10 +440,18 @@
   <FindPanel
     bind:open={findOpen}
     onnotify={notify}
-    onjump={(t) => {
-      tab = t;
-      if (!sidebar) toggleSidebar();
-      mobileView = 'edit';
+    onjump={async (f) => {
+      if (f.tab) {
+        tab = f.tab;
+        if (!sidebar) toggleSidebar();
+        mobileView = 'edit';
+        return;
+      }
+      mobileView = 'preview';
+      await tick();
+      const el = document.querySelector(`[data-field="${f.ref}"]`);
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      el?.focus({ preventScroll: true });
     }}
   />
 
