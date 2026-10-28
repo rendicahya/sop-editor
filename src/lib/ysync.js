@@ -3,7 +3,7 @@
 import * as Y from 'yjs';
 
 // Nilai yang harus diganti utuh, bukan digabung per karakter (id, pilihan, tanggal, data gambar).
-const ATOMIC = new Set(['id', 'actor', 'shape', 'next', 'alt', 'src', 'format', 'tglPembuatan', 'tglEfektif']);
+const ATOMIC = new Set(['id', 'actor', 'shape', 'next', 'alt', 'src', 'format', 'tglPembuatan', 'tglRevisi', 'tglEfektif']);
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const hasId = (v) => isObj(v) && typeof v.id === 'string';

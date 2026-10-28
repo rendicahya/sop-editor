@@ -4,7 +4,6 @@ const HEADER_FIELDS = [
   ['institution', 'Nama instansi'],
   ['namaSop', 'Nama SOP'],
   ['nomor', 'Nomor SOP'],
-  ['tglRevisi', 'Tanggal revisi'],
   ['disahkanJabatan', 'Jabatan pengesah'],
   ['disahkanNama', 'Nama pengesah'],
   ['disahkanNip', 'NIP pengesah']

@@ -21,10 +21,10 @@ export const SECTION_DEFS = [
 const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-/** "2023-08-07" → "07 Agustus 2023". */
+/** "2023-08-07" → "07 Agustus 2023". Teks lain (tanggal revisi dari berkas lama) dicetak apa adanya. */
 export function formatTanggal(iso) {
   const m = ISO.exec(iso || '');
-  return m ? `${m[3]} ${BULAN[+m[2] - 1] ?? ''} ${m[1]}` : '';
+  return m ? `${m[3]} ${BULAN[+m[2] - 1] ?? ''} ${m[1]}` : iso || '';
 }
 
 /** Menerima tanggal ISO atau teks "07 Agustus 2023" (format lama) dan mengembalikan ISO. */
@@ -213,6 +213,8 @@ export function normalizeDocument(raw) {
   }
   header.tglPembuatan = toIsoDate(header.tglPembuatan);
   header.tglEfektif = toIsoDate(header.tglEfektif);
+  // Tanggal revisi dulu teks bebas: dikonversi bila bisa, selain itu teksnya dipertahankan.
+  header.tglRevisi = toIsoDate(header.tglRevisi) || header.tglRevisi.trim();
 
   const sections = {};
   for (const s of SECTION_DEFS) {

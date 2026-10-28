@@ -12,7 +12,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - Format baku SOP Universitas Brawijaya: logo UB selalu tercetak; dokumen baru otomatis berisi kop kementerian sampai
   "UNIVERSITAS BRAWIJAYA" (tetap bisa diubah) dan tanggal pembuatan hari ini.
 - **Halaman 1 diedit langsung di pratinjau (WYSIWYG)**: klik teks di halaman untuk mengetik nama instansi, nomor,
-  tanggal (date picker), tanggal revisi, pengesahan, gambar tanda tangan/stempel, dan setiap butir ketentuan.
+  tanggal pembuatan/revisi/efektif (date picker), pengesahan, gambar tanda tangan/stempel, dan setiap butir ketentuan.
 - Bagian Dasar Hukum, Kualifikasi Pelaksana, Keterkaitan, Peralatan/Perlengkapan, Peringatan, serta
   Pencatatan dan Pendataan, masing-masing bisa bernomor atau tidak (tombol muncul saat judul bagian disorot).
 - Daftar pelaksana (kolom diagram) dan langkah kegiatan dengan simbol Mulai/Selesai, Proses, dan Keputusan,
@@ -130,8 +130,7 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
   "version": 1,
   "header": {
     "namaSop": "...", "nomor": "...",
-    "tglPembuatan": "2023-08-07", "tglEfektif": "2023-10-20", // ISO, dicetak "07 Agustus 2023"
-    "tglRevisi": "teks bebas",
+    "tglPembuatan": "2023-08-07", "tglRevisi": "", "tglEfektif": "2023-10-20", // ISO, dicetak "07 Agustus 2023"
     "signature": { "src": "data:image/png;base64,...", "width": 0, "height": 0 }, ... // logo tidak disimpan (baku)
   },
   "sections": { "dasarHukum": { "numbered": true, "items": ["..."] }, ... },
@@ -160,7 +159,7 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
 - Nomor halaman dan footer (mis. "Halaman 1 dari 3", nomor SOP) di setiap halaman.
 - Pemenggalan kata yang lebih baik untuk nama pelaksana yang panjang di kolom sempit.
 - Format teks sederhana (tebal/miring) di Keterangan dan Dasar Hukum.
-- Riwayat revisi (daftar tanggal dan ringkasan perubahan) dan date picker untuk tanggal revisi.
+- Riwayat revisi (daftar tanggal dan ringkasan perubahan).
 - QR code verifikasi atau tanda tangan digital pada bagian pengesahan.
 
 **Pengelolaan berkas**

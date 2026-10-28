@@ -140,7 +140,7 @@ function layoutIdentity(doc, pages) {
   const rightRows = [
     simple('NOMOR SOP', 'nomor'),
     simple('TGL PEMBUATAN', 'tglPembuatan', { date: true }),
-    simple('TGL REVISI', 'tglRevisi'),
+    simple('TGL REVISI', 'tglRevisi', { date: true }),
     simple('TGL EFEKTIF', 'tglEfektif', { date: true }),
     signRow,
     simple('NAMA SOP', 'namaSop', { bold: true, placeholder: 'NAMA SOP' })
