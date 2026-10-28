@@ -277,10 +277,15 @@ function layoutFlow(doc, pages) {
       const cx = x.act + i * actW;
       cell(cx, y + H1, actW, H2, actorLines[i]);
       const fh = Math.max(1, actorLines[i].length) * lineHeight(HS);
-      page.fields.push({
-        id: 'a:' + a.id, kind: 'text', actor: a.id, key: 'name', x: cx + 1, y: y + H1 + (H2 - fh) / 2, w: actW - 2, h: fh,
-        pad: 0, size: HS, bold: true, align: 'center', label: `Pelaksana ${i + 1}`, placeholder: 'Pelaksana'
-      });
+      // `hot`: isian yang sekelompok; alat kelompok tampil saat salah satunya disorot.
+      const hot = 'a:' + a.id;
+      page.fields.push(
+        { id: 'at:' + a.id, kind: 'actor-tools', hot, actor: a.id, index: i, x: cx, y: y + H1, w: actW, h: H2 },
+        {
+          id: 'a:' + a.id, kind: 'text', hot, actor: a.id, key: 'name', x: cx + 1, y: y + H1 + (H2 - fh) / 2, w: actW - 2, h: fh,
+          pad: 0, size: HS, bold: true, align: 'center', label: `Pelaksana ${i + 1}`, placeholder: 'Pelaksana'
+        }
+      );
     });
     cell(x.kel, y, col.kel + col.wkt + col.out, H1, 'Mutu Baku');
     cell(x.kel, y + H1, col.kel, H2, 'Kelengkapan');
@@ -375,6 +380,7 @@ function layoutFlow(doc, pages) {
     if (top[q]) drawBand(page, bodyTop);
     if (bot[q]) drawBand(page, bandBottomY[q]);
   });
+  if (!rows.length) pageObjs[0].fields.push({ id: 'st:add', kind: 'add-step', x: x.no, y: bodyTop, w: x.end - x.no, h: 12.5 });
   rows.forEach((r, i) => {
     const page = pageObjs[pageOf[i]];
     const y = rowY[i];
@@ -388,15 +394,18 @@ function layoutFlow(doc, pages) {
     put('ket', x.ket);
 
     // Isian langsung: sel teks langkah, dan sel lajur pelaksana lain untuk memindahkan bentuk.
+    // Alas sebaris penuh (paling bawah) menampung tombol tambah/hapus kegiatan.
     const sid = r.step.id;
+    const hot = 'r:' + sid;
+    page.fields.push({ id: `sr:${sid}`, kind: 'step-tools', hot, step: sid, index: i, x: x.no, y, w: x.end - x.no, h: r.h });
     for (const [c, key, label] of CELL_FIELDS) {
       page.fields.push({
-        id: `st:${sid}:${key}`, kind: 'text', step: sid, key, x: x[c] + pad, y: y + pad, w: col[c] - 2 * pad, h: r.h - 2 * pad,
+        id: `st:${sid}:${key}`, kind: 'text', hot, step: sid, key, x: x[c] + pad, y: y + pad, w: col[c] - 2 * pad, h: r.h - 2 * pad,
         pad: 0, size: TS, bold: false, align: 'left', multiline: true, label: `Langkah ${i + 1} · ${label}`
       });
     }
     actors.forEach((a, j) => {
-      if (j !== r.col) page.fields.push({ id: `ln:${sid}:${a.id}`, kind: 'lane', step: sid, actor: a.id, name: a.name, x: x.act + j * actW, y, w: actW, h: r.h });
+      if (j !== r.col) page.fields.push({ id: `ln:${sid}:${a.id}`, kind: 'lane', hot, step: sid, actor: a.id, name: a.name, x: x.act + j * actW, y, w: actW, h: r.h });
     });
   });
 

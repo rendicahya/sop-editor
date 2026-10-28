@@ -3,6 +3,7 @@
   import { app } from './store.svelte.js';
   import { readImage } from './files.js';
   import { PT } from './layout.js';
+  import { newStep, removeStep, uid } from './model.js';
 
   // Lapisan isian di atas halaman (identitas dan diagram alir): teks diketik langsung pada posisinya di dokumen.
   // Teks isian dibuat transparan sehingga yang terlihat tetap hasil render SVG (sama dengan PDF);
@@ -31,6 +32,39 @@
   function moveStep(f) {
     const s = app.doc.steps.find((s) => s.id === f.step);
     if (s) s.actor = f.actor;
+  }
+
+  // Kelompok isian yang sedang disorot/difokus (pelaksana atau baris langkah): alatnya ditampilkan.
+  let hover = $state(null);
+  let focused = $state(null);
+  const groupOf = (e) => e.target.closest?.('[data-hot]')?.dataset.hot ?? null;
+  const isHot = (f) => hover === f.hot || focused === f.hot;
+
+  const actors = $derived(app.doc.actors);
+  const steps = $derived(app.doc.steps);
+  const usage = (id) => steps.filter((s) => s.actor === id).length;
+
+  function moveActor(i, d) {
+    const j = i + d;
+    if (j < 0 || j >= actors.length) return;
+    [actors[i], actors[j]] = [actors[j], actors[i]];
+  }
+  function addActor(i) {
+    const a = { id: uid(), name: '' };
+    actors.splice(i + 1, 0, a);
+    focusField('a:' + a.id);
+  }
+  // Pelaksana hanya bisa dihapus bila tidak ada langkah di lajurnya (dan bukan satu-satunya).
+  const actorLock = (a) =>
+    !a ? 'Tidak ditemukan' : actors.length <= 1 ? 'Minimal harus ada satu pelaksana' : usage(a.id) ? `Tidak bisa dihapus: ${usage(a.id)} langkah dilakukan pelaksana ini` : '';
+  function removeActor(i) {
+    if (!actorLock(actors[i])) actors.splice(i, 1);
+  }
+
+  function addStep(i) {
+    const s = newStep(steps[i]?.actor ?? actors[0].id);
+    steps.splice(i + 1, 0, s);
+    focusField(`st:${s.id}:kegiatan`);
   }
 
   /** Fokus ke isian `id` setelah tata letak diperbarui, dengan kursor di posisi `caret`. */
@@ -126,7 +160,14 @@
     (f.pad ? `padding:calc(${f.pad} * var(--mm));` : '');
 </script>
 
-<div class="fields" inert={!editable}>
+<div
+  class="fields"
+  inert={!editable}
+  onpointerover={(e) => (hover = groupOf(e))}
+  onpointerleave={() => (hover = null)}
+  onfocusin={(e) => (focused = groupOf(e))}
+  onfocusout={() => (focused = null)}
+>
   {#each fields as f (f.id)}
     {#if f.kind === 'text'}
       <textarea
@@ -135,6 +176,7 @@
         class:center={f.align === 'center'}
         style={box(f)}
         data-field={f.id}
+        data-hot={f.hot}
         aria-label={f.label}
         placeholder={f.placeholder ?? ''}
         spellcheck="false"
@@ -199,11 +241,39 @@
         class="f-lane"
         style={box(f)}
         data-field={f.id}
+        data-hot={f.hot}
         tabindex="-1"
         title="Pindahkan langkah ini ke {f.name || 'pelaksana ini'}"
         aria-label="Pindahkan langkah ke {f.name || 'pelaksana ini'}"
         onclick={() => moveStep(f)}
       ></button>
+    {:else if f.kind === 'actor-tools'}
+      {@const a = actors[f.index]}
+      {@const lock = actorLock(a)}
+      <div class="f-group" class:hot={isHot(f)} style={box(f)} data-hot={f.hot}>
+        <span class="g-tools g-top">
+          <button tabindex="-1" title="Geser ke kiri" aria-label="Geser pelaksana ke kiri" aria-disabled={f.index === 0} onclick={() => moveActor(f.index, -1)}>◀</button>
+          <button tabindex="-1" title="Tambah pelaksana di kanan" aria-label="Tambah pelaksana" onclick={() => addActor(f.index)}>＋</button>
+          <button
+            tabindex="-1"
+            class="danger"
+            title={lock || 'Hapus pelaksana'}
+            aria-label="Hapus pelaksana"
+            aria-disabled={!!lock}
+            onclick={() => removeActor(f.index)}>✕</button
+          >
+          <button tabindex="-1" title="Geser ke kanan" aria-label="Geser pelaksana ke kanan" aria-disabled={f.index === actors.length - 1} onclick={() => moveActor(f.index, 1)}>▶</button>
+        </span>
+      </div>
+    {:else if f.kind === 'step-tools'}
+      <div class="f-group" class:hot={isHot(f)} style={box(f)} data-hot={f.hot}>
+        <span class="g-tools g-left">
+          <button tabindex="-1" title="Tambah kegiatan di bawah" aria-label="Tambah kegiatan di bawah" onclick={() => addStep(f.index)}>＋</button>
+          <button tabindex="-1" class="danger" title="Hapus kegiatan" aria-label="Hapus kegiatan" onclick={() => removeStep(steps, f.index)}>✕</button>
+        </span>
+      </div>
+    {:else if f.kind === 'add-step'}
+      <button class="f-empty f-hint" style={box(f)} onclick={() => addStep(-1)}>+ Tambah kegiatan</button>
     {:else if f.kind === 'empty'}
       <button class="f-empty f-hint" style={box(f)} onclick={() => addItem(f.key)}>+ Tambah butir {f.title.toLowerCase()}</button>
     {/if}
@@ -406,6 +476,67 @@
     height: calc(5.5 * var(--mm));
     transform: translate(-50%, -50%);
     border: 1.5px dashed rgb(var(--edit) / 0.6);
+  }
+  .f-group.hot {
+    background: rgb(var(--edit) / 0.035);
+  }
+  .g-tools {
+    position: absolute;
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s;
+    z-index: 1;
+  }
+  .f-group.hot .g-tools {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .g-top {
+    left: 50%;
+    top: 0;
+    transform: translate(-50%, -55%);
+  }
+  .g-left {
+    right: 100%;
+    top: 50%;
+    flex-direction: column;
+    padding-right: 3px;
+    transform: translateY(-50%);
+  }
+  .g-tools button {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    font: 600 10px/1 var(--ui-font);
+    border: 1px solid rgb(var(--edit) / 0.5);
+    border-radius: 4px;
+    background: #fff;
+    color: rgb(var(--edit));
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+  }
+  .g-tools button:hover {
+    background: rgb(var(--edit));
+    color: #fff;
+  }
+  .g-tools button.danger {
+    border-color: rgb(192 57 43 / 0.5);
+    color: #c0392b;
+  }
+  .g-tools button.danger:hover {
+    background: #c0392b;
+    color: #fff;
+  }
+  .g-tools button[aria-disabled='true'] {
+    opacity: 0.35;
+    cursor: not-allowed;
+    background: #fff;
+    color: #888;
+    border-color: #bbb;
   }
   .err {
     font: 11px var(--ui-font);

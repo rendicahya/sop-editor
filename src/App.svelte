@@ -532,11 +532,13 @@
       {/each}
       <button class="add" onclick={() => addTab(emptyDocument())} disabled={collab.status !== 'off'} title={collab.status !== 'off' ? 'Keluar dari ruang kolaborasi untuk membuka tab baru' : 'Tab baru'} aria-label="Tab baru">+</button>
     </div>
-    <label class="zoom" title="Zoom pratinjau">
+    <div class="zoom" title="Zoom pratinjau">
       <span class="zoom-label">Zoom</span>
+      <button class="zoom-step" onclick={() => (zoom = Math.max(50, zoom - 10))} disabled={zoom <= 50} title="Perkecil" aria-label="Perkecil">−</button>
       <input type="range" min="50" max="200" step="10" bind:value={zoom} aria-label="Zoom pratinjau" />
+      <button class="zoom-step" onclick={() => (zoom = Math.min(200, zoom + 10))} disabled={zoom >= 200} title="Perbesar" aria-label="Perbesar">+</button>
       <span class="zoom-val">{zoom}%</span>
-    </label>
+    </div>
   </div>
 
   <div class="mobile-switch">

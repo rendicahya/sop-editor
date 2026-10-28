@@ -20,7 +20,9 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   plus kolom Mutu Baku (Kelengkapan, Waktu, Output) dan Keterangan.
 - **Halaman diagram alir juga bisa diedit langsung**: nama pelaksana di kepala tabel serta kolom Kegiatan,
   Kelengkapan, Waktu, Output, dan Keterangan tiap langkah. Klik sel lajur pelaksana lain untuk memindahkan
-  simbol langkah ke pelaksana itu.
+  simbol langkah ke pelaksana itu. Sorot kepala kolom pelaksana untuk menggeser, menambah, atau menghapus
+  pelaksana (hanya bila tidak ada langkah di lajurnya); sorot baris langkah untuk menambah/menghapus kegiatan.
+- Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …).
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
 - **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Buat dengan AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab tersimpan otomatis di browser; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.

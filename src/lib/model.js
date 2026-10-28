@@ -73,6 +73,16 @@ export function newStep(actorId, shape = 'process') {
   };
 }
 
+/** Menghapus langkah `i`; rujukan alur ke langkah itu dikembalikan ke bawaan. */
+export function removeStep(steps, i) {
+  const id = steps[i].id;
+  steps.splice(i, 1);
+  for (const s of steps) {
+    if (s.next === id) s.next = 'auto';
+    if (s.alt === id) s.alt = null;
+  }
+}
+
 export function emptyDocument() {
   const actors = [{ id: uid(), name: 'Pelaksana 1' }];
   const sections = {};

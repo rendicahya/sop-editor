@@ -1,6 +1,6 @@
 <script>
   import { app } from '../store.svelte.js';
-  import { newStep, SHAPES } from '../model.js';
+  import { newStep, removeStep, SHAPES } from '../model.js';
   import { collab } from '../collab.svelte.js';
 
   const steps = $derived(app.doc.steps);
@@ -24,14 +24,7 @@
     steps.splice(i + 1, 0, copy);
   }
 
-  function remove(i) {
-    const id = steps[i].id;
-    steps.splice(i, 1);
-    for (const s of steps) {
-      if (s.next === id) s.next = 'auto';
-      if (s.alt === id) s.alt = null;
-    }
-  }
+  const remove = (i) => removeStep(steps, i);
 </script>
 
 <section class="panel">
