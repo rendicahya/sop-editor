@@ -4,6 +4,7 @@
   import { readImage } from './files.js';
   import { PT } from './layout.js';
   import { newStep, removeStep, uid, SHAPES } from './model.js';
+  import { collab } from './collab.svelte.js';
 
   // Lapisan isian di atas halaman (identitas dan diagram alir): teks diketik langsung pada posisinya di dokumen.
   // Teks isian dibuat transparan sehingga yang terlihat tetap hasil render SVG (sama dengan PDF);
@@ -66,6 +67,16 @@
     steps.splice(i + 1, 0, s);
     focusField(`st:${s.id}:kegiatan`);
   }
+  function moveStepRow(i, d) {
+    const j = i + d;
+    if (j < 0 || j >= steps.length) return;
+    [steps[i], steps[j]] = [steps[j], steps[i]];
+  }
+  function duplicateStep(i) {
+    steps.splice(i + 1, 0, { ...$state.snapshot(steps[i]), id: uid(), next: 'auto', alt: null });
+  }
+  // Peserta kolaborasi yang sedang mengedit langkah ini.
+  const editors = (id) => collab.peers.filter((p) => p.focus?.step === id);
 
   // Menu simbol: id langkah yang menunya sedang terbuka.
   let menu = $state(null);
@@ -274,11 +285,18 @@
         </span>
       </div>
     {:else if f.kind === 'step-tools'}
-      <div class="f-group" class:hot={isHot(f)} style={box(f)} data-hot={f.hot}>
+      {@const peers = editors(f.step)}
+      <div class="f-group" class:hot={isHot(f)} class:shared={peers.length} style="{box(f)}--peer:{peers[0]?.color}" data-hot={f.hot}>
         <span class="g-tools g-left">
+          <button tabindex="-1" title="Naikkan" aria-label="Naikkan kegiatan" aria-disabled={f.index === 0} onclick={() => moveStepRow(f.index, -1)}>▲</button>
+          <button tabindex="-1" title="Turunkan" aria-label="Turunkan kegiatan" aria-disabled={f.index === steps.length - 1} onclick={() => moveStepRow(f.index, 1)}>▼</button>
+          <button tabindex="-1" title="Duplikat" aria-label="Duplikat kegiatan" onclick={() => duplicateStep(f.index)}>⧉</button>
           <button tabindex="-1" title="Tambah kegiatan di bawah" aria-label="Tambah kegiatan di bawah" onclick={() => addStep(f.index)}>＋</button>
           <button tabindex="-1" class="danger" title="Hapus kegiatan" aria-label="Hapus kegiatan" onclick={() => removeStep(steps, f.index)}>✕</button>
         </span>
+        {#if peers.length}
+          <span class="peers">{#each peers as p (p.id)}<span style:background={p.color}>{p.name}</span>{/each}</span>
+        {/if}
       </div>
     {:else if f.kind === 'shape'}
       {@const s = steps[f.index]}
@@ -287,6 +305,7 @@
         <button
           class="f-shape-btn"
           tabindex="-1"
+          data-field={f.id}
           title="Ubah simbol"
           aria-label="Ubah simbol langkah {f.index + 1}"
           aria-expanded={!!open}
@@ -539,6 +558,24 @@
   }
   .f-group.hot {
     background: rgb(var(--edit) / 0.035);
+  }
+  .f-group.shared {
+    box-shadow: inset 0 0 0 1.5px var(--peer);
+  }
+  .peers {
+    position: absolute;
+    right: 2px;
+    top: 2px;
+    display: flex;
+    gap: 2px;
+    pointer-events: none;
+  }
+  .peers span {
+    font: 600 10px/1 var(--ui-font);
+    color: #fff;
+    padding: 2px 5px;
+    border-radius: 3px;
+    white-space: nowrap;
   }
   .g-tools {
     position: absolute;

@@ -8,8 +8,6 @@
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
   import { saveJson, openJsonFile, slug } from './lib/files.js';
   import Preview from './lib/Preview.svelte';
-  import ActorsEditor from './lib/editors/ActorsEditor.svelte';
-  import StepsEditor from './lib/editors/StepsEditor.svelte';
   import CollabDialog from './lib/CollabDialog.svelte';
   import AiDialog from './lib/AiDialog.svelte';
   import PdfPreviewDialog from './lib/PdfPreviewDialog.svelte';
@@ -17,7 +15,6 @@
   import * as Collab from './lib/collab.svelte.js';
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
 
-  let mobileView = $state('edit');
   let zoom = $state(100);
   let toast = $state('');
   let toastTimer;
@@ -25,24 +22,11 @@
   const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW();
 
   // Preferensi tampilan (per browser).
-  const pref = (key, fallback) => {
-    try {
-      return localStorage.getItem('sop-editor:' + key) ?? fallback;
-    } catch {
-      return fallback;
-    }
-  };
   const setPref = (key, value) => {
     try {
       localStorage.setItem('sop-editor:' + key, value);
     } catch {}
   };
-
-  let sidebar = $state(pref('sidebar', 'open') === 'open');
-  function toggleSidebar() {
-    sidebar = !sidebar;
-    setPref('sidebar', sidebar ? 'open' : 'closed');
-  }
 
   let theme = $state(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   function toggleTheme() {
@@ -281,8 +265,9 @@
     if (collab.status === 'ready') Collab.setFocus({ step: focusStep });
   });
 
+  // Langkah yang sedang diedit (isian baris langkah di halaman bertanda data-hot="r:<id>").
   function onFocusIn(e) {
-    focusStep = e.target.closest?.('[data-step]')?.dataset.step ?? null;
+    focusStep = e.target.closest?.('[data-hot^="r:"]')?.dataset.hot.slice(2) ?? null;
   }
 
   function newDoc() {
@@ -376,9 +361,6 @@
     } else if (k === 'f' || k === 'h') {
       e.preventDefault();
       findOpen = true;
-    } else if (k === 'b') {
-      e.preventDefault();
-      toggleSidebar();
     } else if ((k === 'z' || k === 'y') && !e.target.closest?.('input, textarea')) {
       e.preventDefault();
       if (k === 'y' || e.shiftKey) redo();
@@ -541,33 +523,19 @@
     </div>
   </div>
 
-  <div class="mobile-switch">
-    <button class:active={mobileView === 'edit'} onclick={() => (mobileView = 'edit')}>Edit</button>
-    <button class:active={mobileView === 'preview'} onclick={() => (mobileView = 'preview')}>Pratinjau</button>
-  </div>
-
-  <main class="workspace" class:collapsed={!sidebar} data-view={mobileView}>
-    <aside class="editor">
+  <main class="workspace">
+    <section class="preview" onfocusin={onFocusIn}>
       {#if collab.status === 'connecting'}
         <div class="waiting">
-          <strong>Menunggu dokumen ruang…</strong>
-          <p>Dokumen akan muncul begitu tersambung dengan peserta lain yang sedang membuka ruang ini.</p>
+          <span>
+            <strong>Menunggu dokumen ruang…</strong>
+            Dokumen akan muncul begitu tersambung dengan peserta lain yang sedang membuka ruang ini.
+          </span>
           <button class="btn small" onclick={() => confirm('Isi ruang dengan dokumen yang sedang terbuka di sini?') && Collab.useLocalDocument()}>
             Gunakan dokumen saya sebagai isi ruang
           </button>
         </div>
       {/if}
-      <div class="editor-body" inert={collab.status === 'connecting'} onfocusin={onFocusIn}>
-        <ActorsEditor />
-        <StepsEditor />
-      </div>
-    </aside>
-
-    <section class="preview">
-      <!-- Pegangan di tepi panel editor untuk membuka/menutupnya. -->
-      <button class="sidebar-toggle" onclick={toggleSidebar} title={sidebar ? 'Tutup panel editor (Ctrl+B)' : 'Buka panel editor (Ctrl+B)'} aria-label="Panel editor" aria-expanded={sidebar}>
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d={sidebar ? 'm15 6-6 6 6 6' : 'm9 6 6 6-6 6'} /></svg>
-      </button>
       {#if docFont !== 'calibri'}
         <div class="font-warn">
           <span>
@@ -625,22 +593,22 @@
     bind:open={findOpen}
     onnotify={notify}
     onjump={async (f) => {
-      if (f.tab) {
-        if (!sidebar) toggleSidebar();
-        mobileView = 'edit';
-        await tick();
-        const el = document.querySelector(f.tab === 'langkah' ? `[data-step="${f.obj.id}"]` : '[data-actors]');
-        el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-        return;
-      }
-      mobileView = 'preview';
       await tick();
       const el = document.querySelector(`[data-field="${f.ref}"]`);
       el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
       el?.focus({ preventScroll: true });
+      // Label ya/tidak ada di menu simbol: buka menunya.
+      if (f.ref.startsWith('sy:') && el?.getAttribute('aria-expanded') !== 'true') el?.click();
     }}
   />
 
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
   {#if dragging}<div class="dropzone">Lepaskan berkas JSON untuk membuka</div>{/if}
+</div>
+
+<!-- Ditampilkan (lewat CSS) menggantikan aplikasi di layar HP. -->
+<div class="mobile-block">
+  <img src="./favicon.svg" alt="" width="56" height="56" />
+  <strong>SOP Editor hanya bisa dibuka di laptop/PC</strong>
+  <p>Aplikasi ini dirancang untuk layar lebar dengan mouse dan keyboard. Silakan buka alamat ini dari laptop atau PC.</p>
 </div>

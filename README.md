@@ -21,7 +21,8 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - **Halaman diagram alir juga bisa diedit langsung**: nama pelaksana di kepala tabel serta kolom Kegiatan,
   Kelengkapan, Waktu, Output, dan Keterangan tiap langkah. Klik sel lajur pelaksana lain untuk memindahkan
   simbol langkah ke pelaksana itu. Sorot kepala kolom pelaksana untuk menggeser, menambah, atau menghapus
-  pelaksana (hanya bila tidak ada langkah di lajurnya); sorot baris langkah untuk menambah/menghapus kegiatan.
+  pelaksana (hanya bila tidak ada langkah di lajurnya); sorot baris langkah untuk menaikkan/menurunkan,
+  menduplikat, menambah, atau menghapus kegiatan.
   Klik simbol untuk mengganti jenisnya dan tujuan alurnya (untuk Keputusan: cabang ya/tidak beserta labelnya).
 - Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …).
@@ -41,10 +42,9 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - **Buat dengan AI**: salin prompt siap pakai ke ChatGPT, Gemini, atau Claude, lalu tempel jawabannya untuk langsung
   diedit dan diekspor.
 - **Cari & ganti** teks di seluruh dokumen (identitas, ketentuan, pelaksana, langkah), per kolom atau sekaligus.
-- Panel editor bisa ditutup agar pratinjau lebih lebar, mode layar penuh, serta mode terang/gelap (mengikuti sistem
-  secara bawaan; halaman dokumen tetap putih).
+- Mode layar penuh serta mode terang/gelap (mengikuti sistem secara bawaan; halaman dokumen tetap putih).
 - Bisa dipasang sebagai aplikasi (PWA), bekerja offline, dan membuka berkas `.json` lewat "Buka dengan".
-- Tampilan responsif (beralih Edit/Pratinjau di layar kecil).
+- Dirancang untuk laptop/PC; di HP hanya tampil pesan untuk membukanya dari laptop/PC.
 
 ## Penggunaan
 
@@ -54,7 +54,6 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 | Ctrl+O | Buka JSON |
 | Ctrl+Shift+P | Pratinjau & ekspor PDF |
 | Ctrl+F / Ctrl+H | Cari & ganti (Esc untuk menutup) |
-| Ctrl+B | Tutup/buka panel editor |
 | Ctrl+Z / Ctrl+Y | Urungkan / Ulangi (saat fokus di luar kolom teks) |
 
 Pada butir ketentuan di halaman 1: **Enter** membuat butir baru (memecah di posisi kursor), **Backspace** di awal butir
@@ -125,7 +124,6 @@ Struktur utama:
 | `src/lib/findReplace.js` | Daftar kolom teks dokumen, pencarian, dan penggantian |
 | `src/lib/collab.svelte.js` | Ruang kolaborasi: Yjs, koneksi P2P (Trystero), kehadiran, undo per pengguna |
 | `src/lib/ysync.js` | Selisih dua arah antara dokumen JSON dan struktur Yjs |
-| `src/lib/editors/` | Komponen form editor (pelaksana dan langkah) |
 
 ## Deploy ke GitHub Pages
 

@@ -2,7 +2,7 @@
   import { app } from './store.svelte.js';
   import { searchPattern, findMatches, replaceIn } from './findReplace.js';
 
-  /** onjump(field) → tampilkan kolom: tab editor (field.tab) atau isian di pratinjau (field.ref). */
+  /** onjump(field) → tampilkan isian kolom itu di halaman (field.ref). */
   let { open = $bindable(false), onjump, onnotify } = $props();
 
   let query = $state('');

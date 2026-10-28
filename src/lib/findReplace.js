@@ -20,8 +20,8 @@ const STEP_FIELDS = [
 ];
 
 /**
- * Semua kolom teks dokumen yang bisa dicari: { obj, key, label, tab } untuk kolom di panel editor,
- * atau { obj, key, label, ref } untuk isian halaman identitas (ref = data-field di pratinjau).
+ * Semua kolom teks dokumen yang bisa dicari: { obj, key, label, ref } (ref = data-field isiannya di halaman;
+ * label ya/tidak ada di menu simbol langkah).
  */
 export function textFields(doc) {
   const out = [];
@@ -30,11 +30,12 @@ export function textFields(doc) {
     const items = doc.sections[sec]?.items ?? [];
     items.forEach((_, i) => out.push({ obj: items, key: i, label: `${title} · butir ${i + 1}`, ref: `s:${sec}:${i}` }));
   }
-  doc.actors.forEach((a, i) => out.push({ obj: a, key: 'name', label: `Pelaksana ${i + 1}`, tab: 'pelaksana' }));
+  doc.actors.forEach((a, i) => out.push({ obj: a, key: 'name', label: `Pelaksana ${i + 1}`, ref: 'a:' + a.id }));
   doc.steps.forEach((s, i) => {
     for (const [key, label] of STEP_FIELDS) {
       if (s.shape !== 'decision' && (key === 'yesLabel' || key === 'noLabel')) continue;
-      out.push({ obj: s, key, label: `Langkah ${i + 1} · ${label}`, tab: 'langkah' });
+      const ref = key === 'yesLabel' || key === 'noLabel' ? 'sy:' + s.id : `st:${s.id}:${key}`;
+      out.push({ obj: s, key, label: `Langkah ${i + 1} · ${label}`, ref });
     }
   });
   return out.filter((f) => typeof f.obj[f.key] === 'string');
