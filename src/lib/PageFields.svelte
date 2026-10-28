@@ -327,7 +327,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.2rem;
-    font: 600 11px/1 system-ui, sans-serif;
+    font: 600 11px/1 Calibri, Carlito, sans-serif;
     padding: 3px 7px;
     border: 1px solid rgb(var(--edit) / 0.5);
     border-radius: 5px;
@@ -340,7 +340,7 @@
     margin: 0;
   }
   .f-hint {
-    font: 11px/1.2 system-ui, sans-serif;
+    font: 11px/1.2 Calibri, Carlito, sans-serif;
     color: rgb(var(--edit));
     background: transparent;
     border: 1px dashed rgb(var(--edit) / 0.5);
@@ -362,7 +362,7 @@
     box-shadow: inset 0 0 0 1px rgb(var(--edit) / 0.35);
   }
   .err {
-    font: 11px system-ui, sans-serif;
+    font: 11px Calibri, Carlito, sans-serif;
     color: #c0392b;
   }
 </style>

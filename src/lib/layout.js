@@ -153,7 +153,7 @@ function layoutIdentity(doc, pages) {
   const instH = textH(inst, 11);
   const logoAreaTop = y + 3;
   const logoAreaBottom = y + blockH - instH - 4;
-  const f = fit(LOGO, 60, Math.min(44, logoAreaBottom - logoAreaTop));
+  const f = fit(LOGO, 52, Math.min(38, logoAreaBottom - logoAreaTop));
   page.items.push({ t: 'image', src: LOGO.src, x: m + (leftW - f.w) / 2, y: logoAreaTop + (logoAreaBottom - logoAreaTop - f.h) / 2, w: f.w, h: f.h });
   page.items.push(text(m + leftW / 2, y + blockH - instH - 2, inst, 11, { bold: true, align: 'center' }));
   const instFieldH = Math.max(1, inst.length) * lineHeight(11);

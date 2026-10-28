@@ -21,6 +21,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
 - PDF vektor (teks bisa diseleksi). Teks dokumen memakai font [Carlito](https://github.com/googlefonts/carlito),
   pengganti Calibri dengan metrik identik (file Calibri asli tidak boleh didistribusikan ulang). Font disematkan ke PDF.
+  Antarmuka memakai Calibri bila terpasang di perangkat, dengan Carlito sebagai cadangan.
 - Simpan/buka JSON, seret-lepas berkas JSON ke jendela, simpan otomatis ke browser, Undo/Redo.
 - **Kolaborasi real-time** tanpa server: edit satu dokumen bersama lewat tautan undangan, lihat siapa sedang
   mengedit bagian mana, dan ketik bersamaan di kolom yang sama tanpa saling menimpa.
