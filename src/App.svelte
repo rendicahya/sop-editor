@@ -15,7 +15,6 @@
   import * as Collab from './lib/collab.svelte.js';
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
 
-  let zoom = $state(100);
   let toast = $state('');
   let toastTimer;
 
@@ -27,6 +26,54 @@
       localStorage.setItem('sop-editor:' + key, value);
     } catch {}
   };
+  const getPref = (key) => {
+    try {
+      return localStorage.getItem('sop-editor:' + key);
+    } catch {
+      return null;
+    }
+  };
+
+  // Zoom pratinjau; Ctrl+roda mouse mengubah zoom pratinjau (bukan zoom browser), berpusat di posisi kursor.
+  const ZOOM_MIN = 50;
+  const ZOOM_MAX = 200;
+  const clampZoom = (z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z)));
+  let zoom = $state(clampZoom(Number(getPref('zoom')) || 100));
+  $effect(() => setPref('zoom', zoom));
+  let previewScroll;
+  async function zoomAt(next, clientX, clientY) {
+    next = clampZoom(next);
+    if (next === zoom) return;
+    const el = previewScroll;
+    const r = el.getBoundingClientRect();
+    const x = clientX - r.left;
+    const y = clientY - r.top;
+    const ratio = next / zoom;
+    const left = (el.scrollLeft + x) * ratio - x;
+    const top = (el.scrollTop + y) * ratio - y;
+    zoom = next;
+    await tick();
+    el.scrollLeft = left;
+    el.scrollTop = top;
+  }
+  function onCtrlWheel(e) {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    if (!previewScroll || !e.deltaY) return;
+    // Roda mouse: ±10% per takik; trackpad (pinch) mengirim delta kecil sehingga zoom berubah halus.
+    const delta = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+    const step = Math.abs(delta) >= 50 ? Math.sign(delta) * 10 : delta / 5;
+    const inside = previewScroll.contains(e.target);
+    const r = previewScroll.getBoundingClientRect();
+    zoomAt(zoom - step, inside ? e.clientX : r.left + r.width / 2, inside ? e.clientY : r.top + r.height / 2);
+  }
+  const zoomStep = (dir) => {
+    const r = previewScroll.getBoundingClientRect();
+    zoomAt(dir > 0 ? Math.floor(zoom / 10) * 10 + 10 : Math.ceil(zoom / 10) * 10 - 10, r.left + r.width / 2, r.top + r.height / 2);
+  };
+
+  // Menu ekspor (PDF / DOCX).
+  let exportOpen = $state(false);
 
   let theme = $state(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   function toggleTheme() {
@@ -395,6 +442,7 @@
     window.addEventListener('hashchange', checkInvite);
     const onFs = () => (fullscreen = !!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onFs);
+    window.addEventListener('wheel', onCtrlWheel, { passive: false });
     if ('launchQueue' in window) {
       window.launchQueue.setConsumer(async (params) => {
         for (const handle of params.files ?? []) {
@@ -406,11 +454,18 @@
     return () => {
       window.removeEventListener('hashchange', checkInvite);
       document.removeEventListener('fullscreenchange', onFs);
+      window.removeEventListener('wheel', onCtrlWheel);
     };
   });
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === 'Escape') exportOpen = false;
+    onKey(e);
+  }}
+  onpointerdown={(e) => exportOpen && !e.target.closest?.('.export') && (exportOpen = false)}
+/>
 
 <div
   class="app"
@@ -472,8 +527,22 @@
         <button class="btn ghost" onclick={() => (collabOpen = true)} title="Edit bersama secara real-time">Kolaborasi</button>
       {/if}
       <button class="btn ghost" onclick={loadSample} title="Muat contoh SOP Skripsi">Contoh</button>
-      <button class="btn ghost" onclick={docx} disabled={docxBusy} title="Unduh dokumen Word (.docx) yang bisa diedit">Ekspor DOCX</button>
-      <button class="btn primary" onclick={pdf} title="Pratinjau lalu ekspor PDF (Ctrl+Shift+P)">Ekspor PDF</button>
+      <div class="export">
+        <button class="btn primary" onclick={() => (exportOpen = !exportOpen)} aria-haspopup="menu" aria-expanded={exportOpen} disabled={docxBusy}>
+          {docxBusy ? 'Membuat DOCX…' : 'Ekspor'}
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+        </button>
+        {#if exportOpen}
+          <div class="export-menu" role="menu">
+            <button role="menuitem" onclick={() => ((exportOpen = false), pdf())}>
+              <strong>PDF</strong><small>Pratinjau lalu unduh · Ctrl+Shift+P</small>
+            </button>
+            <button role="menuitem" onclick={() => ((exportOpen = false), docx())}>
+              <strong>Word (.docx)</strong><small>Dokumen yang bisa diedit</small>
+            </button>
+          </div>
+        {/if}
+      </div>
     </nav>
   </header>
 
@@ -484,7 +553,7 @@
       aria-label="Dokumen terbuka"
       onwheel={(e) => {
         // Roda vertikal menggeser deretan tab ke samping.
-        if (!e.deltaY || e.currentTarget.scrollWidth <= e.currentTarget.clientWidth) return;
+        if (!e.deltaY || e.ctrlKey || e.metaKey || e.currentTarget.scrollWidth <= e.currentTarget.clientWidth) return;
         e.preventDefault();
         e.currentTarget.scrollLeft += e.deltaY;
       }}
@@ -531,9 +600,9 @@
     </div>
     <div class="zoom" title="Zoom pratinjau">
       <span class="zoom-label">Zoom</span>
-      <button class="zoom-step" onclick={() => (zoom = Math.max(50, zoom - 10))} disabled={zoom <= 50} title="Perkecil" aria-label="Perkecil">−</button>
-      <input type="range" min="50" max="200" step="10" bind:value={zoom} aria-label="Zoom pratinjau" />
-      <button class="zoom-step" onclick={() => (zoom = Math.min(200, zoom + 10))} disabled={zoom >= 200} title="Perbesar" aria-label="Perbesar">+</button>
+      <button class="zoom-step" onclick={() => zoomStep(-1)} disabled={zoom <= ZOOM_MIN} title="Perkecil (Ctrl+roda mouse)" aria-label="Perkecil">−</button>
+      <input type="range" min={ZOOM_MIN} max={ZOOM_MAX} step="1" bind:value={zoom} aria-label="Zoom pratinjau" />
+      <button class="zoom-step" onclick={() => zoomStep(1)} disabled={zoom >= ZOOM_MAX} title="Perbesar (Ctrl+roda mouse)" aria-label="Perbesar">+</button>
       <span class="zoom-val">{zoom}%</span>
     </div>
   </div>
@@ -577,7 +646,7 @@
           />
         </div>
       {/if}
-      <div class="preview-scroll">
+      <div class="preview-scroll" bind:this={previewScroll}>
         <Preview {pages} {zoom} editable={collab.status !== 'connecting'} />
       </div>
     </section>
