@@ -98,6 +98,94 @@ function charAt(chars, i) {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Ubah huruf besar/kecil
+// ---------------------------------------------------------------------------
+
+export const CASES = [
+  ['upper', 'HURUF BESAR'],
+  ['lower', 'huruf kecil'],
+  ['title', 'Huruf Awal Kata'],
+  ['sentence', 'Huruf awal kalimat']
+];
+
+// Kata tugas yang tetap kecil pada "Huruf Awal Kata" kecuali di awal (PUEBI).
+const SMALL = new Set(
+  'dan atau di ke dari yang untuk pada dengan dalam oleh serta bagi tentang sebagai terhadap secara antara kepada daripada'.split(
+    ' '
+  )
+);
+const WORDCH = /[\p{L}\p{N}'’]/u;
+
+/** Mode berikutnya untuk Shift+F3 (seperti Word): BESAR → kecil → Awal Kata → BESAR. */
+export function nextCase(text) {
+  if (!/\p{L}/u.test(text)) return 'upper';
+  if (text === text.toLocaleUpperCase('id')) return 'lower';
+  if (text === text.toLocaleLowerCase('id')) return 'title';
+  return 'upper';
+}
+
+/** Rentang kata di sekitar posisi `pos` pada teks polos (untuk perintah tanpa seleksi). */
+export function wordAt(plain, pos) {
+  const chars = [...plain];
+  let a = pos;
+  let b = pos;
+  while (a > 0 && WORDCH.test(chars[a - 1])) a--;
+  while (b < chars.length && WORDCH.test(chars[b])) b++;
+  return { start: a, end: b };
+}
+
+/** Ubah huruf pada [start, end) teks polos `s` (posisi per kode titik); format tetap. */
+export function changeCase(s, start, end, mode) {
+  const chars = [];
+  for (const r of parseRich(s)) for (const ch of r.text) chars.push({ text: ch, b: r.b, i: r.i, u: r.u });
+  const up = (c) => c.toLocaleUpperCase('id');
+  const low = (c) => c.toLocaleLowerCase('id');
+  const plain = chars.map((c) => c.text);
+  for (let i = start; i < end && i < chars.length; i++) {
+    const c = plain[i];
+    if (mode === 'upper') chars[i].text = up(c);
+    else if (mode === 'lower') chars[i].text = low(c);
+    else if (mode === 'title') {
+      if (i > 0 && WORDCH.test(plain[i - 1])) chars[i].text = low(c);
+      else {
+        let j = i;
+        while (j < plain.length && WORDCH.test(plain[j])) j++;
+        const word = low(plain.slice(i, j).join(''));
+        chars[i].text = i > start && SMALL.has(word) ? low(c) : up(c);
+      }
+    } else {
+      // Huruf pertama kalimat: awal teks, atau huruf pertama setelah . ! ? / baris baru.
+      let k = i - 1;
+      while (k >= 0 && !/[\p{L}\p{N}.!?\n]/u.test(plain[k])) k--;
+      const first = /\p{L}/u.test(c) && (k < 0 || /[.!?\n]/.test(plain[k]));
+      chars[i].text = first ? up(c) : low(c);
+    }
+  }
+  return serializeRuns(chars);
+}
+
+/**
+ * Ubah huruf pada seleksi di isian `root` (tanpa seleksi: kata di posisi kursor). `mode` 'cycle' memilih
+ * mode berikutnya seperti Shift+F3. Isian diberi event input agar nilainya tersimpan.
+ */
+export function applyCase(root, mode) {
+  const sel = getSelection(root);
+  if (!sel) return;
+  const value = domToRich(root);
+  const plain = plainText(value);
+  let { start, end } = sel;
+  if (start > end) [start, end] = [end, start];
+  if (start === end) ({ start, end } = wordAt(plain, start));
+  if (start === end) return;
+  if (mode === 'cycle') mode = nextCase([...plain].slice(start, end).join(''));
+  const next = changeCase(value, start, end, mode);
+  if (next === value) return;
+  root.innerHTML = richToHtml(next);
+  root.dispatchEvent(new Event('input', { bubbles: true }));
+  setSelection(root, start, start + (plainText(next).length - plain.length) + (end - start));
+}
+
 /** Tag format dari jawaban AI: <strong>/<em>/**tebal** diseragamkan ke <b>/<i>. */
 export function normalizeMarkup(s) {
   return String(s ?? '')

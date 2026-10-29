@@ -27,6 +27,8 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - **Format teks tebal, miring, dan garis bawah** pada butir ketentuan dan sel tabel langkah (Kegiatan, Kelengkapan,
   Waktu, Output, Keterangan): tombol **B / I / U** di bar tab atau Ctrl+B / Ctrl+I / Ctrl+U. Format ikut tercetak di
   pratinjau, PDF, dan DOCX.
+- **Ubah huruf besar/kecil** di isian yang sama lewat tombol **Aa** (HURUF BESAR, huruf kecil, Huruf Awal Kata,
+  Huruf awal kalimat) atau Shift+F3 untuk berganti mode seperti di Word. Tanpa seleksi, yang diubah kata di kursor.
 - Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …). Jalur garis dicari otomatis agar tidak menembus simbol dan tidak saling menumpuk.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
@@ -65,6 +67,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 | Ctrl+F / Ctrl+H | Cari & ganti (Esc untuk menutup) |
 | Ctrl+Z / Ctrl+Y | Urungkan / Ulangi (saat fokus di luar kolom teks) |
 | Ctrl+B / Ctrl+I / Ctrl+U | Tebal / miring / garis bawah (di butir ketentuan dan sel langkah) |
+| Shift+F3 | Ganti huruf: BESAR → kecil → Awal Kata |
 
 Pada butir ketentuan di halaman 1: **Enter** membuat butir baru (memecah di posisi kursor), **Backspace** di awal butir
 menggabungkannya dengan butir sebelumnya, **Alt+↑/↓** memindahkan butir, dan **↑/↓** di awal/akhir butir berpindah

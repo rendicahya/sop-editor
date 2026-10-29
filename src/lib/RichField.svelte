@@ -1,5 +1,5 @@
 <script>
-  import { richToHtml, domToRich, getSelection, setSelection, plainText } from './richtext.js';
+  import { richToHtml, domToRich, getSelection, setSelection, plainText, applyCase } from './richtext.js';
 
   // Isian teks berformat (contenteditable). Nilainya string bertag <b>/<i>/<u>; seperti textarea biasa,
   // teksnya transparan sehingga yang terlihat tetap hasil render halaman.
@@ -35,6 +35,11 @@
     if (cmd) {
       e.preventDefault();
       document.execCommand(cmd);
+      return;
+    }
+    if (e.key === 'F3' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      applyCase(el, 'cycle');
       return;
     }
     onkeydown?.(e);

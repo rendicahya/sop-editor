@@ -1,4 +1,6 @@
 <script>
+  import { applyCase, CASES } from './richtext.js';
+
   // Tombol format teks (tebal/miring/garis bawah) untuk isian berformat yang sedang difokus.
   // Tombol tidak mengambil fokus, jadi perintahnya berlaku pada seleksi di isian tersebut.
   const FORMATS = [
@@ -21,9 +23,29 @@
     document.execCommand(cmd);
     update();
   }
+
+  let caseOpen = $state(false);
+  let caseWrap;
+
+  function setCase(mode) {
+    caseOpen = false;
+    if (active) applyCase(document.activeElement, mode);
+    update();
+  }
+
+  $effect(() => {
+    if (!active) caseOpen = false;
+  });
 </script>
 
-<svelte:document onfocusin={update} onfocusout={() => setTimeout(update)} onselectionchange={update} oninput={update} />
+<svelte:document
+  onfocusin={update}
+  onfocusout={() => setTimeout(update)}
+  onselectionchange={update}
+  oninput={update}
+  onpointerdown={(e) => caseOpen && !caseWrap?.contains(e.target) && (caseOpen = false)}
+  onkeydown={(e) => caseOpen && e.key === 'Escape' && (caseOpen = false)}
+/>
 
 <div
   class="fmt"
@@ -43,6 +65,28 @@
       onclick={() => run(cmd)}>{label}</button
     >
   {/each}
+  <div class="case" bind:this={caseWrap}>
+    <button
+      class="fmt-case"
+      class:open={caseOpen}
+      disabled={!active}
+      title="Ubah huruf besar/kecil (Shift+F3)"
+      aria-label="Ubah huruf besar/kecil"
+      aria-haspopup="menu"
+      aria-expanded={caseOpen}
+      onpointerdown={(e) => e.preventDefault()}
+      onclick={() => (caseOpen = !caseOpen)}>Aa<span class="caret">▾</span></button
+    >
+    {#if caseOpen}
+      <div class="case-menu" role="menu">
+        {#each CASES as [mode, label] (mode)}
+          <button role="menuitem" onpointerdown={(e) => e.preventDefault()} onclick={() => setCase(mode)}
+            >{label}</button
+          >
+        {/each}
+      </div>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -86,6 +130,46 @@
   .fmt-removeFormat {
     position: relative;
     font-weight: 400;
+  }
+  .case {
+    position: relative;
+  }
+  .fmt-case {
+    display: flex;
+    gap: 1px;
+    width: auto;
+    padding: 0 3px;
+    font-weight: 400;
+  }
+  .fmt-case.open {
+    background: var(--surface-2);
+    border-color: var(--line);
+  }
+  .caret {
+    font: 9px/1 system-ui, sans-serif;
+    opacity: 0.7;
+  }
+  .case-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    min-width: 170px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
+  }
+  .case-menu button {
+    display: block;
+    width: 100%;
+    height: auto;
+    padding: 6px 10px;
+    text-align: left;
+    font: 400 0.85rem/1.2 system-ui, sans-serif;
   }
   .fmt-removeFormat::after {
     content: '';
