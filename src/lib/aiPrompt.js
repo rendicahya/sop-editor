@@ -1,17 +1,16 @@
-// Prompt siap salin agar ChatGPT/Gemini/Claude menghasilkan JSON yang bisa dibuka aplikasi ini.
+// Prompt siap salin agar asisten AI menghasilkan JSON yang bisa dibuka aplikasi ini.
+import { DEFAULT_INSTITUTION, DEFAULT_PENGESAH } from './model.js';
 
 const EXAMPLE = {
   format: 'sop-editor',
   version: 1,
   header: {
-    institution: 'KEMENTERIAN PENDIDIKAN TINGGI, SAINS, DAN TEKNOLOGI\nFAKULTAS ILMU KOMPUTER\nUNIVERSITAS CONTOH',
+    institution: DEFAULT_INSTITUTION,
     nomor: 'UN00/F00/01/HK.01.02/001',
     tglPembuatan: '2026-01-15',
     tglRevisi: '',
     tglEfektif: '2026-02-01',
-    disahkanJabatan: 'DEKAN FAKULTAS ILMU KOMPUTER',
-    disahkanNama: 'Nama Pejabat, Gelar',
-    disahkanNip: 'NIP. 000000000000000000',
+    ...DEFAULT_PENGESAH,
     namaSop: 'PENGAJUAN CUTI AKADEMIK'
   },
   sections: {
@@ -46,6 +45,7 @@ ATURAN FORMAT:
 - Keluarkan HANYA satu objek JSON yang valid, tanpa penjelasan di luar JSON. Jika bisa, berikan juga sebagai berkas .json yang dapat diunduh.
 - "format" selalu "sop-editor" dan "version" selalu 1.
 - header: isi semua kolom teks. "institution" boleh beberapa baris (pisahkan dengan \\n), ditulis HURUF KAPITAL dari kementerian sampai unit kerja. Tanggal memakai format YYYY-MM-DD; kosongkan ("") bila tidak diketahui. Jangan menyertakan logo atau tanda tangan.
+- Pengesah: kecuali deskripsi menyebut pejabat lain, isi "disahkanJabatan" dengan "${DEFAULT_PENGESAH.disahkanJabatan}", "disahkanNama" dengan "${DEFAULT_PENGESAH.disahkanNama}", dan "disahkanNip" dengan "${DEFAULT_PENGESAH.disahkanNip}".
 - sections: enam bagian tetap (dasarHukum, kualifikasi, keterkaitan, peralatan, peringatan, pencatatan), masing-masing { "numbered": boolean, "items": [teks, …] }. Gunakan peraturan yang benar-benar ada; bila ragu, tulis "[lengkapi: …]" alih-alih mengarang nomor peraturan.
 - actors: daftar pelaksana, masing-masing { "id": "a1", "name": "…" }. Urutannya menjadi urutan kolom pada diagram alir (biasanya urutan kemunculan dalam proses).
 - steps: langkah berurutan dari atas ke bawah. Setiap langkah:

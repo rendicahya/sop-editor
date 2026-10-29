@@ -1,6 +1,13 @@
-// Utilitas berkas: simpan/buka JSON, unduh blob, dan impor gambar.
+// Utilitas berkas: simpan/buka dokumen SOP, unduh blob, dan impor gambar.
+// Isi berkas berupa JSON, tetapi disimpan berekstensi .sop; .json lama (dan berkas dari AI) tetap bisa dibuka.
 
-const JSON_TYPES = [{ description: 'Dokumen SOP (JSON)', accept: { 'application/json': ['.json'] } }];
+const SAVE_TYPES = [{ description: 'Dokumen SOP', accept: { 'application/json': ['.sop'] } }];
+const OPEN_TYPES = [{ description: 'Dokumen SOP', accept: { 'application/json': ['.sop', '.json'] } }];
+
+/** Nama berkas dengan ekstensi .sop (mengganti .json lama). */
+export function sopName(name) {
+  return name.replace(/\.(json|sop)$/i, '') + '.sop';
+}
 
 export function slug(name) {
   return (
@@ -31,7 +38,7 @@ export async function saveJson(text, suggestedName, handle, saveAs = false) {
   const blob = new Blob([text], { type: 'application/json' });
   if ('showSaveFilePicker' in window) {
     try {
-      if (!handle || saveAs) handle = await window.showSaveFilePicker({ suggestedName, types: JSON_TYPES });
+      if (!handle || saveAs) handle = await window.showSaveFilePicker({ suggestedName, types: SAVE_TYPES });
       const w = await handle.createWritable();
       await w.write(blob);
       await w.close();
@@ -48,7 +55,7 @@ export async function saveJson(text, suggestedName, handle, saveAs = false) {
 export async function openJsonFile() {
   if ('showOpenFilePicker' in window) {
     try {
-      const [handle] = await window.showOpenFilePicker({ types: JSON_TYPES });
+      const [handle] = await window.showOpenFilePicker({ types: OPEN_TYPES });
       const file = await handle.getFile();
       return { text: await file.text(), name: file.name, handle };
     } catch (e) {
@@ -59,7 +66,7 @@ export async function openJsonFile() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json,application/json';
+    input.accept = '.sop,.json,application/json';
     input.onchange = async () => {
       const file = input.files?.[0];
       resolve(file ? { text: await file.text(), name: file.name, handle: null } : null);

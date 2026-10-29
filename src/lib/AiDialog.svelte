@@ -40,7 +40,7 @@
 
 <dialog bind:this={dialog} class="dialog" onclose={() => (open = false)}>
   <h2>Buat SOP dengan AI</h2>
-  <p>Minta ChatGPT, Gemini, atau Claude menyusun SOP, lalu buka hasilnya di sini untuk dirapikan dan diekspor ke PDF.</p>
+  <p>Minta asisten AI menyusun SOP, lalu buka hasilnya di sini untuk dirapikan dan diekspor ke PDF.</p>
 
   <section>
     <h3><span class="num">1</span>Salin prompt ke AI</h3>

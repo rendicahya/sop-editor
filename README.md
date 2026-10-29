@@ -1,7 +1,7 @@
 # SOP Editor
 
 Aplikasi web (front-end saja, PWA) untuk membuat dan mengedit dokumen SOP berformat standar
-(halaman identitas + diagram alir lintas pelaksana), menyimpannya sebagai JSON, dan mengekspornya ke PDF A4 lanskap.
+(halaman identitas + diagram alir lintas pelaksana), menyimpannya sebagai berkas `.sop` (isinya JSON), dan mengekspornya ke PDF A4 lanskap atau Word.
 
 Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero untuk kolaborasi real-time.
 
@@ -41,22 +41,22 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   dipakai [Carlito](https://github.com/googlefonts/carlito) (metrik identik, jadi tata letak tidak berubah) dan muncul
   peringatan di atas pratinjau.
 - Antarmuka memakai font [Inter](https://rsms.me/inter/).
-- Simpan/buka JSON, seret-lepas berkas JSON ke jendela, simpan otomatis ke browser, Undo/Redo.
+- Simpan/buka berkas `.sop` (berkas `.json` lama tetap bisa dibuka), seret-lepas berkas ke jendela, simpan otomatis ke browser, Undo/Redo.
 - **Kolaborasi real-time** tanpa server: edit satu dokumen bersama lewat tautan undangan, lihat siapa sedang
   mengedit bagian mana, dan ketik bersamaan di kolom yang sama tanpa saling menimpa.
-- **Buat dengan AI**: salin prompt siap pakai ke ChatGPT, Gemini, atau Claude, lalu tempel jawabannya untuk langsung
+- **Buat dengan AI**: salin prompt siap pakai ke asisten AI, lalu tempel jawabannya untuk langsung
   diedit dan diekspor.
 - **Cari & ganti** teks di seluruh dokumen (identitas, ketentuan, pelaksana, langkah), per kolom atau sekaligus.
 - Mode layar penuh serta mode terang/gelap (mengikuti sistem secara bawaan; halaman dokumen tetap putih).
-- Bisa dipasang sebagai aplikasi (PWA), bekerja offline, dan membuka berkas `.json` lewat "Buka dengan".
+- Bisa dipasang sebagai aplikasi (PWA), bekerja offline, dan membuka berkas `.sop` lewat "Buka dengan".
 - Dirancang untuk laptop/PC; di HP hanya tampil pesan untuk membukanya dari laptop/PC.
 
 ## Penggunaan
 
 | Pintasan | Aksi |
 | --- | --- |
-| Ctrl+S / Ctrl+Shift+S | Simpan JSON / Simpan sebagai |
-| Ctrl+O | Buka JSON |
+| Ctrl+S / Ctrl+Shift+S | Simpan / Simpan sebagai |
+| Ctrl+O | Buka berkas |
 | Ctrl+Shift+P | Pratinjau & ekspor PDF |
 | Ctrl+F / Ctrl+H | Cari & ganti (Esc untuk menutup) |
 | Ctrl+Z / Ctrl+Y | Urungkan / Ulangi (saat fokus di luar kolom teks) |
@@ -73,7 +73,7 @@ Tombol **Contoh** memuat contoh SOP Skripsi untuk melihat semua fitur.
 ### Buat dengan AI
 
 1. Klik **Buat dengan AI**, tulis deskripsi singkat prosesnya (opsional), lalu **Salin prompt**.
-2. Tempel prompt ke ChatGPT, Gemini, atau Claude. Prompt berisi aturan format dan contoh, sehingga AI menjawab
+2. Tempel prompt ke asisten AI. Prompt berisi aturan format, contoh, serta nama dan NIP dekan bawaan sebagai pengesah, sehingga AI menjawab
    dengan JSON dokumen SOP.
 3. Salin jawabannya ke kolom **Tempel jawaban AI** lalu **Buka di editor**, atau unduh berkas `.json` dari AI lalu buka
    seperti biasa. Periksa kembali isinya (terutama dasar hukum) sebelum diekspor.
@@ -139,7 +139,7 @@ Aktifkan sekali di **Settings → Pages → Build and deployment → Source: Git
 
 Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_PATH=/`.
 
-## Format JSON
+## Format berkas (.sop, berisi JSON)
 
 ```jsonc
 {
@@ -194,7 +194,7 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
 - Daftar ruang yang pernah diikuti dan riwayat versi (snapshot Yjs) yang bisa dipulihkan.
 
 **AI**
-- Integrasi langsung dengan API Claude/Gemini/OpenAI (kunci API milik pengguna) agar SOP dibuat tanpa salin-tempel.
+- Integrasi langsung dengan API penyedia AI (kunci API milik pengguna) agar SOP dibuat tanpa salin-tempel.
 - Revisi dengan AI: kirim dokumen yang sedang dibuka beserta instruksi ("pecah langkah 3", "rapikan keterangan").
 - Buat SOP dari dokumen yang ada (PDF/DOCX SOP lama, notulen, atau peraturan).
 

@@ -96,7 +96,7 @@
         <p>
           Anda diundang untuk mengedit sebuah dokumen SOP bersama. Dokumen yang sedang terbuka di sini akan
           <b>diganti</b> dengan dokumen ruang.
-          <button type="button" class="link" onclick={onsave}>Simpan JSON dokumen ini dulu</button> bila masih diperlukan.
+          <button type="button" class="link" onclick={onsave}>Simpan dokumen ini dulu</button> bila masih diperlukan.
         </p>
       {:else}
         <h2>Kolaborasi real-time</h2>

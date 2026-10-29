@@ -6,7 +6,7 @@
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf } from './lib/pdf.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
-  import { saveJson, openJsonFile, slug, downloadBlob } from './lib/files.js';
+  import { saveJson, openJsonFile, slug, sopName, downloadBlob } from './lib/files.js';
   import Preview from './lib/Preview.svelte';
   import CollabDialog from './lib/CollabDialog.svelte';
   import AiDialog from './lib/AiDialog.svelte';
@@ -248,7 +248,7 @@
 
   function closeTab(id) {
     const tab = tabs.list.find((t) => t.id === id);
-    if (!confirm(`Tutup "${tabTitle(tab)}"? Perubahan yang belum disimpan ke JSON akan hilang.`)) return;
+    if (!confirm(`Tutup "${tabTitle(tab)}"? Perubahan yang belum disimpan ke berkas akan hilang.`)) return;
     if (tabs.list.length === 1) {
       if (!canLeaveTab()) return;
       past = [];
@@ -335,7 +335,7 @@
       notify(`Dibuka: ${name}`);
       return true;
     } catch (e) {
-      alert(e instanceof SyntaxError ? 'Berkas bukan JSON yang valid.' : e.message);
+      alert(e instanceof SyntaxError ? 'Berkas bukan dokumen SOP yang valid.' : e.message);
       return false;
     }
   }
@@ -368,7 +368,7 @@
   }
 
   async function save(saveAs = false) {
-    const name = app.fileName || `SOP-${slug(app.doc.header.namaSop)}.json`;
+    const name = sopName(app.fileName || `SOP-${slug(app.doc.header.namaSop)}`);
     try {
       const handle = await saveJson(JSON.stringify(app.doc, null, 2), name, app.fileHandle, saveAs);
       if (handle === undefined) return;
@@ -492,9 +492,9 @@
     </div>
     <nav class="toolbar">
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
-      <button class="btn ghost" onclick={open} title="Buka JSON (Ctrl+O)">Buka</button>
-      <button class="btn ghost" onclick={() => save(false)} title="Simpan JSON (Ctrl+S)">Simpan JSON</button>
-      <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP dengan ChatGPT, Gemini, atau Claude">Buat dengan AI</button>
+      <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)">Buka</button>
+      <button class="btn ghost" onclick={() => save(false)} title="Simpan sebagai berkas .sop (Ctrl+S)">Simpan</button>
+      <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP dengan bantuan asisten AI">Buat dengan AI</button>
       <span class="sep"></span>
       <button class="icon" onclick={undo} disabled={!undoable} title="Urungkan (Ctrl+Z)">↶</button>
       <button class="icon" onclick={redo} disabled={!redoable} title="Ulangi (Ctrl+Y)">↷</button>
@@ -687,7 +687,7 @@
   />
 
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
-  {#if dragging}<div class="dropzone">Lepaskan berkas JSON untuk membuka</div>{/if}
+  {#if dragging}<div class="dropzone">Lepaskan berkas .sop untuk membuka</div>{/if}
 </div>
 
 <!-- Ditampilkan (lewat CSS) menggantikan aplikasi di layar HP. -->
