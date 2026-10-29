@@ -70,7 +70,7 @@ function richLine(pdf, it, runs, y) {
   };
   const widths = runs.map((r) => (font(r), pdf.getTextWidth(r.text)));
   const total = widths.reduce((a, w) => a + w, 0);
-  let x = it.align === 'center' ? it.x - total / 2 : it.align === 'right' ? it.x - total : it.x;
+  let x = it.align === 'center' ? it.x - total / 2 : it.align === 'right' ? it.x - total : it.x + (runs.indent ?? 0);
   runs.forEach((r, k) => {
     font(r);
     pdf.text(r.text, x, y, r.i || it.italic ? { angle: oblique(pdf, y) } : {});

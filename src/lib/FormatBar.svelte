@@ -1,5 +1,6 @@
 <script>
-  import { applyCase, CASES } from './richtext.js';
+  import { applyCase, CASES, editField, toggleList, listKindAt } from './richtext.js';
+  import { asStep } from './history.js';
 
   // Tombol format teks (tebal/miring/garis bawah) untuk isian berformat yang sedang difokus.
   // Tombol tidak mengambil fokus, jadi perintahnya berlaku pada seleksi di isian tersebut.
@@ -10,17 +11,34 @@
     ['removeFormat', 'T', 'Hapus format']
   ];
 
+  // Daftar hanya untuk isian banyak baris (sel tabel langkah).
+  const LISTS = [
+    ['bullet', 'Daftar poin (Ctrl+Shift+8)'],
+    ['number', 'Daftar bernomor (Ctrl+Shift+7)']
+  ];
+
   let active = $state(false);
+  let multi = $state(false);
+  let list = $state('');
   let state = $state({});
 
   function update() {
-    active = !!document.activeElement?.classList?.contains('f-rich');
+    const el = document.activeElement;
+    active = !!el?.classList?.contains('f-rich');
+    multi = active && el.getAttribute('aria-multiline') === 'true';
     if (active) for (const [cmd] of FORMATS.slice(0, 3)) state[cmd] = document.queryCommandState(cmd);
+    list = multi ? listKindAt(el) : '';
   }
 
   function run(cmd) {
     if (!active) return;
-    document.execCommand(cmd);
+    asStep(() => document.execCommand(cmd));
+    update();
+  }
+
+  function setList(kind) {
+    if (!multi) return;
+    asStep(() => editField(document.activeElement, (v, a, b) => toggleList(v, a, b, kind)));
     update();
   }
 
@@ -29,7 +47,7 @@
 
   function setCase(mode) {
     caseOpen = false;
-    if (active) applyCase(document.activeElement, mode);
+    if (active) asStep(() => applyCase(document.activeElement, mode));
     update();
   }
 
@@ -64,6 +82,35 @@
       onpointerdown={(e) => e.preventDefault()}
       onclick={() => run(cmd)}>{label}</button
     >
+  {/each}
+  {#each LISTS as [kind, title] (kind)}
+    <button
+      class="fmt-list"
+      class:on={list === kind}
+      disabled={!multi}
+      title={multi ? title : 'Daftar poin/bernomor tersedia di sel tabel langkah'}
+      aria-label={title}
+      aria-pressed={list === kind}
+      onpointerdown={(e) => e.preventDefault()}
+      onclick={() => setList(kind)}
+    >
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+        {#if kind === 'bullet'}
+          <circle cx="2.5" cy="4" r="1.3" /><circle cx="2.5" cy="8" r="1.3" /><circle cx="2.5" cy="12" r="1.3" />
+        {:else}
+          <text x="0.3" y="5.6" font-size="5" font-family="system-ui, sans-serif">1</text>
+          <text x="0.3" y="9.6" font-size="5" font-family="system-ui, sans-serif">2</text>
+          <text x="0.3" y="13.6" font-size="5" font-family="system-ui, sans-serif">3</text>
+        {/if}
+        <rect x="5.5" y="3.3" width="9" height="1.4" rx="0.7" /><rect x="5.5" y="7.3" width="9" height="1.4" rx="0.7" /><rect
+          x="5.5"
+          y="11.3"
+          width="9"
+          height="1.4"
+          rx="0.7"
+        />
+      </svg>
+    </button>
   {/each}
   <div class="case" bind:this={caseWrap}>
     <button
@@ -130,6 +177,9 @@
   .fmt-removeFormat {
     position: relative;
     font-weight: 400;
+  }
+  .fmt-list svg {
+    fill: currentColor;
   }
   .case {
     position: relative;

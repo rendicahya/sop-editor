@@ -54,7 +54,8 @@ ${header}
   - "kelengkapan", "waktu" (contoh "1 Hari", "15 Menit"), "output", "keterangan": teks, boleh ""
   - "next" (opsional): bawaannya langkah berikutnya. Isi id langkah lain untuk melompat, atau "none" bila alur berhenti.
   - Khusus "decision": "yesLabel" dan "noLabel" (contoh "Valid"/"Tidak Valid"); jalur "ya" lanjut ke "next", jalur "tidak" ke "alt" yang berisi id langkah tujuan (biasanya kembali ke langkah sebelumnya untuk perbaikan).
-- Format teks: butir sections serta kolom kegiatan, kelengkapan, waktu, output, dan keterangan boleh memakai tag <b>tebal</b>, <i>miring</i>, dan <u>garis bawah</u> (boleh bertumpuk, mis. <b><i>…</i></b>). Jangan memakai Markdown (**…**) atau tag lain. Kolom lain selalu teks polos.`;
+- Format teks: butir sections serta kolom kegiatan, kelengkapan, waktu, output, dan keterangan boleh memakai tag <b>tebal</b>, <i>miring</i>, dan <u>garis bawah</u> (boleh bertumpuk, mis. <b><i>…</i></b>). Jangan memakai Markdown (**…**) atau tag lain. Kolom lain selalu teks polos.
+- Daftar di dalam sel kolom langkah: satu butir per baris (dipisah \\n), diawali "• " untuk poin atau "1. ", "2. ", … untuk nomor.`;
 
 export function aiPrompt(description = '') {
   const desc = description.trim() || '[TULIS DI SINI: nama SOP, unit kerja, siapa saja yang terlibat, dan urutan prosesnya]';

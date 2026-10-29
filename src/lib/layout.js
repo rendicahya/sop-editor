@@ -4,7 +4,7 @@
 import { jsPDF } from 'jspdf';
 import { pdfFont, registerFonts, fontRevision } from './fonts.js';
 import { formatTanggal } from './model.js';
-import { hasMarkup, parseRich, plainText, wrapRuns } from './richtext.js';
+import { hasList, hasMarkup, parseRich, plainText, setMarkerMeasure, wrapRuns } from './richtext.js';
 import logoSrc from '../assets/logo-ub.png?inline';
 
 const LOGO = { src: logoSrc, width: 418, height: 420 };
@@ -42,9 +42,17 @@ function wrap(text, size, bold, width) {
   return measurerFor(size, bold).splitTextToSize(t, Math.max(width, 2));
 }
 
-/** Seperti wrap, untuk isian berformat: baris tanpa tag tetap string, baris bertag menjadi array runs. */
+/** Lebar penanda daftar ("• ", "1. ") dalam mm; baris lanjutan butir menjorok sejauh ini. */
+export const markerWidth = (marker, size) => measurerFor(size, false).getTextWidth(marker);
+// Isian di pratinjau memakai indentasi yang sama, dalam em (1 em = ukuran font).
+setMarkerMeasure((m) => markerWidth(m, 10) / (10 * PT));
+
+/**
+ * Seperti wrap, untuk isian berformat: baris tanpa tag tetap string, baris bertag menjadi array runs.
+ * Baris lanjutan butir daftar membawa `indent` (mm).
+ */
 function wrapRich(text, size, width) {
-  if (!hasMarkup(text)) return wrap(text, size, false, width);
+  if (!hasMarkup(text) && !hasList(text)) return wrap(text, size, false, width);
   if (!plainText(text).trim()) return [];
   return wrapRuns(parseRich(text), width, (s, bold) => measurerFor(size, bold).getTextWidth(s));
 }

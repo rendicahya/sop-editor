@@ -15,6 +15,7 @@
   import FindPanel from './lib/FindPanel.svelte';
   import * as Collab from './lib/collab.svelte.js';
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
+  import { connectHistory } from './lib/history.js';
 
   let toast = $state('');
   let toastTimer;
@@ -120,24 +121,35 @@
     const json = JSON.stringify(app.doc);
     if (json === current) return;
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      // Di ruang kolaborasi, undo/redo ditangani Yjs (hanya perubahan sendiri yang dibatalkan).
-      if (collab.status !== 'off') {
-        past = [];
-        future = [];
-        current = json;
-        persist(json);
-        syncFlags();
-        return;
-      }
-      past.push(current);
-      if (past.length > 100) past.shift();
+    timer = setTimeout(() => commit(json), 350);
+  });
+
+  function commit(json) {
+    clearTimeout(timer);
+    // Di ruang kolaborasi, undo/redo ditangani Yjs (hanya perubahan sendiri yang dibatalkan).
+    if (collab.status !== 'off') {
+      past = [];
       future = [];
       current = json;
       persist(json);
       syncFlags();
-    }, 350);
-  });
+      return;
+    }
+    past.push(current);
+    if (past.length > 100) past.shift();
+    future = [];
+    current = json;
+    persist(json);
+    syncFlags();
+  }
+
+  /** Simpan perubahan yang belum masuk riwayat sebagai langkah tersendiri. */
+  function checkpoint() {
+    if (collab.status !== 'off') return Collab.stopCapturing();
+    const json = JSON.stringify(app.doc);
+    if (json !== current) commit(json);
+  }
+  connectHistory({ checkpoint, undo: () => undo(), redo: () => redo() });
 
   // Setiap perubahan lokal langsung dikirim ke ruang kolaborasi.
   $effect(() => {
@@ -163,6 +175,7 @@
 
   function undo() {
     if (collab.status !== 'off') return Collab.undo();
+    checkpoint(); // ketikan yang belum tercatat dibatalkan lebih dulu, bukan hilang
     if (!past.length) return;
     future.push(current);
     restore(past.pop());
@@ -170,6 +183,7 @@
 
   function redo() {
     if (collab.status !== 'off') return Collab.redo();
+    checkpoint();
     if (!future.length) return;
     past.push(current);
     restore(future.pop());

@@ -30,7 +30,7 @@
         text-anchor={anchor[it.align]}
       >
         {#each it.lines as line, j (j)}{#if typeof line === 'string'}<tspan x={it.x} y={baseline(it, j)}>{line}</tspan>{:else}<tspan
-              x={it.x}
+              x={it.x + (line.indent ?? 0)}
               y={baseline(it, j)}
               >{#each line as r, k (k)}<tspan
                   font-weight={r.b ? 700 : null}

@@ -181,9 +181,136 @@ export function applyCase(root, mode) {
   if (mode === 'cycle') mode = nextCase([...plain].slice(start, end).join(''));
   const next = changeCase(value, start, end, mode);
   if (next === value) return;
-  root.innerHTML = richToHtml(next);
+  setRich(root, next, start, start + (plainText(next).length - plain.length) + (end - start));
+}
+
+// ---------------------------------------------------------------------------
+// Daftar poin/bernomor di dalam sel: baris yang diawali "• " atau "1. " (juga "1) ").
+// Tetap teks biasa; tata letak memberi indentasi gantung agar baris lanjutan rata dengan teksnya.
+// ---------------------------------------------------------------------------
+
+export const BULLET = '• ';
+const LIST = /^(?:•|\d{1,3}[.)])[ \t]+/;
+
+/** Penanda daftar di awal baris teks polos ('' bila bukan butir daftar). */
+export const listMarker = (line) => line.match(LIST)?.[0] ?? '';
+export const hasList = (s) => plainText(s).split('\n').some((l) => LIST.test(l));
+const numbered = (m) => /^\d/.test(m);
+
+// Ukuran penanda dalam em (lebar sesungguhnya diisi layout.js dengan metrik font dokumen).
+let markerEm = (m) => m.length * 0.5;
+export const setMarkerMeasure = (fn) => (markerEm = fn);
+
+/** Ganti penanda tiap baris (`marks[i]`, '' = tanpa penanda) lalu nomori ulang; posisi `pos` ikut bergeser. */
+function remark(s, marks, pos) {
+  const plain = plainText(s);
+  const lines = plain.split('\n');
+  const want = lines.map((l, i) => marks[i] ?? listMarker(l));
+  // Nomor berurutan dalam tiap kelompok baris bernomor yang bersambung.
+  let n = 0;
+  want.forEach((m, i) => {
+    n = numbered(m) ? n + 1 : 0;
+    if (n) want[i] = m.replace(/^\d+/, n);
+  });
+  let out = '';
+  let at = 0;
+  let to = 0;
+  const moved = pos.map(() => null);
+  lines.forEach((l, i) => {
+    const old = listMarker(l).length;
+    const m = want[i];
+    pos.forEach((p, k) => {
+      if (moved[k] === null && p <= at + l.length) moved[k] = to + m.length + Math.max(0, p - at - old);
+    });
+    out += (i ? '\n' : '') + m + sliceRich(s, at + old, at + l.length);
+    at += l.length + 1;
+    to += m.length + l.length - old + 1;
+  });
+  return { value: out, pos: moved.map((p) => p ?? to - 1) };
+}
+
+/** Rentang baris yang tersentuh seleksi [start, end]. */
+function linesOf(plain, start, end) {
+  const lines = plain.split('\n');
+  let at = 0;
+  let a = -1;
+  let b = -1;
+  lines.forEach((l, i) => {
+    if (a < 0 && start <= at + l.length) a = i;
+    if (b < 0 && end <= at + l.length) b = i;
+    at += l.length + 1;
+  });
+  const last = lines.length - 1;
+  return { lines, a: a < 0 ? last : a, b: b < 0 ? last : b };
+}
+
+/** Jadikan baris terpilih butir daftar `kind` ('bullet' | 'number'), atau lepaskan bila semuanya sudah begitu. */
+export function toggleList(s, start, end, kind) {
+  const { lines, a, b } = linesOf(plainText(s), start, end);
+  const isKind = (l) => (kind === 'number' ? numbered(listMarker(l)) : listMarker(l).startsWith('•'));
+  const off = lines.slice(a, b + 1).every(isKind);
+  const marks = lines.map((_, i) => (i < a || i > b ? undefined : off ? '' : kind === 'number' ? '1. ' : BULLET));
+  const r = remark(s, marks, [start, end]);
+  return { value: r.value, start: r.pos[0], end: r.pos[1] };
+}
+
+/**
+ * Enter pada butir daftar: butir baru dengan penanda berikutnya; pada butir kosong, daftar diakhiri.
+ * Mengembalikan null bila baris kursor bukan butir daftar.
+ */
+export function listEnter(s, start, end) {
+  const plain = plainText(s);
+  const { lines, a } = linesOf(plain, start, start);
+  const m = listMarker(lines[a]);
+  if (!m) return null;
+  const lineStart = lines.slice(0, a).reduce((x, l) => x + l.length + 1, 0);
+  if (start === end && lines[a].length === m.length) {
+    const r = remark(s, lines.map((_, i) => (i === a ? '' : undefined)), [lineStart]);
+    return { value: r.value, start: r.pos[0], end: r.pos[0] };
+  }
+  const next = start - lineStart < m.length ? '' : numbered(m) ? m.replace(/^\d+/, (d) => +d + 1) : m;
+  const value = sliceRich(s, 0, start) + '\n' + next + sliceRich(s, end);
+  const r = remark(value, [], [start + 1 + next.length]);
+  return { value: r.value, start: r.pos[0], end: r.pos[0] };
+}
+
+/** Backspace tepat setelah penanda daftar melepas penandanya. Null bila tidak berlaku. */
+export function listBackspace(s, start, end) {
+  if (start !== end) return null;
+  const { lines, a } = linesOf(plainText(s), start, start);
+  const m = listMarker(lines[a]);
+  const lineStart = lines.slice(0, a).reduce((x, l) => x + l.length + 1, 0);
+  if (!m || start - lineStart !== m.length) return null;
+  const r = remark(s, lines.map((_, i) => (i === a ? '' : undefined)), [start]);
+  return { value: r.value, start: r.pos[0], end: r.pos[0] };
+}
+
+/** Jenis daftar baris kursor di isian `root`: 'bullet', 'number', atau ''. */
+export function listKindAt(root) {
+  const sel = getSelection(root);
+  if (!sel) return '';
+  const plain = plainText(domToRich(root));
+  const { lines, a } = linesOf(plain, Math.min(sel.start, sel.end), 0);
+  const m = listMarker(lines[a] ?? '');
+  return !m ? '' : numbered(m) ? 'number' : 'bullet';
+}
+
+/** Terapkan `fn(value, start, end)` → { value, start, end } pada isian `root`. */
+export function editField(root, fn) {
+  const sel = getSelection(root);
+  if (!sel) return false;
+  const value = domToRich(root);
+  const r = fn(value, Math.min(sel.start, sel.end), Math.max(sel.start, sel.end));
+  if (!r) return false;
+  setRich(root, r.value, r.start, r.end);
+  return true;
+}
+
+/** Ganti isi isian dengan nilai baru (memicu input agar tersimpan) dan pasang seleksi. */
+export function setRich(root, value, start, end = start) {
+  root.innerHTML = richToHtml(value);
   root.dispatchEvent(new Event('input', { bubbles: true }));
-  setSelection(root, start, start + (plainText(next).length - plain.length) + (end - start));
+  setSelection(root, start, end);
 }
 
 /** Tag format dari jawaban AI: <strong>/<em>/**tebal** diseragamkan ke <b>/<i>. */
@@ -200,13 +327,31 @@ export function normalizeMarkup(s) {
 
 const escHtml = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
 
-/** HTML isian; baris kosong terakhir butuh <br> tambahan agar terlihat. */
+/**
+ * HTML isian; baris kosong terakhir butuh <br> tambahan agar terlihat. Isian berdaftar ditulis satu
+ * <div class="ln"> per baris agar butir daftar bisa diberi indentasi gantung seperti di halaman.
+ */
 export function richToHtml(s) {
+  const plain = plainText(s);
+  if (hasList(s)) {
+    let at = 0;
+    return plain
+      .split('\n')
+      .map((l) => {
+        const html = serializeRuns(parseRich(sliceRich(s, at, at + l.length)), escHtml);
+        at += l.length + 1;
+        const m = listMarker(l);
+        const attr = m ? ` class="ln li" style="--ind: ${+markerEm(m).toFixed(4)}em;"` : ' class="ln"';
+        return `<div${attr}>${html || '<br>'}</div>`;
+      })
+      .join('');
+  }
   const html = serializeRuns(parseRich(s), escHtml);
-  return /\n$/.test(plainText(s)) ? html + '<br>' : html;
+  return /\n$/.test(plain) ? html + '<br>' : html;
 }
 
 const BLOCK = new Set(['DIV', 'P', 'LI']);
+const isLine = (n) => n?.nodeName === 'DIV' && n.classList.contains('ln');
 
 /** Potongan teks berformat dalam urutan dokumen: { node, text, b, i, u, br }. */
 function pieces(root) {
@@ -217,7 +362,8 @@ function pieces(root) {
         if (c.data) out.push({ node: c, text: c.data, ...f });
       } else if (c.nodeType === 1) {
         if (c.nodeName === 'BR') {
-          out.push({ node: c, text: '\n', ...f, br: true });
+          // <br> terakhir dalam baris <div class="ln"> hanyalah penampung baris kosong.
+          if (!(isLine(node) && c === node.lastChild)) out.push({ node: c, text: '\n', ...f, br: true });
           continue;
         }
         const st = c.style;
@@ -229,7 +375,9 @@ function pieces(root) {
           u: c.nodeName === 'U' || /underline/.test(deco) || f.u
         };
         if (w && (w === 'normal' || +w < 600) && !/^(B|STRONG)$/.test(c.nodeName)) g.b = false;
-        if (BLOCK.has(c.nodeName) && out.length && out.at(-1).text !== '\n') out.push({ node: c, text: '\n', ...f });
+        if (isLine(c)) {
+          if (out.length) out.push({ node: c, text: '\n', ...f, line: true });
+        } else if (BLOCK.has(c.nodeName) && out.length && out.at(-1).text !== '\n') out.push({ node: c, text: '\n', ...f });
         walk(c, g);
       }
     }
@@ -264,9 +412,13 @@ export function getSelection(root) {
 /** Taruh kursor (atau seleksi) di posisi teks polos. */
 export function setSelection(root, start, end = start) {
   const doc = root.ownerDocument;
+  // Ujung baris <div class="ln">: sebelum <br> penampung bila barisnya kosong.
+  const lineEnd = (div) => [div, div.lastChild?.nodeName === 'BR' ? div.childNodes.length - 1 : div.childNodes.length];
   const locate = (pos) => {
     let acc = 0;
     for (const p of pieces(root)) {
+      if (p.line && pos === acc + 1) return [p.node, 0];
+      if (p.line && pos === acc && isLine(p.node.previousSibling)) return lineEnd(p.node.previousSibling);
       if (pos <= acc + p.text.length && !(p.text === '\n' && pos === acc + 1)) {
         if (p.node.nodeType === 3) return [p.node, pos - acc];
         return [p.node.parentNode, [...p.node.parentNode.childNodes].indexOf(p.node)];
@@ -274,6 +426,7 @@ export function setSelection(root, start, end = start) {
       acc += p.text.length;
     }
     const last = root.lastChild;
+    if (isLine(last)) return lineEnd(last);
     return last?.nodeName === 'BR' ? [root, root.childNodes.length - 1] : [root, root.childNodes.length];
   };
   const range = doc.createRange();
@@ -315,6 +468,10 @@ export function wrapRuns(runs, width, measure) {
   };
   const lines = [];
   for (const chars of paras) {
+    // Butir daftar: baris lanjutan menjorok selebar penandanya (indentasi gantung).
+    const marker = listMarker(chars.map((c) => c.ch).join(''));
+    const ind = marker ? widthOf(chars.slice(0, marker.length)) : 0;
+    let lim = W;
     const tokens = [];
     for (const c of chars) {
       const space = c.ch === ' ';
@@ -326,9 +483,11 @@ export function wrapRuns(runs, width, measure) {
     let lw = 0;
     const flush = () => {
       while (line.length && line.at(-1).ch === ' ') line.pop();
+      if (lim < W) line.indent = ind;
       lines.push(line);
       line = [];
       lw = 0;
+      lim = Math.max(W - ind, 2);
     };
     for (const t of tokens) {
       const tw = widthOf(t.chars);
@@ -336,8 +495,8 @@ export function wrapRuns(runs, width, measure) {
         if (line.length) (line.push(...t.chars), (lw += tw));
         continue;
       }
-      if (line.length && lw + tw > W) flush();
-      if (tw <= W) {
+      if (line.length && lw + tw > lim) flush();
+      if (tw <= lim) {
         line.push(...t.chars);
         lw += tw;
         continue;
@@ -345,7 +504,7 @@ export function wrapRuns(runs, width, measure) {
       // Kata lebih lebar dari kolom: dipenggal per huruf.
       for (const c of t.chars) {
         const cw = widthOf([c]);
-        if (line.length && lw + cw > W) flush();
+        if (line.length && lw + cw > lim) flush();
         line.push(c);
         lw += cw;
       }
@@ -359,6 +518,7 @@ export function wrapRuns(runs, width, measure) {
       if (last && last.b === c.b && last.i === c.i && last.u === c.u) last.text += c.ch;
       else out.push({ text: c.ch, b: c.b, i: c.i, u: c.u });
     }
+    if (chars.indent) out.indent = chars.indent;
     return out;
   });
 }

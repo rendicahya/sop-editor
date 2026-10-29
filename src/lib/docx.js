@@ -2,9 +2,9 @@
 // Halaman diagram alir menjadi tabel dengan ukuran kolom/baris persis seperti tata letak, ditambah
 // gambar diagram (SVG + cadangan PNG) di belakang tabel, diposisikan relatif terhadap halaman.
 import { zipSync, strToU8 } from 'fflate';
-import { layoutDocument, baseline, PT, PAGE } from './layout.js';
+import { layoutDocument, baseline, markerWidth, PT, PAGE } from './layout.js';
 import { formatTanggal } from './model.js';
-import { parseRich, lineText } from './richtext.js';
+import { parseRich, lineText, hasList, listMarker, plainText, sliceRich } from './richtext.js';
 
 const TW = 1440 / 25.4; // twip per mm
 const EMU = 36000; // EMU per mm
@@ -37,11 +37,12 @@ function run(text, { size, bold, italic, underline, color } = {}) {
 }
 
 /** Paragraf; spasi baris tetap size × 1,2 seperti tata letak (line dalam twip, 0 = otomatis). */
-function para(content, { size = 10, align, before = 0, after = 0, line = size * 24, keepNext, num } = {}) {
+function para(content, { size = 10, align, before = 0, after = 0, line = size * 24, keepNext, num, hang } = {}) {
   const pr =
     (keepNext ? '<w:keepNext/>' : '') + (num ? `<w:numPr><w:ilvl w:val="0"/><w:numId w:val="${num}"/></w:numPr>` : '') +
     `<w:spacing w:before="${Math.round(before)}" w:after="${Math.round(after)}" ` +
     (line ? `w:line="${Math.round(line)}" w:lineRule="exact"/>` : 'w:line="240" w:lineRule="auto"/>') +
+    (hang ? `<w:ind w:left="${tw(hang)}" w:hanging="${tw(hang)}"/>` : '') +
     (align ? `<w:jc w:val="${align}"/>` : '') + `<w:rPr><w:sz w:val="${size * 2}"/><w:szCs w:val="${size * 2}"/></w:rPr>`;
   return `<w:p><w:pPr>${pr}</w:pPr>${content}</w:p>`;
 }
@@ -256,7 +257,7 @@ function flowTable(doc, f) {
   if (f.top) rows.push(band());
   for (const r of f.rows) {
     const s = doc.steps[r.index];
-    const t = (v) => para(richRun(v, { size: S }), { size: S });
+    const t = (v) => cellText(v, S);
     rows.push(row([
       cell(w[0], para(run(String(r.index + 1), { size: S }), { size: S, align: 'center' })),
       cell(w[1], t(s.kegiatan)),
@@ -269,6 +270,25 @@ function flowTable(doc, f) {
   }
   if (f.bot) rows.push(band());
   return table(w, rows, { top: f.pad, bottom: 0, x: f.pad });
+}
+
+/**
+ * Isi sel langkah. Sel berdaftar menjadi satu paragraf per baris; butir daftar diberi indentasi gantung
+ * selebar penandanya dan tab setelah penanda, sehingga baris lanjutan rata seperti di pratinjau.
+ */
+function cellText(v, S) {
+  if (!hasList(v)) return para(richRun(v, { size: S }), { size: S });
+  let at = 0;
+  return plainText(v)
+    .split('\n')
+    .map((l) => {
+      const m = listMarker(l);
+      const body = richRun(sliceRich(v, at + m.length, at + l.length), { size: S });
+      at += l.length + 1;
+      if (!m) return para(body, { size: S });
+      return para(run(m.trimEnd(), { size: S }) + '<w:r><w:tab/></w:r>' + body, { size: S, hang: markerWidth(m, S) });
+    })
+    .join('');
 }
 
 // ---------------------------------------------------------------------------

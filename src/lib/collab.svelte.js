@@ -127,6 +127,11 @@ export function redo() {
   session?.redo();
 }
 
+/** Perubahan lokal berikutnya menjadi langkah undo tersendiri. */
+export function stopCapturing() {
+  session?.stopCapturing();
+}
+
 /** Memberi tahu peserta lain bagian mana yang sedang kita edit. */
 export function setFocus(focus) {
   session?.setFocus(focus);

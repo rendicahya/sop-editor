@@ -139,6 +139,7 @@ export function startSession(room, seed) {
     push: (doc) => ydoc.transact(() => syncMap(root, doc), LOCAL),
     undo: () => undoManager?.undo(),
     redo: () => undoManager?.redo(),
+    stopCapturing: () => undoManager?.stopCapturing(),
     setUser: (user) => awareness.setLocalStateField('user', user),
     /** Memberi tahu peserta lain bagian mana yang sedang kita edit. */
     setFocus: (focus) => awareness.setLocalStateField('focus', focus),
