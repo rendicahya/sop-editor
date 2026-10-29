@@ -10,6 +10,7 @@
   import Preview from './lib/Preview.svelte';
   import CollabDialog from './lib/CollabDialog.svelte';
   import AiDialog from './lib/AiDialog.svelte';
+  import FormatBar from './lib/FormatBar.svelte';
   import PdfPreviewDialog from './lib/PdfPreviewDialog.svelte';
   import FindPanel from './lib/FindPanel.svelte';
   import * as Collab from './lib/collab.svelte.js';
@@ -422,7 +423,7 @@
     } else if (k === 'f' || k === 'h') {
       e.preventDefault();
       findOpen = true;
-    } else if ((k === 'z' || k === 'y') && !e.target.closest?.('input, textarea')) {
+    } else if ((k === 'z' || k === 'y') && !e.target.closest?.('input, textarea, [contenteditable]')) {
       e.preventDefault();
       if (k === 'y' || e.shiftKey) redo();
       else undo();
@@ -494,7 +495,7 @@
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)">Buka</button>
       <button class="btn ghost" onclick={() => save(false)} title="Simpan sebagai berkas .sop (Ctrl+S)">Simpan</button>
-      <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP dengan bantuan asisten AI">Buat dengan AI</button>
+      <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP baru atau impor SOP lama (PDF/Word) dengan bantuan asisten AI">Buat dengan AI</button>
       <span class="sep"></span>
       <button class="icon" onclick={undo} disabled={!undoable} title="Urungkan (Ctrl+Z)">↶</button>
       <button class="icon" onclick={redo} disabled={!redoable} title="Ulangi (Ctrl+Y)">↷</button>
@@ -598,6 +599,8 @@
       {/each}
       <button class="add" onclick={() => addTab(emptyDocument())} disabled={collab.status !== 'off'} title={collab.status !== 'off' ? 'Keluar dari ruang kolaborasi untuk membuka tab baru' : 'Tab baru'} aria-label="Tab baru">+</button>
     </div>
+    <FormatBar />
+    <span class="tab-sep"></span>
     <div class="zoom" title="Zoom pratinjau">
       <span class="zoom-label">Zoom</span>
       <button class="zoom-step" onclick={() => zoomStep(-1)} disabled={zoom <= ZOOM_MIN} title="Perkecil (Ctrl+roda mouse)" aria-label="Perkecil">−</button>

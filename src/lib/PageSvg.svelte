@@ -29,7 +29,15 @@
         fill={it.color}
         text-anchor={anchor[it.align]}
       >
-        {#each it.lines as line, j (j)}<tspan x={it.x} y={baseline(it, j)}>{line}</tspan>{/each}
+        {#each it.lines as line, j (j)}{#if typeof line === 'string'}<tspan x={it.x} y={baseline(it, j)}>{line}</tspan>{:else}<tspan
+              x={it.x}
+              y={baseline(it, j)}
+              >{#each line as r, k (k)}<tspan
+                  font-weight={r.b ? 700 : null}
+                  font-style={r.i ? 'italic' : null}
+                  text-decoration={r.u ? 'underline' : null}>{r.text}</tspan
+                >{/each}</tspan
+            >{/if}{/each}
       </text>
     {:else if it.t === 'image'}
       <image href={it.src} x={it.x} y={it.y} width={it.w} height={it.h} preserveAspectRatio="none" />

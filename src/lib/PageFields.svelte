@@ -5,6 +5,8 @@
   import { PT } from './layout.js';
   import { newStep, removeStep, uid, SHAPES } from './model.js';
   import { collab } from './collab.svelte.js';
+  import { plainText, sliceRich, getSelection, setSelection } from './richtext.js';
+  import RichField from './RichField.svelte';
 
   // Lapisan isian di atas halaman (identitas dan diagram alir): teks diketik langsung pada posisinya di dokumen.
   // Teks isian dibuat transparan sehingga yang terlihat tetap hasil render SVG (sama dengan PDF);
@@ -80,7 +82,10 @@
 
   // Menu simbol: id langkah yang menunya sedang terbuka.
   let menu = $state(null);
-  const short = (s, i) => `${i + 1}. ${s.kegiatan.length > 36 ? s.kegiatan.slice(0, 36) + '…' : s.kegiatan || '(tanpa nama)'}`;
+  const short = (s, i) => {
+    const k = plainText(s.kegiatan);
+    return `${i + 1}. ${k.length > 36 ? k.slice(0, 36) + '…' : k || '(tanpa nama)'}`;
+  };
   function closeMenu(e) {
     if (menu && !e.target.closest?.('.f-shape')) menu = null;
   }
@@ -91,26 +96,30 @@
     const el = document.querySelector(`[data-field="${id}"]`);
     if (!el) return;
     el.focus();
-    if (caret !== null) el.setSelectionRange(caret, caret);
+    if (caret === null) return;
+    if (el.isContentEditable) setSelection(el, caret);
+    else el.setSelectionRange(caret, caret);
   }
 
   function onTextKey(e, f) {
     if (e.key === 'Enter' && !e.shiftKey && !f.multiline) e.preventDefault();
   }
 
+  // Butir ketentuan berformat: posisi kursor dihitung pada teks polos, pemecahan butir mempertahankan format.
   function onItemKey(e, f) {
     const list = items(f.key);
     const i = f.index;
-    const el = e.currentTarget;
-    const { selectionStart: a, selectionEnd: b } = el;
+    const sel = getSelection(e.currentTarget) ?? { start: 0, end: 0 };
+    const { start: a, end: b } = sel;
     const text = list[i];
+    const len = plainText(text).length;
     const at = (j, caret) => focusField(`s:${f.key}:${j}`, caret);
 
     if (e.key === 'Enter' && !e.shiftKey) {
       // Enter memecah butir di posisi kursor.
       e.preventDefault();
-      list[i] = text.slice(0, a);
-      list.splice(i + 1, 0, text.slice(b));
+      list[i] = sliceRich(text, 0, a);
+      list.splice(i + 1, 0, sliceRich(text, b));
       at(i + 1, 0);
     } else if (e.key === 'Backspace' && a === 0 && b === 0) {
       if (i > 0) {
@@ -118,13 +127,13 @@
         const prev = list[i - 1];
         list[i - 1] = prev + text;
         list.splice(i, 1);
-        at(i - 1, prev.length);
-      } else if (!text) {
+        at(i - 1, plainText(prev).length);
+      } else if (!len) {
         e.preventDefault();
         list.splice(0, 1);
         if (list.length) at(0, 0);
       }
-    } else if (e.key === 'Delete' && a === text.length && b === a && i + 1 < list.length) {
+    } else if (e.key === 'Delete' && a === len && b === a && i + 1 < list.length) {
       e.preventDefault();
       list[i] = text + list[i + 1];
       list.splice(i + 1, 1);
@@ -138,8 +147,8 @@
       at(j, a);
     } else if (e.key === 'ArrowUp' && a === 0 && b === 0 && i > 0) {
       e.preventDefault();
-      at(i - 1, list[i - 1].length);
-    } else if (e.key === 'ArrowDown' && a === text.length && i + 1 < list.length) {
+      at(i - 1, plainText(list[i - 1]).length);
+    } else if (e.key === 'ArrowDown' && a === len && i + 1 < list.length) {
       e.preventDefault();
       at(i + 1, 0);
     }
@@ -178,8 +187,7 @@
     (f.pad ? `padding:calc(${f.pad} * var(--mm));` : '');
 </script>
 
-<svelte:window onpointerdown={closeMenu} onkeydown={(e) => e.key === 'Escape' && (menu = null)} />
-<div
+<svelte:window onpointerdown={closeMenu} onkeydown={(e) => e.key === 'Escape' && (menu = null)} /><div
   class="fields"
   inert={!editable}
   onpointerover={(e) => (hover = groupOf(e))}
@@ -188,7 +196,19 @@
   onfocusout={() => (focused = null)}
 >
   {#each fields as f (f.id)}
-    {#if f.kind === 'text'}
+    {#if f.kind === 'text' && f.rich}
+      <RichField
+        class="f-text"
+        style={box(f)}
+        data-field={f.id}
+        data-hot={f.hot}
+        aria-label={f.label}
+        placeholder={f.placeholder ?? ''}
+        multiline={f.multiline}
+        value={value(f)}
+        oninput={(v) => setValue(f, v)}
+      />
+    {:else if f.kind === 'text'}
       <textarea
         class="f-text"
         class:bold={f.bold}
@@ -205,17 +225,16 @@
       ></textarea>
     {:else if f.kind === 'item'}
       <div class="f-item" style={box({ ...f, size: 0, pad: 0 })}>
-        <textarea
+        <RichField
           class="f-text"
-          style="font-size:calc({f.size * PT} * var(--mm))"
+          style="position:absolute;inset:0;font-size:calc({f.size * PT} * var(--mm))"
           data-field={f.id}
           aria-label="Butir {f.index + 1}"
           placeholder="Ketik butir…"
-          spellcheck="false"
           value={value(f)}
-          oninput={(e) => setValue(f, e.currentTarget.value)}
+          oninput={(v) => setValue(f, v)}
           onkeydown={(e) => onItemKey(e, f)}
-        ></textarea>
+        />
         <button class="f-del" tabindex="-1" title="Hapus butir" aria-label="Hapus butir" onclick={() => removeItem(f)}>✕</button>
       </div>
     {:else if f.kind === 'date'}
@@ -389,11 +408,19 @@
     padding: 0;
     cursor: text;
   }
-  .f-item .f-text {
+  /* Isian berformat (RichField) memakai gaya isian teks yang sama. */
+  .fields > :global(.f-rich) {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    box-sizing: border-box;
+    margin: 0;
+  }
+  .fields :global(.f-rich:hover) {
+    background: rgb(var(--edit) / 0.06);
+    box-shadow: inset 0 0 0 1px rgb(var(--edit) / 0.35);
+  }
+  .fields :global(.f-rich:focus) {
+    background: rgb(var(--edit) / 0.08);
+    box-shadow: inset 0 0 0 1.5px rgb(var(--edit));
   }
   .f-text.bold {
     font-weight: 700;

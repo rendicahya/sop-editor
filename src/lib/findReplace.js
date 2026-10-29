@@ -1,4 +1,5 @@
 import { SECTION_DEFS } from './model.js';
+import { plainText, replaceRich } from './richtext.js';
 
 const HEADER_FIELDS = [
   ['institution', 'Nama instansi'],
@@ -28,14 +29,14 @@ export function textFields(doc) {
   for (const [key, label] of HEADER_FIELDS) out.push({ obj: doc.header, key, label, ref: 'h:' + key });
   for (const { key: sec, title } of SECTION_DEFS) {
     const items = doc.sections[sec]?.items ?? [];
-    items.forEach((_, i) => out.push({ obj: items, key: i, label: `${title} · butir ${i + 1}`, ref: `s:${sec}:${i}` }));
+    items.forEach((_, i) => out.push({ obj: items, key: i, label: `${title} · butir ${i + 1}`, ref: `s:${sec}:${i}`, rich: true }));
   }
   doc.actors.forEach((a, i) => out.push({ obj: a, key: 'name', label: `Pelaksana ${i + 1}`, ref: 'a:' + a.id }));
   doc.steps.forEach((s, i) => {
     for (const [key, label] of STEP_FIELDS) {
       if (s.shape !== 'decision' && (key === 'yesLabel' || key === 'noLabel')) continue;
-      const ref = key === 'yesLabel' || key === 'noLabel' ? 'sy:' + s.id : `st:${s.id}:${key}`;
-      out.push({ obj: s, key, label: `Langkah ${i + 1} · ${label}`, ref });
+      const branch = key === 'yesLabel' || key === 'noLabel';
+      out.push({ obj: s, key, label: `Langkah ${i + 1} · ${label}`, ref: branch ? 'sy:' + s.id : `st:${s.id}:${key}`, rich: !branch });
     }
   });
   return out.filter((f) => typeof f.obj[f.key] === 'string');
@@ -51,7 +52,8 @@ export function findMatches(doc, pattern) {
   if (!pattern) return [];
   const results = [];
   for (const field of textFields(doc)) {
-    const value = field.obj[field.key];
+    // Isian berformat dicari pada teks polosnya (tanpa tag).
+    const value = field.rich ? plainText(field.obj[field.key]) : field.obj[field.key];
     const parts = [];
     let last = 0;
     let count = 0;
@@ -81,6 +83,11 @@ function clip(parts, ctx = 40) {
 /** Ganti semua kecocokan di satu kolom; mengembalikan jumlah penggantian. */
 export function replaceIn(field, pattern, replacement) {
   const value = field.obj[field.key];
+  if (field.rich) {
+    const r = replaceRich(value, pattern, replacement);
+    if (r.n) field.obj[field.key] = r.value;
+    return r.n;
+  }
   let n = 0;
   const next = value.replace(pattern, () => (n++, replacement));
   if (n) field.obj[field.key] = next;

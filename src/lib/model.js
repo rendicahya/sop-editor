@@ -1,4 +1,5 @@
 // Model dokumen SOP. Format JSON yang disimpan/dibuka mengikuti struktur ini.
+import { normalizeMarkup, plainText } from './richtext.js';
 
 export const FORMAT = 'sop-editor';
 export const VERSION = 1;
@@ -187,6 +188,9 @@ export function sampleDocument() {
   };
 }
 
+/** Kolom langkah yang boleh berformat tebal/miring/garis bawah. */
+export const RICH_STEP = new Set(['kegiatan', 'kelengkapan', 'waktu', 'output', 'keterangan']);
+
 // Sinonim bentuk yang sering dipakai AI atau manusia.
 const SHAPE_ALIAS = {
   start: 'terminator', end: 'terminator', mulai: 'terminator', selesai: 'terminator', terminal: 'terminator',
@@ -221,10 +225,13 @@ export function normalizeDocument(raw) {
 
   const base = emptyDocument();
   const str = (v) => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '');
+  // Isian konten boleh berformat (<b>, <i>, <u>); isian lain selalu teks polos.
+  const rich = (v) => normalizeMarkup(str(v));
+  const plain = (v) => plainText(rich(v));
   const header = { ...base.header };
   for (const k of Object.keys(header)) {
     if (k === 'signature') header[k] = isImage(raw.header?.[k]) ? raw.header[k] : null;
-    else header[k] = str(raw.header?.[k]);
+    else header[k] = plain(raw.header?.[k]);
   }
   header.tglPembuatan = toIsoDate(header.tglPembuatan);
   header.tglEfektif = toIsoDate(header.tglEfektif);
@@ -237,7 +244,7 @@ export function normalizeDocument(raw) {
     const items = Array.isArray(src) ? src : src?.items;
     sections[s.key] = {
       numbered: typeof src?.numbered === 'boolean' ? src.numbered : base.sections[s.key].numbered,
-      items: Array.isArray(items) ? items.map(str) : []
+      items: Array.isArray(items) ? items.map(rich) : []
     };
   }
 
@@ -251,7 +258,7 @@ export function normalizeDocument(raw) {
     return v;
   };
   for (const x of Array.isArray(raw.actors) ? raw.actors : []) {
-    const name = typeof x === 'string' ? x : str(x?.name);
+    const name = plain(typeof x === 'string' ? x : x?.name);
     actors.push({ id: freshId(typeof x === 'string' ? '' : x?.id), name });
   }
   // `actor` di langkah boleh berisi id atau nama pelaksana; nama yang belum ada ditambahkan.
@@ -270,7 +277,7 @@ export function normalizeDocument(raw) {
   const steps = raw.steps.map((s, i) => {
     const d = newStep(actors[0].id);
     const step = { ...d };
-    for (const k of Object.keys(d)) if (k !== 'next' && k !== 'alt' && s?.[k] != null) step[k] = str(s[k]);
+    for (const k of Object.keys(d)) if (k !== 'next' && k !== 'alt' && s?.[k] != null) step[k] = RICH_STEP.has(k) ? rich(s[k]) : plain(s[k]);
     step.id = freshId(s?.id);
     step.actor = stepActors[i] ?? actors[0].id;
     const shape = step.shape.trim().toLowerCase();
@@ -285,7 +292,7 @@ export function normalizeDocument(raw) {
     const key = str(v).trim();
     if (ids.has(key)) return ids.get(key);
     if (/^\d+$/.test(key) && steps[+key - 1]) return steps[+key - 1].id;
-    return steps.find((t) => t.kegiatan.trim().toLowerCase() === key.toLowerCase())?.id ?? null;
+    return steps.find((t) => plainText(t.kegiatan).trim().toLowerCase() === plainText(key).toLowerCase())?.id ?? null;
   };
   raw.steps.forEach((s, i) => {
     const n = str(s?.next).trim().toLowerCase();

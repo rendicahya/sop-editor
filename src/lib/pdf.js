@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { layoutDocument, baseline, PAGE } from './layout.js';
+import { layoutDocument, baseline, PAGE, PT } from './layout.js';
 import { pdfFont, registerFonts } from './fonts.js';
 
 export function exportPdf(doc) {
@@ -50,7 +50,8 @@ function drawItem(pdf, it) {
       pdf.setTextColor(it.color ?? '#000000');
       it.lines.forEach((line, i) => {
         const y = baseline(it, i);
-        pdf.text(line, it.x, y, { align: it.align ?? 'left', ...(it.italic && { angle: oblique(pdf, y) }) });
+        if (typeof line === 'string') pdf.text(line, it.x, y, { align: it.align ?? 'left', ...(it.italic && { angle: oblique(pdf, y) }) });
+        else richLine(pdf, it, line, y);
       });
       break;
     case 'image': {
@@ -59,6 +60,29 @@ function drawItem(pdf, it) {
       break;
     }
   }
+}
+
+/** Satu baris berformat: tiap run ditulis berurutan dengan fontnya sendiri. */
+function richLine(pdf, it, runs, y) {
+  const font = (r) => {
+    pdf.setFont(pdfFont(), r.b || it.bold ? 'bold' : 'normal');
+    pdf.setFontSize(it.size);
+  };
+  const widths = runs.map((r) => (font(r), pdf.getTextWidth(r.text)));
+  const total = widths.reduce((a, w) => a + w, 0);
+  let x = it.align === 'center' ? it.x - total / 2 : it.align === 'right' ? it.x - total : it.x;
+  runs.forEach((r, k) => {
+    font(r);
+    pdf.text(r.text, x, y, r.i || it.italic ? { angle: oblique(pdf, y) } : {});
+    if (r.u) {
+      // Posisi dan tebal garis bawah mengikuti metrik Calibri.
+      const uy = y + it.size * PT * 0.13;
+      pdf.setDrawColor(it.color ?? '#000000');
+      pdf.setLineWidth(it.size * PT * 0.06);
+      pdf.line(x, uy, x + widths[k], uy);
+    }
+    x += widths[k];
+  });
 }
 
 // Miring tiruan (tanpa file font italic), sudut sama dengan italic sintetis browser di pratinjau.

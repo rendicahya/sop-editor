@@ -24,6 +24,9 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   pelaksana (hanya bila tidak ada langkah di lajurnya); sorot baris langkah untuk menaikkan/menurunkan,
   menduplikat, menambah, atau menghapus kegiatan.
   Klik simbol untuk mengganti jenisnya dan tujuan alurnya (untuk Keputusan: cabang ya/tidak beserta labelnya).
+- **Format teks tebal, miring, dan garis bawah** pada butir ketentuan dan sel tabel langkah (Kegiatan, Kelengkapan,
+  Waktu, Output, Keterangan): tombol **B / I / U** di bar tab atau Ctrl+B / Ctrl+I / Ctrl+U. Format ikut tercetak di
+  pratinjau, PDF, dan DOCX.
 - Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …). Jalur garis dicari otomatis agar tidak menembus simbol dan tidak saling menumpuk.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
@@ -45,7 +48,8 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - **Kolaborasi real-time** tanpa server: edit satu dokumen bersama lewat tautan undangan, lihat siapa sedang
   mengedit bagian mana, dan ketik bersamaan di kolom yang sama tanpa saling menimpa.
 - **Buat dengan AI**: salin prompt siap pakai ke asisten AI, lalu tempel jawabannya untuk langsung
-  diedit dan diekspor.
+  diedit dan diekspor. Bisa menyusun SOP baru dari deskripsi, atau **mengimpor SOP lama** (PDF, Word, foto/pindaian)
+  yang dilampirkan di chat AI, termasuk diagram alir dan formatnya.
 - **Cari & ganti** teks di seluruh dokumen (identitas, ketentuan, pelaksana, langkah), per kolom atau sekaligus.
 - Mode layar penuh serta mode terang/gelap (mengikuti sistem secara bawaan; halaman dokumen tetap putih).
 - Bisa dipasang sebagai aplikasi (PWA), bekerja offline, dan membuka berkas `.sop` lewat "Buka dengan".
@@ -60,6 +64,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 | Ctrl+Shift+P | Pratinjau & ekspor PDF |
 | Ctrl+F / Ctrl+H | Cari & ganti (Esc untuk menutup) |
 | Ctrl+Z / Ctrl+Y | Urungkan / Ulangi (saat fokus di luar kolom teks) |
+| Ctrl+B / Ctrl+I / Ctrl+U | Tebal / miring / garis bawah (di butir ketentuan dan sel langkah) |
 
 Pada butir ketentuan di halaman 1: **Enter** membuat butir baru (memecah di posisi kursor), **Backspace** di awal butir
 menggabungkannya dengan butir sebelumnya, **Alt+↑/↓** memindahkan butir, dan **↑/↓** di awal/akhir butir berpindah
@@ -78,8 +83,14 @@ Tombol **Contoh** memuat contoh SOP Skripsi untuk melihat semua fitur.
 3. Salin jawabannya ke kolom **Tempel jawaban AI** lalu **Buka di editor**, atau unduh berkas `.json` dari AI lalu buka
    seperti biasa. Periksa kembali isinya (terutama dasar hukum) sebelum diekspor.
 
+**Impor SOP lama:** pilih tab **Impor SOP lama**, lampirkan berkas SOP lama di chat AI, lalu tempel promptnya. Prompt
+meminta AI menyalin teks apa adanya, membaca pelaksana dari kolom letak simbol, mengikuti panah dan cabang keputusan,
+serta mempertahankan teks tebal/miring/garis bawah. Secara bawaan kop instansi dan pengesah diperbarui ke bawaan saat
+ini (bisa dimatikan). Catatan tambahan untuk AI bisa ditulis di dialog. Bandingkan hasilnya dengan dokumen asli,
+terutama arah panah.
+
 Pembuka JSON sengaja toleran terhadap jawaban AI: teks pengantar dan pembungkus ```` ```json ```` diabaikan,
-`format` boleh tidak ada, `actor` boleh berisi nama pelaksana (pelaksana baru ditambahkan otomatis), id yang hilang
+`format` boleh tidak ada, `<strong>`/`<em>`/`**tebal**` diseragamkan menjadi tag format, `actor` boleh berisi nama pelaksana (pelaksana baru ditambahkan otomatis), id yang hilang
 atau ganda dibuat ulang, `next`/`alt` boleh berisi nomor urut atau nama kegiatan, dan sinonim simbol
 ("start", "keputusan", …) dikenali.
 
@@ -127,6 +138,7 @@ Struktur utama:
 | `src/lib/docx.js` | Ekspor DOCX: WordprocessingML ditulis langsung lalu dikemas dengan fflate |
 | `src/lib/fonts.js` | Font dokumen: Calibri dari perangkat (disimpan di IndexedDB) atau Carlito sebagai pengganti |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
+| `src/lib/richtext.js` | Format tebal/miring/garis bawah: parse tag, pemenggalan baris berformat, isian contenteditable |
 | `src/lib/findReplace.js` | Daftar kolom teks dokumen, pencarian, dan penggantian |
 | `src/lib/collab.svelte.js` | State ruang kolaborasi (status, peserta, tautan); memuat mesinnya saat pertama kali masuk ruang |
 | `src/lib/collabSession.js` | Mesin kolaborasi (dimuat terpisah): Yjs, koneksi P2P (Trystero), kehadiran, undo per pengguna |
@@ -161,6 +173,10 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
 }
 ```
 
+Butir `sections` serta `kegiatan`, `kelengkapan`, `waktu`, `output`, dan `keterangan` boleh berisi tag format
+`<b>…</b>`, `<i>…</i>`, dan `<u>…</u>` (boleh bertumpuk). Hanya tiga tag itu yang dikenali, jadi teks seperti `< 3 hari`
+tetap apa adanya. Kolom lain selalu teks polos.
+
 ## Rencana Pengembangan (Future Works)
 
 **Diagram alir**
@@ -175,7 +191,6 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
 - Pilihan ukuran kertas (A4/F4/Letter), margin, dan ukuran font.
 - Nomor halaman dan footer (mis. "Halaman 1 dari 3", nomor SOP) di setiap halaman.
 - Pemenggalan kata yang lebih baik untuk nama pelaksana yang panjang di kolom sempit.
-- Format teks sederhana (tebal/miring) di Keterangan dan Dasar Hukum.
 - Riwayat revisi (daftar tanggal dan ringkasan perubahan).
 - QR code verifikasi atau tanda tangan digital pada bagian pengesahan.
 
@@ -196,7 +211,7 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
 **AI**
 - Integrasi langsung dengan API penyedia AI (kunci API milik pengguna) agar SOP dibuat tanpa salin-tempel.
 - Revisi dengan AI: kirim dokumen yang sedang dibuka beserta instruksi ("pecah langkah 3", "rapikan keterangan").
-- Buat SOP dari dokumen yang ada (PDF/DOCX SOP lama, notulen, atau peraturan).
+- Buat SOP dari notulen atau peraturan (impor SOP lama sudah tersedia).
 
 **Editor**
 - Seret-lepas untuk mengurutkan langkah, butir, dan pelaksana.

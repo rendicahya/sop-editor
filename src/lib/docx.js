@@ -4,6 +4,7 @@
 import { zipSync, strToU8 } from 'fflate';
 import { layoutDocument, baseline, PT, PAGE } from './layout.js';
 import { formatTanggal } from './model.js';
+import { parseRich, lineText } from './richtext.js';
 
 const TW = 1440 / 25.4; // twip per mm
 const EMU = 36000; // EMU per mm
@@ -21,9 +22,14 @@ const SECTION_PAIRS = [
 // Potongan WordprocessingML
 // ---------------------------------------------------------------------------
 
-function run(text, { size, bold, italic, color } = {}) {
+/** Teks isian berformat (<b>, <i>, <u>) menjadi beberapa run Word. */
+const richRun = (text, opts = {}) =>
+  parseRich(text).map((r) => run(r.text, { ...opts, bold: r.b || opts.bold, italic: r.i || opts.italic, underline: r.u })).join('') || run('', opts);
+
+function run(text, { size, bold, italic, underline, color } = {}) {
   const pr =
     (bold ? '<w:b/><w:bCs/>' : '') + (italic ? '<w:i/><w:iCs/>' : '') + (color ? `<w:color w:val="${color.replace('#', '')}"/>` : '') +
+    (underline ? '<w:u w:val="single"/>' : '') +
     (size ? `<w:sz w:val="${Math.round(size * 2)}"/><w:szCs w:val="${Math.round(size * 2)}"/>` : '');
   const parts = String(text ?? '').replace(/\r/g, '').split('\n');
   const body = parts.map((p) => `<w:t xml:space="preserve">${esc(p)}</w:t>`).join('<w:br/>');
@@ -136,7 +142,7 @@ function diagramSvg(page, items) {
     if (it.t === 'text') {
       return it.lines.map((line, j) =>
         `<text x="${k(it.x)}" y="${k(baseline(it, j))}" font-family="Calibri, Carlito, sans-serif" font-size="${k(it.size * PT)}" ` +
-        `font-weight="${it.bold ? 700 : 400}" fill="${it.color}" text-anchor="${anchor[it.align]}">${esc(line)}</text>`
+        `font-weight="${it.bold ? 700 : 400}" fill="${it.color}" text-anchor="${anchor[it.align]}">${esc(lineText(line))}</text>`
       ).join('');
     }
     return '';
@@ -207,7 +213,7 @@ function identityTable(doc, meta, media, numbering) {
   const list = (key) => {
     const sec = doc.sections[key];
     const num = sec.numbered && sec.items.length ? numbering.add() : 0;
-    return sec.items.map((t) => para(run(t), { size: S, num, after: tw(0.5) })).join('');
+    return sec.items.map((t) => para(richRun(t), { size: S, num, after: tw(0.5) })).join('');
   };
   for (const [lk, lt, rk, rt] of SECTION_PAIRS) {
     rows.push(row([cell(leftW, para(run(lt, { bold: true }), { size: S, keepNext: true })), cell(labelW + valW, para(run(rt, { bold: true }), { size: S, keepNext: true }), { span: 2 })], 7, 'atLeast', R));
@@ -250,7 +256,7 @@ function flowTable(doc, f) {
   if (f.top) rows.push(band());
   for (const r of f.rows) {
     const s = doc.steps[r.index];
-    const t = (v) => para(run(v, { size: S }), { size: S });
+    const t = (v) => para(richRun(v, { size: S }), { size: S });
     rows.push(row([
       cell(w[0], para(run(String(r.index + 1), { size: S }), { size: S, align: 'center' })),
       cell(w[1], t(s.kegiatan)),

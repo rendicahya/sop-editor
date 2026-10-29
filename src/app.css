@@ -142,6 +142,19 @@ textarea {
 .tabbar .tabs::-webkit-scrollbar {
   display: none;
 }
+.tabbar .fmt {
+  flex: none;
+  align-self: center;
+  padding-bottom: 0.35rem;
+}
+.tabbar .tab-sep {
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 1.2rem;
+  margin-bottom: 0.35rem;
+  background: var(--line);
+}
 .tabbar .zoom {
   flex: none;
   align-self: center;

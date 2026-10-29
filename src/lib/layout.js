@@ -4,6 +4,7 @@
 import { jsPDF } from 'jspdf';
 import { pdfFont, registerFonts, fontRevision } from './fonts.js';
 import { formatTanggal } from './model.js';
+import { hasMarkup, parseRich, plainText, wrapRuns } from './richtext.js';
 import logoSrc from '../assets/logo-ub.png?inline';
 
 const LOGO = { src: logoSrc, width: 418, height: 420 };
@@ -24,9 +25,7 @@ export const lineHeight = (size) => size * PT * LH;
 /** Posisi baseline baris ke-i dari item teks (dipakai kedua renderer). */
 export const baseline = (item, i) => item.y + i * lineHeight(item.size) + item.size * PT * 0.86;
 
-function wrap(text, size, bold, width) {
-  const t = String(text ?? '').replace(/\r/g, '');
-  if (!t.trim()) return [];
+function measurerFor(size, bold) {
   if (measuredWith !== fontRevision()) {
     measurer = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
     registerFonts(measurer);
@@ -34,7 +33,20 @@ function wrap(text, size, bold, width) {
   }
   measurer.setFont(pdfFont(), bold ? 'bold' : 'normal');
   measurer.setFontSize(size);
-  return measurer.splitTextToSize(t, Math.max(width, 2));
+  return measurer;
+}
+
+function wrap(text, size, bold, width) {
+  const t = String(text ?? '').replace(/\r/g, '');
+  if (!t.trim()) return [];
+  return measurerFor(size, bold).splitTextToSize(t, Math.max(width, 2));
+}
+
+/** Seperti wrap, untuk isian berformat: baris tanpa tag tetap string, baris bertag menjadi array runs. */
+function wrapRich(text, size, width) {
+  if (!hasMarkup(text)) return wrap(text, size, false, width);
+  if (!plainText(text).trim()) return [];
+  return wrapRuns(parseRich(text), width, (s, bold) => measurerFor(size, bold).getTextWidth(s));
 }
 
 const textH = (lines, size) => lines.length * lineHeight(size);
@@ -204,7 +216,7 @@ function layoutIdentity(doc, pages) {
 function listBlock(section, key, width, S) {
   const pad = 1.4;
   const numW = section.numbered ? 5 : 0;
-  const items = section.items.map((t) => wrap(t, S, false, width - 2 * pad - numW));
+  const items = section.items.map((t) => wrapRich(t, S, width - 2 * pad - numW));
   const gap = 0.5;
   let h = 2 * pad;
   for (const l of items) h += Math.max(1, l.length) * lineHeight(S) + gap;
@@ -216,7 +228,7 @@ function listBlock(section, key, width, S) {
         if (section.numbered) page.items.push(text(x + pad, yy, [String(i + 1)], S));
         page.items.push(text(x + pad + numW, yy, lines, S));
         const h = Math.max(1, lines.length) * lineHeight(S);
-        page.fields.push({ id: `s:${key}:${i}`, kind: 'item', key, index: i, x: x + pad + numW, y: yy, w: width - 2 * pad - numW, h, pad: 0, size: S, align: 'left' });
+        page.fields.push({ id: `s:${key}:${i}`, kind: 'item', key, index: i, x: x + pad + numW, y: yy, w: width - 2 * pad - numW, h, pad: 0, size: S, align: 'left', rich: true });
         yy += h + gap;
       });
     }
@@ -312,11 +324,11 @@ function layoutFlow(doc, pages) {
   const rows = steps.map((s, i) => {
     const cells = {
       no: wrap(String(i + 1), TS, false, col.no - 2 * pad),
-      keg: wrap(s.kegiatan, TS, false, col.keg - 2 * pad),
-      kel: wrap(s.kelengkapan, TS, false, col.kel - 2 * pad),
-      wkt: wrap(s.waktu, TS, false, col.wkt - 2 * pad),
-      out: wrap(s.output, TS, false, col.out - 2 * pad),
-      ket: wrap(s.keterangan, TS, false, col.ket - 2 * pad)
+      keg: wrapRich(s.kegiatan, TS, col.keg - 2 * pad),
+      kel: wrapRich(s.kelengkapan, TS, col.kel - 2 * pad),
+      wkt: wrapRich(s.waktu, TS, col.wkt - 2 * pad),
+      out: wrapRich(s.output, TS, col.out - 2 * pad),
+      ket: wrapRich(s.keterangan, TS, col.ket - 2 * pad)
     };
     const size = shapeSize(s.shape);
     const textNeed = Math.max(...Object.values(cells).map((l) => textH(l, TS))) + 2 * pad;
@@ -402,7 +414,7 @@ function layoutFlow(doc, pages) {
     for (const [c, key, label] of CELL_FIELDS) {
       page.fields.push({
         id: `st:${sid}:${key}`, kind: 'text', hot, step: sid, key, x: x[c] + pad, y: y + pad, w: col[c] - 2 * pad, h: r.h - 2 * pad,
-        pad: 0, size: TS, bold: false, align: 'left', multiline: true, label: `Langkah ${i + 1} · ${label}`
+        pad: 0, size: TS, bold: false, align: 'left', multiline: true, rich: true, label: `Langkah ${i + 1} · ${label}`
       });
     }
     actors.forEach((a, j) => {

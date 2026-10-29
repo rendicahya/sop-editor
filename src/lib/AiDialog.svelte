@@ -1,14 +1,19 @@
 <script>
-  import { aiPrompt } from './aiPrompt.js';
+  import { aiPrompt, aiImportPrompt } from './aiPrompt.js';
+  import { DEFAULT_PENGESAH } from './model.js';
 
   /** onpaste(text) → true bila jawaban berhasil dibuka. */
   let { open = $bindable(false), onpaste, onopen } = $props();
 
   let dialog;
+  // 'new' = susun SOP baru dari deskripsi; 'import' = salin SOP lama yang dilampirkan di chat AI.
+  let mode = $state('new');
   let description = $state('');
+  let note = $state('');
+  let update = $state(true);
   let answer = $state('');
   let copied = $state(false);
-  const prompt = $derived(aiPrompt(description));
+  const prompt = $derived(mode === 'import' ? aiImportPrompt(note, update) : aiPrompt(description));
 
   $effect(() => {
     if (open && !dialog.open) dialog.showModal();
@@ -40,14 +45,40 @@
 
 <dialog bind:this={dialog} class="dialog" onclose={() => (open = false)}>
   <h2>Buat SOP dengan AI</h2>
-  <p>Minta asisten AI menyusun SOP, lalu buka hasilnya di sini untuk dirapikan dan diekspor ke PDF.</p>
+  <div class="seg" role="tablist" aria-label="Jenis">
+    <button role="tab" aria-selected={mode === 'new'} class:on={mode === 'new'} onclick={() => (mode = 'new')}>Susun SOP baru</button>
+    <button role="tab" aria-selected={mode === 'import'} class:on={mode === 'import'} onclick={() => (mode = 'import')}>Impor SOP lama</button>
+  </div>
+  {#if mode === 'new'}
+    <p>Minta asisten AI menyusun SOP dari deskripsi proses, lalu buka hasilnya di sini untuk dirapikan dan diekspor.</p>
+  {:else}
+    <p>
+      Ubah SOP lama (PDF, Word, atau foto/pindaian) menjadi dokumen yang bisa diedit di sini. Asisten AI membaca berkasnya,
+      termasuk diagram alirnya, lalu menyalin isinya ke format aplikasi ini.
+    </p>
+  {/if}
 
   <section>
-    <h3><span class="num">1</span>Salin prompt ke AI</h3>
-    <label class="field">
-      <span class="label">Deskripsi proses (opsional, bisa juga ditulis langsung di chat AI)</span>
-      <textarea rows="4" bind:value={description} placeholder="Contoh: SOP pengajuan cuti akademik di Fakultas Ilmu Komputer. Mahasiswa mengisi formulir, operator memverifikasi berkas, Kaprodi menyetujui, lalu dekan menerbitkan surat."></textarea>
-    </label>
+    <h3><span class="num">1</span>{mode === 'import' ? 'Lampirkan SOP lama dan salin prompt ke AI' : 'Salin prompt ke AI'}</h3>
+    {#if mode === 'new'}
+      <label class="field">
+        <span class="label">Deskripsi proses (opsional, bisa juga ditulis langsung di chat AI)</span>
+        <textarea rows="4" bind:value={description} placeholder="Contoh: SOP pengajuan cuti akademik di Fakultas Ilmu Komputer. Mahasiswa mengisi formulir, operator memverifikasi berkas, Kaprodi menyetujui, lalu dekan menerbitkan surat."></textarea>
+      </label>
+    {:else}
+      <ol class="steps">
+        <li>Buka chat baru di asisten AI, lalu lampirkan berkas SOP lama (unggah PDF/DOCX atau foto setiap halaman).</li>
+        <li>Salin prompt di bawah, tempel ke chat yang sama, lalu kirim.</li>
+      </ol>
+      <label class="check">
+        <input type="checkbox" bind:checked={update} />
+        <span>Perbarui kop instansi dan pengesah ke bawaan saat ini ({DEFAULT_PENGESAH.disahkanNama})</span>
+      </label>
+      <label class="field">
+        <span class="label">Catatan untuk AI (opsional)</span>
+        <textarea rows="2" bind:value={note} placeholder="Contoh: tanggal pembuatan diganti hari ini; pelaksana “Kasubbag” diganti “Kepala Subbagian Akademik”."></textarea>
+      </label>
+    {/if}
     <div class="row">
       <button type="button" class="btn primary" onclick={copy}>{copied ? 'Tersalin ✓' : 'Salin prompt'}</button>
       <details>
@@ -66,6 +97,7 @@
     <small class="hint">
       Bila AI memberikan berkas .json, unduh lalu
       <button type="button" class="link" onclick={openFile}>buka berkasnya</button> atau seret ke jendela aplikasi.
+      {#if mode === 'import'}Bandingkan hasilnya dengan dokumen asli, terutama arah panah dan cabang keputusan.{/if}
     </small>
   </section>
 
@@ -116,6 +148,45 @@
   }
   section {
     margin-bottom: 1rem;
+  }
+  .seg {
+    display: flex;
+    margin-bottom: 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .seg button {
+    flex: 1;
+    padding: 0.45rem 0.6rem;
+    border: 0;
+    background: var(--surface);
+    color: var(--text);
+    font: 600 0.85rem var(--ui-font);
+    cursor: pointer;
+  }
+  .seg button + button {
+    border-left: 1px solid var(--line);
+  }
+  .seg button.on {
+    background: var(--accent);
+    color: #fff;
+  }
+  .steps {
+    margin: 0 0 0.6rem;
+    padding-left: 1.2rem;
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+  .check {
+    display: flex;
+    gap: 0.45rem;
+    align-items: flex-start;
+    margin-bottom: 0.6rem;
+    font-size: 0.85rem;
+  }
+  .check input {
+    margin-top: 0.15rem;
   }
   .row {
     display: flex;
