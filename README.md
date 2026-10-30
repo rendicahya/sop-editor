@@ -34,6 +34,11 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - **Daftar poin dan bernomor di dalam sel langkah** lewat tombol daftar di bar tab atau Ctrl+Shift+8 / Ctrl+Shift+7.
   Enter melanjutkan butir (nomor bertambah otomatis), Enter pada butir kosong atau Backspace setelah penanda mengakhiri
   daftar. Baris lanjutan butir menjorok rata dengan teksnya di pratinjau, PDF, dan DOCX.
+- **Menu klik kanan** di halaman, isinya sesuai yang diklik: langkah/simbol (ganti simbol, atur alur, pindah
+  pelaksana, tambah di atas/bawah, duplikat, naik/turun, hapus), kepala pelaksana (tambah di kiri/kanan, geser,
+  hapus), butir ketentuan (tambah di atas/bawah, naik/turun, hapus, bernomor), garis alur (atur jalur, kembalikan
+  otomatis), dan tanda tangan. Pada isian teks ada juga potong/salin/tempel/pilih semua serta tebal/miring/garis
+  bawah. Bisa dinavigasi dengan ↑/↓, Enter, dan Esc; Shift+klik kanan membuka menu bawaan browser.
 - Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …). Jalur garis dicari otomatis agar tidak menembus simbol dan tidak saling menumpuk.
 - **Atur jalur garis secara manual** bila jalur otomatis kurang rapi: klik garis untuk memilih sisi keluar/masuk

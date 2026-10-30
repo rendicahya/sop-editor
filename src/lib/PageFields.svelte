@@ -10,10 +10,11 @@
   import { app } from './store.svelte.js';
   import { readImage } from './files.js';
   import { PT } from './layout.js';
-  import { newStep, removeStep, uid, SHAPES } from './model.js';
+  import { newStep, removeStep, uid, SHAPES, SECTION_DEFS } from './model.js';
   import { collab } from './collab.svelte.js';
   import { plainText, sliceRich, getSelection, setSelection } from './richtext.js';
   import RichField from './RichField.svelte';
+  import ContextMenu from './ContextMenu.svelte';
 
   // Lapisan isian di atas halaman (identitas dan diagram alir): teks diketik langsung pada posisinya di dokumen.
   // Teks isian dibuat transparan sehingga yang terlihat tetap hasil render SVG (sama dengan PDF);
@@ -144,6 +145,7 @@
     return [(e.clientX - r.left) * k, (e.clientY - r.top) * k];
   }
   function pickEdge(e, f) {
+    if (e.button !== 0) return;
     const [mx, my] = toMm(e);
     edgeSel = { step: f.step, branch: f.branch, fid: f.id, mx, my };
     menu = null;
@@ -280,6 +282,182 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Menu klik kanan: isinya sesuai isian yang diklik (Shift+klik kanan = menu bawaan browser).
+  // ---------------------------------------------------------------------------
+  let ctx = $state(null);
+  const SEP = { sep: true };
+
+  function insertStep(at, actor) {
+    const s = newStep(actor ?? actors[0].id);
+    steps.splice(at, 0, s);
+    focusField(`st:${s.id}:kegiatan`);
+  }
+  function insertItem(key, at) {
+    items(key).splice(at, 0, '');
+    focusField(`s:${key}:${at}`, 0);
+  }
+  function moveItem(key, i, d) {
+    const list = items(key);
+    const j = i + d;
+    if (j >= 0 && j < list.length) [list[i], list[j]] = [list[j], list[i]];
+  }
+
+  /** Potong/salin/tempel dan format untuk isian teks; fokus dan seleksinya tetap di isian. */
+  function editItems(el) {
+    const rich = !el.matches('textarea');
+    const sel = document.getSelection();
+    const hasSel = rich ? !!sel && !sel.isCollapsed && el.contains(sel.anchorNode) : el.selectionStart !== el.selectionEnd;
+    const exec = (cmd) => () => {
+      el.focus();
+      asStep(() => document.execCommand(cmd));
+    };
+    async function paste() {
+      let t;
+      try {
+        t = await navigator.clipboard.readText();
+      } catch {
+        alert('Browser tidak mengizinkan membaca clipboard dari menu. Gunakan Ctrl+V.');
+        return;
+      }
+      el.focus();
+      asStep(() => {
+        if (!rich) return document.execCommand('insertText', false, t);
+        // Isian berformat menangani tempel sendiri (teks polos, tanpa baris baru untuk isian satu baris).
+        const data = new DataTransfer();
+        data.setData('text/plain', t);
+        el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+      });
+    }
+    const out = [
+      { label: 'Potong', hint: 'Ctrl+X', disabled: !hasSel, run: exec('cut') },
+      { label: 'Salin', hint: 'Ctrl+C', disabled: !hasSel, run: exec('copy') },
+      { label: 'Tempel', hint: 'Ctrl+V', disabled: !navigator.clipboard?.readText, run: paste },
+      { label: 'Pilih semua', hint: 'Ctrl+A', run: () => (el.focus(), rich ? document.execCommand('selectAll') : el.select()) }
+    ];
+    if (rich) {
+      out.push(
+        SEP,
+        { label: 'Tebal', hint: 'Ctrl+B', checked: document.queryCommandState('bold'), run: exec('bold') },
+        { label: 'Miring', hint: 'Ctrl+I', checked: document.queryCommandState('italic'), run: exec('italic') },
+        { label: 'Garis bawah', hint: 'Ctrl+U', checked: document.queryCommandState('underline'), run: exec('underline') }
+      );
+    }
+    return out;
+  }
+
+  function stepItems(f) {
+    const i = steps.findIndex((s) => s.id === f.step);
+    const s = steps[i];
+    if (!s) return [];
+    const out = [{ head: short(s, i) }];
+    if (f.kind === 'lane') out.push({ label: `Pindahkan ke ${f.name || 'pelaksana ini'}`, run: () => asStep(() => moveStep(f)) }, SEP);
+    out.push(
+      ...SHAPES.map((sh) => ({ label: sh.label, checked: s.shape === sh.value, run: () => asStep(() => (s.shape = sh.value)) })),
+      { label: 'Atur alur & kegiatan bersama…', run: () => ((edgeSel = null), (menu = s.id)) }
+    );
+    const others = actors.map((a, j) => [a, j]).filter(([a]) => a.id !== s.actor);
+    if (others.length && f.kind !== 'lane') {
+      out.push(SEP, { head: 'Pindahkan ke pelaksana' },
+        ...others.map(([a, j]) => ({ label: a.name || `Pelaksana ${j + 1}`, run: () => asStep(() => moveStep({ step: s.id, actor: a.id })) })));
+    }
+    out.push(
+      SEP,
+      { label: 'Tambah kegiatan di atas', run: () => insertStep(i, s.actor) },
+      { label: 'Tambah kegiatan di bawah', run: () => insertStep(i + 1, s.actor) },
+      { label: 'Duplikat', run: () => asStep(() => duplicateStep(i)) },
+      { label: 'Naikkan', disabled: i === 0, run: () => asStep(() => moveStepRow(i, -1)) },
+      { label: 'Turunkan', disabled: i === steps.length - 1, run: () => asStep(() => moveStepRow(i, 1)) },
+      SEP,
+      { label: 'Hapus kegiatan', danger: true, run: () => asStep(() => removeStep(steps, i)) }
+    );
+    return out;
+  }
+
+  function actorItems(id) {
+    const i = actors.findIndex((a) => a.id === id);
+    const a = actors[i];
+    if (!a) return [];
+    const lock = actorLock(a);
+    return [
+      { head: a.name || `Pelaksana ${i + 1}` },
+      { label: 'Tambah pelaksana di kiri', run: () => addActor(i - 1) },
+      { label: 'Tambah pelaksana di kanan', run: () => addActor(i) },
+      { label: 'Geser ke kiri', disabled: i === 0, run: () => asStep(() => moveActor(i, -1)) },
+      { label: 'Geser ke kanan', disabled: i === actors.length - 1, run: () => asStep(() => moveActor(i, 1)) },
+      SEP,
+      { label: 'Hapus pelaksana', danger: true, disabled: !!lock, title: lock, run: () => removeActor(i) }
+    ];
+  }
+
+  function sectionItems(key, add = true) {
+    const sec = app.doc.sections[key];
+    return [
+      { head: SECTION_DEFS.find((d) => d.key === key)?.title ?? '' },
+      { label: 'Bernomor', checked: sec.numbered, run: () => asStep(() => (sec.numbered = !sec.numbered)) },
+      ...(key === 'kualifikasi' ? [{ label: 'Isi dari daftar pelaksana', run: () => asStep(fromActors) }] : []),
+      ...(add ? [{ label: 'Tambah butir', run: () => addItem(key) }] : [])
+    ];
+  }
+
+  function itemItems(f) {
+    const n = items(f.key).length;
+    const i = f.index;
+    return [
+      ...sectionItems(f.key, false),
+      SEP,
+      { label: 'Tambah butir di atas', run: () => insertItem(f.key, i) },
+      { label: 'Tambah butir di bawah', run: () => insertItem(f.key, i + 1) },
+      { label: 'Naikkan', hint: 'Alt+↑', disabled: i === 0, run: () => asStep(() => moveItem(f.key, i, -1)) },
+      { label: 'Turunkan', hint: 'Alt+↓', disabled: i === n - 1, run: () => asStep(() => moveItem(f.key, i, 1)) },
+      SEP,
+      { label: 'Hapus butir', danger: true, run: () => asStep(() => removeItem(f)) }
+    ];
+  }
+
+  function ctxItems(f, e) {
+    const out = [];
+    const el = e.target.closest?.('textarea, .f-rich');
+    if (el) out.push(...editItems(el), SEP);
+    if (f.kind === 'edge') {
+      const [mx, my] = toMm(e);
+      out.push(
+        { head: 'Garis alur' },
+        { label: 'Atur jalur garis…', run: () => ((menu = null), (edgeSel = { step: f.step, branch: f.branch, fid: f.id, mx, my })) },
+        { label: 'Kembalikan jalur otomatis', disabled: !routeOf(f), run: () => setRoute(f, { from: null, to: null, x: null, y: null }) }
+      );
+    } else if (f.step) out.push(...stepItems(f));
+    else if (f.actor) out.push(...actorItems(f.actor));
+    else if (f.kind === 'item') out.push(...itemItems(f));
+    else if (f.kind === 'section' || f.kind === 'empty') out.push(...sectionItems(f.key));
+    else if (f.kind === 'add-step') out.push({ label: 'Tambah kegiatan', run: () => addStep(-1) });
+    else if (f.kind === 'image') {
+      out.push(
+        { label: h.signature ? 'Ganti tanda tangan…' : 'Pilih tanda tangan / stempel…', run: () => fileInput.click() },
+        { label: 'Hapus tanda tangan', danger: true, disabled: !h.signature, run: () => asStep(() => (h.signature = null)) }
+      );
+    }
+    // Rapikan pemisah di awal, di akhir, dan yang berurutan.
+    return out.filter((it, i, a) => !it.sep || (i > 0 && i < a.length - 1 && !a[i - 1].sep));
+  }
+
+  function openCtx(e) {
+    if (e.shiftKey || !editable) return;
+    const fid = e.target.closest?.('[data-fid]')?.dataset.fid;
+    const f = fid && fields.find((x) => x.id === fid);
+    const list = f ? ctxItems(f, e) : [];
+    if (!list.length) return;
+    e.preventDefault();
+    let { clientX: x, clientY: y } = e;
+    // Dibuka dari keyboard (tombol Menu / Shift+F10): letakkan di bawah elemen.
+    if (!x && !y) {
+      const r = e.target.getBoundingClientRect();
+      x = r.left + 8;
+      y = r.top + Math.min(r.height, 22);
+    }
+    ctx = { x, y, items: list };
+  }
+
   const box = (f) =>
     `left:calc(${f.x} * var(--mm));top:calc(${f.y} * var(--mm));width:calc(${f.w} * var(--mm));height:calc(${f.h} * var(--mm));` +
     (f.size ? `font-size:calc(${f.size * PT} * var(--mm));` : '') +
@@ -294,6 +472,7 @@
   onpointerleave={() => (hover = null)}
   onfocusin={(e) => (focused = groupOf(e))}
   onfocusout={() => (focused = null)}
+  oncontextmenu={openCtx}
 >
   {#each fields as f (f.id)}
     {#if f.kind === 'text' && f.rich}
@@ -301,6 +480,7 @@
         class="f-text"
         style={box(f)}
         data-field={f.id}
+        data-fid={f.id}
         data-hot={f.hot}
         aria-label={f.label}
         placeholder={f.placeholder ?? ''}
@@ -315,6 +495,7 @@
         class:center={f.align === 'center'}
         style={box(f)}
         data-field={f.id}
+        data-fid={f.id}
         data-hot={f.hot}
         aria-label={f.label}
         placeholder={f.placeholder ?? ''}
@@ -324,7 +505,7 @@
         onkeydown={(e) => onTextKey(e, f)}
       ></textarea>
     {:else if f.kind === 'item'}
-      <div class="f-item" style={box({ ...f, size: 0, pad: 0 })}>
+      <div class="f-item" style={box({ ...f, size: 0, pad: 0 })} data-fid={f.id}>
         <RichField
           class="f-text"
           style="position:absolute;inset:0;font-size:calc({f.size * PT} * var(--mm))"
@@ -349,7 +530,7 @@
         />
       </span>
     {:else if f.kind === 'image'}
-      <div class="f-image" class:has={!!h.signature} style={box(f)}>
+      <div class="f-image" class:has={!!h.signature} style={box(f)} data-fid={f.id}>
         {#if h.signature}
           <span class="tools">
             <button onclick={() => fileInput.click()}>Ganti tanda tangan</button>
@@ -363,7 +544,7 @@
         {#if imageError}<span class="err">{imageError}</span>{/if}
       </div>
     {:else if f.kind === 'section'}
-      <div class="f-head" style={box(f)}>
+      <div class="f-head" style={box(f)} data-fid={f.id}>
         <span class="tools">
           <label title="Butir bernomor">
             <input type="checkbox" bind:checked={app.doc.sections[f.key].numbered} /> Bernomor
@@ -379,6 +560,7 @@
         class="f-lane"
         style={box(f)}
         data-field={f.id}
+        data-fid={f.id}
         data-hot={f.hot}
         tabindex="-1"
         title="Pindahkan langkah ini ke {f.name || 'pelaksana ini'}"
@@ -388,7 +570,7 @@
     {:else if f.kind === 'actor-tools'}
       {@const a = actors[f.index]}
       {@const lock = actorLock(a)}
-      <div class="f-group" class:hot={isHot(f)} style={box(f)} data-hot={f.hot}>
+      <div class="f-group" class:hot={isHot(f)} style={box(f)} data-hot={f.hot} data-fid={f.id}>
         <span class="g-tools g-top">
           <button tabindex="-1" title="Geser ke kiri" aria-label="Geser pelaksana ke kiri" aria-disabled={f.index === 0} onclick={() => moveActor(f.index, -1)}>◀</button>
           <button tabindex="-1" title="Tambah pelaksana di kanan" aria-label="Tambah pelaksana" onclick={() => addActor(f.index)}>＋</button>
@@ -405,7 +587,7 @@
       </div>
     {:else if f.kind === 'step-tools'}
       {@const peers = editors(f.step)}
-      <div class="f-group" class:hot={isHot(f)} class:shared={peers.length} style="{box(f)}--peer:{peers[0]?.color}" data-hot={f.hot}>
+      <div class="f-group" class:hot={isHot(f)} class:shared={peers.length} style="{box(f)}--peer:{peers[0]?.color}" data-hot={f.hot} data-fid={f.id}>
         <span class="g-tools g-left">
           <button tabindex="-1" title="Naikkan" aria-label="Naikkan kegiatan" aria-disabled={f.index === 0} onclick={() => moveStepRow(f.index, -1)}>▲</button>
           <button tabindex="-1" title="Turunkan" aria-label="Turunkan kegiatan" aria-disabled={f.index === steps.length - 1} onclick={() => moveStepRow(f.index, 1)}>▼</button>
@@ -420,7 +602,7 @@
     {:else if f.kind === 'shape'}
       {@const s = steps[f.index]}
       {@const open = menu === f.step && s}
-      <div class="f-shape" class:open style={box(f)} data-hot={f.hot}>
+      <div class="f-shape" class:open style={box(f)} data-hot={f.hot} data-fid={f.id}>
         <button
           class="f-shape-btn"
           tabindex="-1"
@@ -489,6 +671,7 @@
       <svg class="f-edge" class:sel viewBox="0 0 297 210" aria-hidden={!sel}>
         <polyline
           class="e-hit"
+          data-fid={f.id}
           points={ptsAttr(f.pts)}
           role="button"
           tabindex="-1"
@@ -545,13 +728,16 @@
         </div>
       {/if}
     {:else if f.kind === 'add-step'}
-      <button class="f-empty f-hint" style={box(f)} onclick={() => addStep(-1)}>+ Tambah kegiatan</button>
+      <button class="f-empty f-hint" style={box(f)} data-fid={f.id} onclick={() => addStep(-1)}>+ Tambah kegiatan</button>
     {:else if f.kind === 'empty'}
-      <button class="f-empty f-hint" style={box(f)} onclick={() => addItem(f.key)}>+ Tambah butir {f.title.toLowerCase()}</button>
+      <button class="f-empty f-hint" style={box(f)} data-fid={f.id} onclick={() => addItem(f.key)}>+ Tambah butir {f.title.toLowerCase()}</button>
     {/if}
   {/each}
 </div>
 <input bind:this={fileInput} type="file" accept="image/*" hidden onchange={pickImage} />
+{#if ctx}
+  {#key ctx}<ContextMenu x={ctx.x} y={ctx.y} items={ctx.items} onclose={() => (ctx = null)} />{/key}
+{/if}
 
 <style>
   .fields {
