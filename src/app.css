@@ -392,6 +392,36 @@ textarea:focus {
   font-size: 0.82rem;
 }
 
+/* Tombol Periksa dengan jumlah temuan */
+.check-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.check-btn.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.check-btn .badge {
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: #d98e04;
+}
+.check-btn .badge.err {
+  background: var(--danger);
+}
+.check-btn .badge.ok {
+  background: #2e8540;
+}
+
 /* Menu ekspor */
 .export {
   position: relative;

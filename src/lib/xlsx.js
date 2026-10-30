@@ -397,6 +397,10 @@ function buildFlow(doc, pages, sh) {
         const path = P.map(([x, y], j) => `<a:${j ? 'lnTo' : 'moveTo'}><a:pt x="${Math.round(x - X)}" y="${Math.round(y - Y)}"/></a:${j ? 'lnTo' : 'moveTo'}>`).join('');
         const geom = `<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="${Math.round(W)}" h="${Math.round(H)}" fill="none">${path}</a:path></a:pathLst></a:custGeom>`;
         dr.sp(X, Y, W, H, 'Garis alur', geom, { ...style, fill: null, arrow, txBody: '' });
+      } else if (it.t === 'rect' && it.bg) {
+        // Latar putih label cabang: menjadi isian kotak teks label sesudahnya.
+        const next = items[k + 1];
+        if (next?.t === 'text') dr.sp(...textBox(next, mapX, (y) => mapY(q, y), it)), k++;
       } else if (it.t === 'rect') {
         dr.sp(...box(it.x, it.y, it.w, it.h), it.r ? 'Mulai/Selesai' : 'Proses', prst(it.r ? 'flowChartTerminator' : 'flowChartProcess'), style);
       } else if (it.t === 'poly' && it.closed && (it.pts.length === 4 || it.pts.length === 5)) {
@@ -421,14 +425,18 @@ function buildFlow(doc, pages, sh) {
   };
 }
 
-/** Label diagram (Ya/Tidak, huruf penghubung) sebagai kotak teks tanpa garis. */
-function textBox(it, mapX, mapY) {
+/**
+ * Label diagram (Ya/Tidak, huruf penghubung) sebagai kotak teks tanpa garis. Dengan `bg` (latar putih
+ * label cabang), kotak berisi putih seukuran latar itu dan teksnya di tengah.
+ */
+function textBox(it, mapX, mapY, bg = null) {
   const sz = Math.round(it.size * K * 100);
   const chars = Math.max(1, ...it.lines.map((l) => lineText(l).length));
-  const wmm = chars * it.size * PT * 0.62 + 2;
+  const wmm = bg ? bg.w : chars * it.size * PT * 0.62 + 2;
   const hmm = it.lines.length * it.size * PT * 1.25;
-  const x0 = it.align === 'center' ? it.x - wmm / 2 : it.align === 'right' ? it.x - wmm : it.x;
-  const algn = { left: 'l', center: 'ctr', right: 'r' }[it.align];
+  const x0 = bg ? bg.x : it.align === 'center' ? it.x - wmm / 2 : it.align === 'right' ? it.x - wmm : it.x;
+  const algn = bg ? 'ctr' : { left: 'l', center: 'ctr', right: 'r' }[it.align];
+  const fill = bg ? 'FFFFFF' : null;
   const color = (it.color ?? '#000000').replace('#', '').toUpperCase();
   const paras = it.lines.map((l) =>
     `<a:p><a:pPr algn="${algn}"/><a:r><a:rPr lang="id-ID" sz="${sz}"${it.bold ? ' b="1"' : ''}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill>` +
@@ -436,7 +444,7 @@ function textBox(it, mapX, mapY) {
   const txBody = `<xdr:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"/><a:lstStyle/>${paras}</xdr:txBody>`;
   const X = mapX(x0);
   const Y = mapY(it.y);
-  return [X, Y, wmm * K * EMU_MM, hmm * K * EMU_MM, 'Label', prst('rect'), { txBox: true, txBody }];
+  return [X, Y, wmm * K * EMU_MM, hmm * K * EMU_MM, 'Label', prst('rect'), { txBox: true, txBody, fill }];
 }
 
 // ---------------------------------------------------------------------------

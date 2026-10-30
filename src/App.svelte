@@ -13,6 +13,8 @@
   import FormatBar from './lib/FormatBar.svelte';
   import PdfPreviewDialog from './lib/PdfPreviewDialog.svelte';
   import FindPanel from './lib/FindPanel.svelte';
+  import CheckPanel from './lib/CheckPanel.svelte';
+  import { checkDocument } from './lib/validate.js';
   import * as Collab from './lib/collab.svelte.js';
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
   import { connectHistory } from './lib/history.js';
@@ -91,6 +93,25 @@
   }
 
   let findOpen = $state(false);
+  let checkOpen = $state(false);
+  $effect(() => {
+    if (findOpen) checkOpen = false;
+  });
+  $effect(() => {
+    if (checkOpen) findOpen = false;
+  });
+  const issues = $derived(checkDocument(app.doc));
+  const issueErrors = $derived(issues.filter((i) => i.level === 'error').length);
+  const issueWarns = $derived(issues.filter((i) => i.level === 'warn').length);
+
+  /** Tampilkan isian `ref` (data-field) di halaman; isian simbol dibuka menunya. */
+  async function jumpTo(ref) {
+    await tick();
+    const el = document.querySelector(`[data-field="${ref}"]`);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el?.focus({ preventScroll: true });
+    if (ref.startsWith('sy:') && el?.getAttribute('aria-expanded') !== 'true') el?.click();
+  }
 
   // Font dokumen wajib Calibri; Carlito hanya pengganti sementara bila Calibri belum diambil dari perangkat.
   let docFont = $state(fontSource());
@@ -424,10 +445,11 @@
   async function exportFile(kind) {
     exportBusy = kind.toUpperCase();
     try {
-      const blob = kind === 'docx'
-        ? await (await import('./lib/docx.js')).exportDocx(app.doc)
-        : await (await import('./lib/xlsx.js')).exportXlsx(app.doc);
-      downloadBlob(blob, `SOP-${slug(app.doc.header.namaSop)}.${kind}`);
+      const blob =
+        kind === 'docx' ? await (await import('./lib/docx.js')).exportDocx(app.doc)
+        : kind === 'xlsx' ? await (await import('./lib/xlsx.js')).exportXlsx(app.doc)
+        : await (await import('./lib/png.js')).exportPngZip(app.doc, `SOP-${slug(app.doc.header.namaSop)}`);
+      downloadBlob(blob, `SOP-${slug(app.doc.header.namaSop)}.${kind === 'png' ? 'zip' : kind}`);
     } catch (e) {
       alert(`Gagal membuat ${kind.toUpperCase()}: ` + e.message);
     } finally {
@@ -555,6 +577,19 @@
         <button class="btn ghost" onclick={() => (collabOpen = true)} title="Edit bersama secara real-time">Kolaborasi</button>
       {/if}
       <button class="btn ghost" onclick={loadSample} title="Muat contoh SOP Skripsi">Contoh</button>
+      <button
+        class="btn ghost check-btn"
+        class:on={checkOpen}
+        onclick={() => (checkOpen = !checkOpen)}
+        title={issueErrors + issueWarns ? `${issueErrors} salah, ${issueWarns} peringatan pada alur dan isian` : 'Alur dan isian penting sudah lengkap'}
+      >
+        Periksa
+        {#if issueErrors + issueWarns}
+          <span class="badge" class:err={issueErrors}>{issueErrors + issueWarns}</span>
+        {:else}
+          <span class="badge ok">✓</span>
+        {/if}
+      </button>
       <div class="export">
         <button class="btn primary" onclick={() => (exportOpen = !exportOpen)} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy}>
           {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
@@ -566,10 +601,13 @@
               <strong>PDF</strong><small>Pratinjau lalu unduh · Ctrl+Shift+P</small>
             </button>
             <button role="menuitem" onclick={() => ((exportOpen = false), exportFile('docx'))}>
-              <strong>Word (.docx)</strong><small>Dokumen yang bisa diedit</small>
+              <strong>Word (.docx)</strong><small>Teks dan simbol diagram bisa diedit</small>
             </button>
             <button role="menuitem" onclick={() => ((exportOpen = false), exportFile('xlsx'))}>
               <strong>Excel (.xlsx)</strong><small>Sesuai template SOP, simbol bisa diedit</small>
+            </button>
+            <button role="menuitem" onclick={() => ((exportOpen = false), exportFile('png'))}>
+              <strong>Gambar PNG (.zip)</strong><small>Satu gambar per halaman, 200 dpi</small>
             </button>
           </div>
         {/if}
@@ -709,15 +747,9 @@
   <FindPanel
     bind:open={findOpen}
     onnotify={notify}
-    onjump={async (f) => {
-      await tick();
-      const el = document.querySelector(`[data-field="${f.ref}"]`);
-      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      el?.focus({ preventScroll: true });
-      // Label ya/tidak ada di menu simbol: buka menunya.
-      if (f.ref.startsWith('sy:') && el?.getAttribute('aria-expanded') !== 'true') el?.click();
-    }}
+    onjump={(f) => jumpTo(f.ref)}
   />
+  <CheckPanel bind:open={checkOpen} {issues} onjump={jumpTo} />
 
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
   {#if dragging}<div class="dropzone">Lepaskan berkas .sop untuk membuka</div>{/if}

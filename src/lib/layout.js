@@ -568,17 +568,26 @@ function layoutFlow(doc, pages) {
       labels[pd].push(...connector(x2, dstY + (forward ? -R : R), R, tag));
     }
 
-    // Label cabang diletakkan di sisi yang tidak dilalui ruas kedua garis.
+    // Label cabang diletakkan di sisi yang tidak dilalui ruas kedua garis, berlatar putih agar
+    // tidak tertimpa garis tabel.
     if (e.label) {
       const [P, Q, T] = first;
       const dir = Math.sign(Q[0] - P[0]);
       const lh = lineHeight(7);
+      const label = (lx, ly, align) => {
+        const w = measurerFor(7, false).getTextWidth(e.label);
+        const x0 = align === 'right' ? lx - w : lx;
+        labels[ps].push(
+          { t: 'rect', x: x0 - 0.4, y: ly + 0.3, w: w + 0.8, h: lh - 0.5, fill: '#ffffff', bg: true },
+          text(lx, ly, [e.label], 7, { align, color: FLOW })
+        );
+      };
       if (dir) {
         const below = T && T[1] < Q[1];
-        labels[ps].push(text(P[0] + dir * 0.8, below ? P[1] + 0.6 : P[1] - 0.6 - lh, [e.label], 7, { align: dir > 0 ? 'left' : 'right', color: FLOW }));
+        label(P[0] + dir * 0.8, below ? P[1] + 0.6 : P[1] - 0.6 - lh, dir > 0 ? 'left' : 'right');
       } else {
         const left = T && T[0] > Q[0] && Q[1] - P[1] < lh + 1;
-        labels[ps].push(text(P[0] + (left ? -1 : 1), P[1] + 0.4, [e.label], 7, { align: left ? 'right' : 'left', color: FLOW }));
+        label(P[0] + (left ? -1 : 1), P[1] + 0.4, left ? 'right' : 'left');
       }
     }
   }

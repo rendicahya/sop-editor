@@ -1,7 +1,7 @@
 # SOP Editor
 
 Aplikasi web (front-end saja, PWA) untuk membuat dan mengedit dokumen SOP berformat standar
-(halaman identitas + diagram alir lintas pelaksana), menyimpannya sebagai berkas `.sop` (isinya JSON), dan mengekspornya ke PDF A4 lanskap, Word, atau Excel.
+(halaman identitas + diagram alir lintas pelaksana), menyimpannya sebagai berkas `.sop` (isinya JSON), dan mengekspornya ke PDF A4 lanskap, Word, Excel, atau gambar PNG.
 
 Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero untuk kolaborasi real-time.
 
@@ -26,6 +26,10 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   Klik simbol untuk mengganti jenisnya dan tujuan alurnya (untuk Keputusan: cabang ya/tidak beserta labelnya).
 - **Kegiatan bersama beberapa pelaksana**: di menu simbol, pilih pelaksana lain pada "Dilakukan bersama"; simbolnya
   membentang dari lajur pelaksana paling kiri sampai paling kanan (di pratinjau, PDF, dan DOCX).
+- **Periksa dokumen**: tombol **Periksa** di toolbar menampilkan jumlah temuan yang diperbarui langsung. Yang diperiksa:
+  langkah yang tidak pernah dicapai, keputusan tanpa cabang ya/tidak, tujuan alur yang sudah dihapus, alur tanpa titik
+  akhir atau yang berputar tanpa sampai ke Selesai, akhir alur yang simbolnya bukan Mulai/Selesai, kegiatan kosong,
+  serta isian identitas penting (nama, nomor, tanggal, pengesah). Klik temuan untuk langsung menuju isiannya.
 - **Format teks tebal, miring, dan garis bawah** pada butir ketentuan dan sel tabel langkah (Kegiatan, Kelengkapan,
   Waktu, Output, Keterangan): tombol **B / I / U** di bar tab atau Ctrl+B / Ctrl+I / Ctrl+U. Format ikut tercetak di
   pratinjau, PDF, dan DOCX.
@@ -40,7 +44,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   otomatis), dan tanda tangan. Pada isian teks ada juga potong/salin/tempel/pilih semua serta tebal/miring/garis
   bawah. Bisa dinavigasi dengan ↑/↓, Enter, dan Esc; Shift+klik kanan membuka menu bawaan browser.
 - Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
-- Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …). Jalur garis dicari otomatis agar tidak menembus simbol dan tidak saling menumpuk.
+- Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" (labelnya berlatar putih agar tidak tertimpa garis tabel) pada keputusan dan konektor antarhalaman (A, B, …). Jalur garis dicari otomatis agar tidak menembus simbol dan tidak saling menumpuk.
 - **Atur jalur garis secara manual** bila jalur otomatis kurang rapi: klik garis untuk memilih sisi keluar/masuk
   simbol, lalu seret kotak kecil pada ruas garis untuk menggesernya. Posisi disimpan relatif terhadap lajur dan baris,
   jadi tetap berlaku saat tata letak berubah. "Kembalikan jalur otomatis" menghapus pengaturan manualnya.
@@ -49,14 +53,15 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
   halaman diagram alir menjadi tabel dengan kolom/baris berukuran sama persis seperti pratinjau. Teks semua sel bisa
-  diedit di Word, sedangkan diagramnya (simbol, garis, label, konektor) disisipkan sebagai gambar vektor (SVG, dengan
-  cadangan PNG untuk Word lama) di belakang tabel. Tinggi baris diagram dikunci agar tetap sejajar dengan gambar, jadi
+  diedit di Word, dan diagramnya (simbol, garis alur berpanah, label, konektor antarhalaman) berupa **shape Word yang
+  bisa diedit**, diposisikan di halaman seperti PDF. Tinggi baris diagram dikunci agar tetap sejajar dengan shape, jadi
   perubahan besar (teks bertambah banyak, langkah baru) sebaiknya dilakukan di aplikasi lalu diekspor ulang.
 - **Ekspor XLSX** (Excel) mengikuti template SOP (`src/assets/template-sop.xlsx`): sheet **Cover** berisi identitas
   (logo, nomor, tanggal, pengesahan beserta tanda tangan, dan keenam bagian ketentuan) dan sheet **Flowchart** berisi
   tabel langkah. Simbol, garis alur berpanah, label ya/tidak, dan konektor antarhalaman digambar sebagai **shape Excel
   yang bisa diedit**, dengan posisi sama seperti PDF. Pemisah halaman cetak mengikuti PDF dan kepala tabel diulang di
   tiap halaman.
+- **Ekspor PNG**: setiap halaman menjadi gambar 200 dpi berlatar putih, dikemas dalam satu berkas ZIP.
 - PDF vektor (teks bisa diseleksi). Dokumen SOP wajib memakai **Calibri**, yang disematkan ke PDF. Karena file Calibri
   tidak boleh didistribusikan ulang, font diambil dari perangkat pengguna: tombol **Pakai Calibri perangkat**
   (Local Font Access API, Chrome/Edge desktop) atau **Pilih file Calibri…** (`calibri.ttf` + `calibrib.ttf`, di Windows
@@ -163,7 +168,9 @@ Struktur utama:
 | `src/lib/PageFields.svelte` | Lapisan isian edit-langsung di atas halaman identitas dan diagram alir (posisi dari `page.fields`) |
 | `src/assets/logo-ub.png` | Logo Universitas Brawijaya yang disematkan ke setiap dokumen |
 | `src/lib/pdf.js` | Renderer PDF (jsPDF) |
-| `src/lib/docx.js` | Ekspor DOCX: WordprocessingML ditulis langsung lalu dikemas dengan fflate |
+| `src/lib/docx.js` | Ekspor DOCX: WordprocessingML ditulis langsung (diagram sebagai shape Word) lalu dikemas dengan fflate |
+| `src/lib/png.js` | Ekspor PNG: tiap halaman digambar ke canvas lalu dikemas ZIP |
+| `src/lib/validate.js` | Pemeriksa dokumen: alur diagram dan isian penting |
 | `src/lib/xlsx.js` | Ekspor XLSX: mengisi template SOP (gaya, tema, logo), diagram sebagai shape DrawingML |
 | `src/lib/fonts.js` | Font dokumen: Calibri dari perangkat (disimpan di IndexedDB) atau Carlito sebagai pengganti |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
@@ -210,10 +217,8 @@ tetap apa adanya. Kolom lain selalu teks polos.
 ## Rencana Pengembangan (Future Works)
 
 **Diagram alir**
-- Latar putih di belakang label cabang agar tidak tertimpa garis tabel.
 - Simbol tambahan: dokumen, data/arsip, dan sub-proses yang merujuk ke SOP lain.
 - Klik simbol di pratinjau untuk langsung membuka langkah terkait di editor.
-- Peringatan validasi: langkah yang tidak terjangkau, keputusan tanpa cabang "tidak", alur tanpa titik akhir.
 
 **Dokumen & tata letak**
 - Pilihan ukuran kertas (A4/F4/Letter), margin, dan ukuran font.
@@ -226,8 +231,7 @@ tetap apa adanya. Kolom lain selalu teks polos.
 - Pustaka multi-dokumen di browser (IndexedDB): daftar, cari, duplikasi, dan templat SOP.
 - Keterkaitan antar-SOP yang bisa ditautkan ke dokumen lain di pustaka.
 - Berbagi via tautan (JSON terkompresi di URL) tanpa server.
-- Ekspor tambahan: PNG/SVG per halaman; impor langkah dari Excel/CSV.
-- Diagram di DOCX sebagai bentuk Word yang bisa diedit (saat ini berupa gambar).
+- Ekspor SVG per halaman; impor langkah dari Excel/CSV.
 
 **Kolaborasi**
 - Konfigurasi server TURN (mis. dari layanan pihak ketiga) agar tetap tersambung di jaringan yang ketat.

@@ -1,8 +1,8 @@
 // Ekspor DOCX. Halaman identitas menjadi tabel Word biasa (bisa diedit, mengalir antarhalaman).
 // Halaman diagram alir menjadi tabel dengan ukuran kolom/baris persis seperti tata letak, ditambah
-// gambar diagram (SVG + cadangan PNG) di belakang tabel, diposisikan relatif terhadap halaman.
+// simbol, garis alur, dan label sebagai shape Word yang bisa diedit, diposisikan relatif terhadap halaman.
 import { zipSync, strToU8 } from 'fflate';
-import { layoutDocument, baseline, markerWidth, PT, PAGE } from './layout.js';
+import { layoutDocument, markerWidth, PT, PAGE } from './layout.js';
 import { formatTanggal } from './model.js';
 import { parseRich, lineText, hasList, listMarker, plainText, sliceRich } from './richtext.js';
 
@@ -101,15 +101,12 @@ class Media {
   }
 }
 
-function graphic(rid, w, h, id, svgRid) {
-  const svg = svgRid
-    ? `<a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="${svgRid}"/></a:ext></a:extLst>`
-    : '';
+function graphic(rid, w, h, id) {
   return (
     `<wp:docPr id="${id}" name="Gambar ${id}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>` +
     `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>` +
     `<pic:nvPicPr><pic:cNvPr id="${id}" name="Gambar ${id}"/><pic:cNvPicPr/></pic:nvPicPr>` +
-    `<pic:blipFill><a:blip r:embed="${rid}">${svg}</a:blip><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
     `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emu(w)}" cy="${emu(h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
     `</pic:pic></a:graphicData></a:graphic>`
   );
@@ -120,57 +117,90 @@ const inlineImage = (rid, w, h) =>
   `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${emu(w)}" cy="${emu(h)}"/>` +
   `<wp:effectExtent l="0" t="0" r="0" b="0"/>${graphic(rid, w, h, ++drawingId)}</wp:inline></w:drawing></w:r>`;
 
-/** Gambar mengambang di belakang teks, posisinya relatif terhadap pojok halaman. */
-const pageImage = (rid, svgRid, w, h) =>
-  `<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="1" locked="1" layoutInCell="0" allowOverlap="1">` +
-  `<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH>` +
-  `<wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx="${emu(w)}" cy="${emu(h)}"/>` +
-  `<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>${graphic(rid, w, h, ++drawingId, svgRid)}</wp:anchor></w:drawing></w:r>`;
+// ---------------------------------------------------------------------------
+// Diagram sebagai shape Word (bisa dipindah, diubah ukurannya, dan diedit teksnya)
+// ---------------------------------------------------------------------------
+
+const hex = (c) => (c ?? '#000000').replace('#', '').toUpperCase();
+const prst = (p) => `<a:prstGeom prst="${p}"><a:avLst/></a:prstGeom>`;
 
 /**
- * SVG berisi item diagram saja (latar transparan), seukuran halaman. Koordinat dalam 0,1 mm:
- * renderer SVG Word salah mengatur jarak huruf bila ukuran font (dalam satuan viewBox) sangat kecil.
+ * Satu shape mengambang di depan tabel, posisinya relatif terhadap pojok halaman (mm).
+ * `text`: isi kotak teks (paragraf WordprocessingML), tanpa jarak dalam.
  */
-function diagramSvg(page, items) {
-  const k = (v) => Math.round(v * 1000) / 100;
-  const pts = (list) => list.map(([x, y]) => `${k(x)},${k(y)}`).join(' ');
-  const anchor = { left: 'start', center: 'middle', right: 'end' };
-  const body = items.map((it) => {
-    const st = `fill="${(it.t !== 'poly' || it.closed) && it.fill ? it.fill : 'none'}" stroke="${it.stroke ?? 'none'}" stroke-width="${k(it.lw ?? 0.25)}"`;
-    if (it.t === 'rect') return `<rect x="${k(it.x)}" y="${k(it.y)}" width="${k(it.w)}" height="${k(it.h)}" rx="${k(it.r || 0)}" ${st}/>`;
-    if (it.t === 'poly') return `<${it.closed ? 'polygon' : 'polyline'} points="${pts(it.pts)}" ${st}/>`;
-    if (it.t === 'circle') return `<circle cx="${k(it.cx)}" cy="${k(it.cy)}" r="${k(it.r)}" ${st}/>`;
-    if (it.t === 'text') {
-      return it.lines.map((line, j) =>
-        `<text x="${k(it.x)}" y="${k(baseline(it, j))}" font-family="Calibri, Carlito, sans-serif" font-size="${k(it.size * PT)}" ` +
-        `font-weight="${it.bold ? 700 : 400}" fill="${it.color}" text-anchor="${anchor[it.align]}">${esc(lineText(line))}</text>`
-      ).join('');
-    }
-    return '';
-  });
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${page.w}mm" height="${page.h}mm" viewBox="0 0 ${k(page.w)} ${k(page.h)}">${body.join('')}</svg>`;
+function shape(x, y, w, h, name, geom, { fill, line, lw = 0, arrow, text, txBox } = {}) {
+  const id = ++drawingId;
+  const fillX = fill ? `<a:solidFill><a:srgbClr val="${fill}"/></a:solidFill>` : '<a:noFill/>';
+  const lnX = line
+    ? `<a:ln w="${emu(lw)}"><a:solidFill><a:srgbClr val="${line}"/></a:solidFill><a:miter lim="800000"/>${arrow ? '<a:tailEnd type="triangle" w="med" len="med"/>' : ''}</a:ln>`
+    : '<a:ln><a:noFill/></a:ln>';
+  const [cx, cy] = [Math.max(1, emu(w)), Math.max(1, emu(h))];
+  return (
+    `<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="${id + 2}" behindDoc="0" locked="0" layoutInCell="0" allowOverlap="1">` +
+    `<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>${emu(x)}</wp:posOffset></wp:positionH>` +
+    `<wp:positionV relativeFrom="page"><wp:posOffset>${emu(y)}</wp:posOffset></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/>` +
+    `<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="${id}" name="${name} ${id}"/><wp:cNvGraphicFramePr/>` +
+    `<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp>` +
+    `<wps:cNvSpPr${txBox ? ' txBox="1"' : ''}/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>${geom}${fillX}${lnX}</wps:spPr>` +
+    (text ? `<wps:txbx><w:txbxContent>${text}</w:txbxContent></wps:txbx>` : '') +
+    `<wps:bodyPr rot="0" vert="horz" wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="${text && !txBox ? 'ctr' : 't'}" anchorCtr="0"><a:noAutofit/></wps:bodyPr>` +
+    `</wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>`
+  );
 }
 
-/** Cadangan PNG (200 dpi) untuk Word lama yang belum mendukung SVG. */
-async function svgToPng(svg, page) {
-  const scale = 200 / 25.4;
-  const img = new Image();
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-  try {
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = () => reject(new Error('Gambar diagram gagal dibuat.'));
-      img.src = url;
-    });
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(page.w * scale);
-    canvas.height = Math.round(page.h * scale);
-    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
-    return new Uint8Array(await blob.arrayBuffer());
-  } finally {
-    URL.revokeObjectURL(url);
+/** Garis alur (polyline) dengan ujung panah; koordinat titik relatif terhadap kotak pembatasnya. */
+function lineShape(pts, it, arrow) {
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  const [x, y] = [Math.min(...xs), Math.min(...ys)];
+  const [w, h] = [Math.max(...xs) - x, Math.max(...ys) - y];
+  const W = Math.max(1, emu(w));
+  const H = Math.max(1, emu(h));
+  const path = pts.map(([px, py], j) => `<a:${j ? 'lnTo' : 'moveTo'}><a:pt x="${emu(px - x)}" y="${emu(py - y)}"/></a:${j ? 'lnTo' : 'moveTo'}>`).join('');
+  const geom = `<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="${W}" h="${H}" fill="none">${path}</a:path></a:pathLst></a:custGeom>`;
+  return shape(x, y, w, h, 'Garis alur', geom, { line: hex(it.stroke), lw: it.lw, arrow });
+}
+
+/** Label (Ya/Tidak, huruf penghubung) sebagai kotak teks; `bg` = latar putih label cabang. */
+function labelShape(it, bg) {
+  const lh = it.size * PT * 1.2;
+  const w = bg ? bg.w : Math.max(...it.lines.map((l) => markerWidth(lineText(l), it.size))) * (it.bold ? 1.1 : 1) + 1;
+  const x = bg ? bg.x : it.align === 'center' ? it.x - w / 2 : it.align === 'right' ? it.x - w : it.x;
+  const align = bg ? 'center' : it.align;
+  const text = it.lines
+    .map((l) => para(run(lineText(l), { size: it.size, bold: it.bold, color: it.color }), { size: it.size, align: align === 'left' ? null : align }))
+    .join('');
+  return shape(x, it.y, w, it.lines.length * lh, 'Label', prst('rect'), { fill: bg ? 'FFFFFF' : null, text, txBox: true });
+}
+
+/** Item diagram satu halaman (garis, simbol, penghubung, label) menjadi shape Word. */
+function diagramShapes(items) {
+  const out = [];
+  for (let k = 0; k < items.length; k++) {
+    const it = items[k];
+    const style = { fill: it.fill ? hex(it.fill) : null, line: it.stroke ? hex(it.stroke) : null, lw: it.lw };
+    if (it.t === 'poly' && !it.closed) {
+      // Batang + mata panah (segitiga berikutnya) menjadi satu garis dengan ujung panah.
+      const head = items[k + 1];
+      const arrow = head?.t === 'poly' && head.closed && head.pts.length === 3;
+      out.push(lineShape(arrow ? [...it.pts.slice(0, -1), head.pts[0]] : it.pts, it, arrow));
+      if (arrow) k++;
+    } else if (it.t === 'rect' && it.bg) {
+      if (items[k + 1]?.t === 'text') out.push(labelShape(items[++k], it));
+    } else if (it.t === 'rect') {
+      out.push(shape(it.x, it.y, it.w, it.h, it.r ? 'Mulai/Selesai' : 'Proses', prst(it.r ? 'flowChartTerminator' : 'flowChartProcess'), style));
+    } else if (it.t === 'poly' && it.closed && (it.pts.length === 4 || it.pts.length === 5)) {
+      const xs = it.pts.map((p) => p[0]);
+      const ys = it.pts.map((p) => p[1]);
+      const [x, y] = [Math.min(...xs), Math.min(...ys)];
+      const dec = it.pts.length === 4;
+      const [w, h] = [Math.max(...xs) - x, Math.max(...ys) - y];
+      out.push(shape(x, y, w, h, dec ? 'Keputusan' : 'Penghubung', prst(dec ? 'flowChartDecision' : 'flowChartOffpageConnector'), style));
+    } else if (it.t === 'text') {
+      out.push(labelShape(it, null));
+    }
   }
+  return out.join('');
 }
 
 // ---------------------------------------------------------------------------
@@ -300,7 +330,8 @@ const NS =
   'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
   'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
   'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
-  'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
+  'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ' +
+  'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"';
 const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 
 const sectPr = (bottom) =>
@@ -326,11 +357,8 @@ export async function exportDocx(doc) {
   for (let q = 0; q < flowPages.length; q++) {
     const page = flowPages[q];
     body.push(flowTable(doc, page.flow));
-    const svg = diagramSvg(page, page.items.slice(page.diagram));
-    const svgRid = media.add(strToU8(svg), 'svg');
-    const pngRid = media.add(await svgToPng(svg, page), 'png');
-    const pic = pageImage(pngRid, svgRid, page.w, page.h);
-    body.push(tiny(pic + (q < flowPages.length - 1 ? '<w:r><w:br w:type="page"/></w:r>' : '')));
+    const shapes = diagramShapes(page.items.slice(page.diagram));
+    body.push(tiny(shapes + (q < flowPages.length - 1 ? '<w:r><w:br w:type="page"/></w:r>' : '')));
   }
 
   const document = `${XML}<w:document ${NS}><w:body>${body.join('')}${sectPr(4)}</w:body></w:document>`;
