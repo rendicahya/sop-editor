@@ -30,6 +30,11 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   langkah yang tidak pernah dicapai, keputusan tanpa cabang ya/tidak, tujuan alur yang sudah dihapus, alur tanpa titik
   akhir atau yang berputar tanpa sampai ke Selesai, akhir alur yang simbolnya bukan Mulai/Selesai, kegiatan kosong,
   serta isian identitas penting (nama, nomor, tanggal, pengesah). Klik temuan untuk langsung menuju isiannya.
+- **Estimasi total waktu**: kolom Waktu pada jalur utama (dari langkah 1 mengikuti cabang "ya", tanpa putaran balik)
+  dijumlahkan dan ditampilkan di bar tab, mis. "24 hari 5 menit". Terbaca: "5 Menit", "1-2 hari kerja" (menjadi
+  rentang), "1 jam 30 menit", "1x24 jam", "1/2 hari", "sehari", "maks. 3 hari". Satuan dijumlahkan terpisah (menit
+  dibulatkan ke jam, tetapi jam tidak diubah ke hari karena hari kerja berbeda-beda). Panel Periksa merinci isian waktu
+  yang tidak terbaca atau masih kosong; klik untuk menuju isiannya.
 - **Format teks tebal, miring, dan garis bawah** pada butir ketentuan dan sel tabel langkah (Kegiatan, Kelengkapan,
   Waktu, Output, Keterangan): tombol **B / I / U** di bar tab atau Ctrl+B / Ctrl+I / Ctrl+U. Format ikut tercetak di
   pratinjau, PDF, dan DOCX.
@@ -55,6 +60,9 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   dokumennya bisa diduplikasi atau dijadikan **templat**, dan templat (termasuk templat bawaan) dipakai untuk memulai SOP
   baru dengan tanggal hari ini. Seluruh pustaka bisa dicadangkan ke satu .zip berisi berkas .sop dan dipulihkan lagi
   (isi yang sudah ada tidak digandakan). Dokumen dari ruang kolaborasi orang lain disimpan sebagai entri tersendiri.
+  **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen dan templat: satu entri boleh berlabel lebih dari satu,
+  daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
+  Label hanya ada di pustaka (tidak masuk berkas .sop) dan ikut tersimpan di cadangan .zip (`pustaka.json`).
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
   halaman diagram alir menjadi tabel dengan kolom/baris berukuran sama persis seperti pratinjau. Teks semua sel bisa
@@ -180,6 +188,7 @@ Struktur utama:
 | `src/lib/docx.js` | Ekspor DOCX: WordprocessingML ditulis langsung (diagram sebagai shape Word) lalu dikemas dengan fflate |
 | `src/lib/png.js` | Ekspor PNG: tiap halaman digambar ke canvas lalu dikemas ZIP |
 | `src/lib/validate.js` | Pemeriksa dokumen: alur diagram dan isian penting |
+| `src/lib/duration.js` | Estimasi total waktu: membaca kolom Waktu dan menjumlahkannya di jalur utama |
 | `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan otomatis per tab (id tab = id entri), daftar, hapus |
 | `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, duplikat, templat, cadangkan/pulihkan .zip |
 | `src/lib/xlsx.js` | Ekspor XLSX: mengisi template SOP (gaya, tema, logo), diagram sebagai shape DrawingML |

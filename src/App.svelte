@@ -14,6 +14,7 @@
   import PdfPreviewDialog from './lib/PdfPreviewDialog.svelte';
   import FindPanel from './lib/FindPanel.svelte';
   import CheckPanel from './lib/CheckPanel.svelte';
+  import { estimateDuration } from './lib/duration.js';
   import { checkDocument } from './lib/validate.js';
   import * as Collab from './lib/collab.svelte.js';
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
@@ -105,6 +106,7 @@
   const issues = $derived(checkDocument(app.doc));
   const issueErrors = $derived(issues.filter((i) => i.level === 'error').length);
   const issueWarns = $derived(issues.filter((i) => i.level === 'warn').length);
+  const duration = $derived(estimateDuration(app.doc));
 
   /** Tampilkan isian `ref` (data-field) di halaman; isian simbol dibuka menunya. */
   async function jumpTo(ref) {
@@ -747,6 +749,19 @@
       <button class="add" onclick={() => addTab(emptyDocument())} disabled={collab.status !== 'off'} title={collab.status !== 'off' ? 'Keluar dari ruang kolaborasi untuk membuka tab baru' : 'Tab baru'} aria-label="Tab baru">+</button>
     </div>
     <FormatBar />
+    {#if duration.text || duration.unread.length}
+      <span class="tab-sep"></span>
+      <button
+        class="dur"
+        onclick={() => (checkOpen = true)}
+        title={`Estimasi total waktu jalur utama (${duration.counted} dari ${duration.steps} langkah berisi waktu)` +
+          (duration.unread.length ? `; ${duration.unread.length} isian waktu tidak terbaca` : '') + '. Klik untuk rinciannya.'}
+      >
+        <span class="lbl">Total waktu</span>
+        <strong>{duration.text || '—'}</strong>
+        {#if duration.unread.length}<span class="warn">!</span>{/if}
+      </button>
+    {/if}
     <span class="tab-sep"></span>
     <div class="zoom" title="Zoom pratinjau">
       <span class="zoom-label">Zoom</span>
@@ -828,7 +843,7 @@
     onnotify={notify}
     onjump={(f) => jumpTo(f.ref)}
   />
-  <CheckPanel bind:open={checkOpen} {issues} onjump={jumpTo} />
+  <CheckPanel bind:open={checkOpen} {issues} {duration} steps={app.doc.steps} onjump={jumpTo} />
   <LibraryDialog
     bind:open={libraryOpen}
     {openIds}

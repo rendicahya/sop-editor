@@ -1,5 +1,6 @@
 // Pustaka dokumen: semua SOP yang pernah diedit tersimpan otomatis di IndexedDB browser ini.
-// Entri: { id, kind: 'doc' | 'template', title, nomor, fileName, created, updated, json }.
+// Entri: { id, kind: 'doc' | 'template', title, nomor, fileName, created, updated, json, tags }.
+// `tags` (label pengelompokan) hanya ada di pustaka, tidak ikut tersimpan di berkas .sop.
 // Dokumen tab memakai id tab sebagai id entri, jadi setiap perubahan tab memperbarui entrinya sendiri.
 
 const DB = 'sop-editor-library';
@@ -30,6 +31,24 @@ export const getEntry = (id) => run('readonly', (s) => s.get(id));
 export const deleteEntry = (id) => run('readwrite', (s) => s.delete(id));
 export const putEntry = (entry) => run('readwrite', (s) => s.put(entry));
 
+/** Mengubah sebagian kolom entri dalam satu transaksi (tidak bertabrakan dengan simpan otomatis). */
+export const patchEntry = (id, patch) =>
+  run('readwrite', (s) => {
+    const req = s.get(id);
+    req.onsuccess = () => req.result && s.put({ ...req.result, ...patch });
+    return req;
+  });
+
+/** Label unik dan rapi: spasi dipangkas, tanpa duplikat (tidak peka huruf besar/kecil), urut abjad. */
+export function cleanTags(tags) {
+  const seen = new Map();
+  for (const t of tags ?? []) {
+    const v = String(t).trim().replace(/\s+/g, ' ');
+    if (v && !seen.has(v.toLowerCase())) seen.set(v.toLowerCase(), v);
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b, 'id'));
+}
+
 /** Semua entri, terbaru di atas (isi `json` ikut dibaca untuk pencarian). */
 export async function listEntries() {
   const all = (await run('readonly', (s) => s.getAll())) ?? [];
@@ -44,19 +63,27 @@ export function isBlank(doc) {
 /** Menyimpan dokumen tab `id`; dilewati bila kosong atau isinya sama dengan yang tersimpan. */
 export async function saveDoc(id, json, fileName = null) {
   const doc = JSON.parse(json);
-  const old = await getEntry(id);
-  if (old && old.json === json && old.fileName === fileName) return;
-  if (!old && isBlank(doc)) return;
-  const now = Date.now();
-  await putEntry({
-    id,
-    kind: 'doc',
-    title: doc.header.namaSop,
-    nomor: doc.header.nomor,
-    fileName,
-    created: old?.created ?? now,
-    updated: old && old.json === json ? old.updated : now,
-    json
+  // Baca dan tulis dalam satu transaksi agar label yang baru diubah di dialog Pustaka tidak tertimpa.
+  await run('readwrite', (s) => {
+    const req = s.get(id);
+    req.onsuccess = () => {
+      const old = req.result;
+      if (old && old.json === json && old.fileName === fileName) return;
+      if (!old && isBlank(doc)) return;
+      const now = Date.now();
+      s.put({
+        id,
+        kind: 'doc',
+        title: doc.header.namaSop,
+        nomor: doc.header.nomor,
+        fileName,
+        created: old?.created ?? now,
+        updated: old && old.json === json ? old.updated : now,
+        json,
+        tags: old?.tags ?? []
+      });
+    };
+    return req;
   });
 }
 

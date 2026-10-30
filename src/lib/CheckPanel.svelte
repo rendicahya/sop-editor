@@ -1,6 +1,9 @@
 <script>
-  /** Daftar temuan pemeriksa dokumen; onjump(ref) menuju isian terkait di halaman. */
-  let { open = $bindable(false), issues, onjump } = $props();
+  import { plainText } from './richtext.js';
+
+  /** Daftar temuan pemeriksa dokumen dan estimasi waktu (duration.js); onjump(ref) menuju isian terkait di halaman. */
+  let { open = $bindable(false), issues, duration, steps, onjump } = $props();
+  const waktuRef = (i) => `st:${steps[i].id}:waktu`;
 
   let showInfo = $state(false);
   const LEVEL = { error: 'Salah', warn: 'Peringatan', info: 'Saran' };
@@ -27,6 +30,33 @@
         {count('error')} salah · {count('warn')} peringatan
       {/if}
     </p>
+    <div class="dur">
+      <span class="lv">Estimasi total waktu</span>
+      <strong>{duration.text || 'Belum ada isian waktu yang terbaca'}</strong>
+      <small>
+        Jumlah kolom Waktu pada jalur utama ({duration.steps} langkah, mengikuti cabang
+        "ya"){duration.skipped ? `; ${duration.skipped} langkah di cabang lain tidak dihitung` : ''}. Satuan tidak
+        dikonversi ke hari karena hari kerja dan jam kerja bisa berbeda.
+      </small>
+      {#if duration.unread.length}
+        <span class="sub">Tidak terbaca, tidak ikut dihitung:</span>
+        <span class="refs">
+          {#each duration.unread as i (i)}
+            <button onclick={() => onjump(waktuRef(i))} title="Tampilkan di halaman">
+              {i + 1}. "{plainText(steps[i].waktu).slice(0, 30)}"
+            </button>
+          {/each}
+        </span>
+      {/if}
+      {#if duration.empty.length}
+        <span class="sub">Waktu belum diisi:</span>
+        <span class="refs">
+          {#each duration.empty as i (i)}
+            <button onclick={() => onjump(waktuRef(i))} title="Tampilkan di halaman">Langkah {i + 1}</button>
+          {/each}
+        </span>
+      {/if}
+    </div>
     <label class="check-row"><input type="checkbox" bind:checked={showInfo} /> Tampilkan saran ({count('info')})</label>
     {#if shown.length}
       <ul>
@@ -70,6 +100,43 @@
     margin: 0;
     font-size: 0.82rem;
     color: var(--muted);
+  }
+  .dur {
+    display: grid;
+    gap: 0.2rem;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-2);
+  }
+  .dur strong {
+    font-size: 0.95rem;
+  }
+  .dur small,
+  .dur .sub {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .dur .sub {
+    margin-top: 0.2rem;
+  }
+  .refs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+  .refs button {
+    border: 1px solid var(--line);
+    border-left: 3px solid #d98e04;
+    border-radius: 5px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.75rem;
+    padding: 0.1rem 0.4rem;
+    cursor: pointer;
+  }
+  .refs button:hover {
+    border-color: var(--accent);
   }
   .check-row {
     display: flex;

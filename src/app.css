@@ -155,6 +155,39 @@ textarea {
   margin-bottom: 0.35rem;
   background: var(--line);
 }
+.tabbar .dur {
+  flex: none;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tabbar .dur:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tabbar .dur strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.tabbar .dur .warn {
+  color: #d98e04;
+  font-weight: 700;
+}
+@media (max-width: 1100px) {
+  .tabbar .dur .lbl {
+    display: none;
+  }
+}
 .tabbar .zoom {
   flex: none;
   align-self: center;
