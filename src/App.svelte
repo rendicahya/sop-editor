@@ -1,8 +1,8 @@
 <script>
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist, tabs, stash, newTabId } from './lib/store.svelte.js';
-  import { emptyDocument, sampleDocument, parseDocumentText } from './lib/model.js';
+  import { emptyDocument, sampleDocument, parseDocumentText, todayIso } from './lib/model.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf } from './lib/pdf.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
@@ -18,6 +18,8 @@
   import * as Collab from './lib/collab.svelte.js';
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
   import { connectHistory } from './lib/history.js';
+  import LibraryDialog from './lib/LibraryDialog.svelte';
+  import { queueSave, flush, flushAll, saveDoc, isBlank } from './lib/library.js';
 
   let toast = $state('');
   let toastTimer;
@@ -153,6 +155,7 @@
       future = [];
       current = json;
       persist(json);
+      remember();
       syncFlags();
       return;
     }
@@ -161,7 +164,13 @@
     future = [];
     current = json;
     persist(json);
+    remember();
     syncFlags();
+  }
+
+  /** Dokumen tab aktif ikut tersimpan di pustaka (kecuali selagi menunggu isi ruang kolaborasi). */
+  function remember() {
+    if (collab.status !== 'connecting') queueSave(tabs.active, current, app.fileName);
   }
 
   /** Simpan perubahan yang belum masuk riwayat sebagai langkah tersendiri. */
@@ -188,6 +197,7 @@
     current = json;
     app.doc = JSON.parse(json);
     persist(json);
+    remember();
     syncFlags();
   }
 
@@ -234,6 +244,14 @@
     }
     stash.set(tabs.active, { json, handle: app.fileHandle, past, future });
     Object.assign(activeTab, { title: app.doc.header.namaSop, fileName: app.fileName });
+    queueSave(tabs.active, json, app.fileName);
+  }
+
+  /** Tab aktif mendapat id (= entri pustaka) baru, mis. saat isinya diganti dokumen lain. */
+  function rekey(id = newTabId()) {
+    flush(tabs.active);
+    activeTab.id = id;
+    tabs.active = id;
   }
 
   function activate(id) {
@@ -268,32 +286,45 @@
     app.doc.steps.length <= 2 &&
     Object.values(app.doc.sections).every((s) => !s.items.length);
 
-  /** Membuka dokumen di tab baru (atau, di ruang kolaborasi, mengganti dokumen ruang). */
-  function openInTab(doc, name = null, handle = null) {
-    if (collab.status !== 'off' || pristine()) return replaceDocument(doc, name, handle);
-    addTab(doc, name, handle);
+  /**
+   * Membuka dokumen di tab baru (atau, di ruang kolaborasi, mengganti dokumen ruang).
+   * `id`: entri pustaka yang dibuka; tanpa id, dokumen menjadi entri baru.
+   */
+  function openInTab(doc, name = null, handle = null, id = newTabId()) {
+    if (collab.status !== 'off') return replaceDocument(doc, name, handle);
+    if (pristine()) {
+      rekey(id);
+      return replaceDocument(doc, name, handle);
+    }
+    addTab(doc, name, handle, id);
   }
 
-  function addTab(doc, name = null, handle = null) {
+  function addTab(doc, name = null, handle = null, id = newTabId()) {
     stashActive();
-    const id = newTabId();
     tabs.list.splice(tabs.list.indexOf(activeTab) + 1, 0, { id, title: doc.header.namaSop, fileName: name });
     stash.set(id, { json: JSON.stringify(doc), handle, past: [], future: [] });
     activate(id);
   }
 
   function closeTab(id) {
+    // Isi tab tetap ada di pustaka, jadi tab bisa ditutup tanpa konfirmasi.
     const tab = tabs.list.find((t) => t.id === id);
-    if (!confirm(`Tutup "${tabTitle(tab)}"? Perubahan yang belum disimpan ke berkas akan hilang.`)) return;
-    if (tabs.list.length === 1) {
+    if (id === tabs.active) {
       if (!canLeaveTab()) return;
+      checkpoint();
+      flush(id);
+    } else saveDoc(id, stash.get(id).json, tab.fileName).catch(() => {});
+    const json = id === tabs.active ? current : stash.get(id).json;
+    if (!isBlank(JSON.parse(json))) notify(`"${tabTitle(tab)}" ditutup — buka lagi dari Pustaka`);
+    if (tabs.list.length === 1) {
+      rekey();
+      replaceDocument(emptyDocument());
       past = [];
       future = [];
-      return replaceDocument(emptyDocument());
+      return syncFlags();
     }
     const i = tabs.list.indexOf(tab);
     if (id === tabs.active) {
-      if (!canLeaveTab()) return;
       tabs.list.splice(i, 1);
       stash.delete(id);
       activate(tabs.list[Math.min(i, tabs.list.length - 1)].id);
@@ -347,6 +378,44 @@
   $effect(() => {
     if (collab.status === 'ready') Collab.setFocus({ step: focusStep });
   });
+
+  // Bergabung ke ruang orang lain: dokumen tab ini disimpan dulu, lalu dokumen ruang menjadi entri pustaka sendiri.
+  let keyedRoom = null;
+  $effect(() => {
+    const r = collab.room;
+    if (!r?.joined || r.id === keyedRoom) return;
+    keyedRoom = r.id;
+    untrack(() => {
+      const id = 'room-' + r.id;
+      if (tabs.active === id) return; // ruang yang sama dibuka lagi (mis. setelah muat ulang)
+      saveDoc(tabs.active, JSON.stringify(app.doc), app.fileName).catch(() => {});
+      rekey(tabs.list.some((t) => t.id === id) ? newTabId() : id);
+      app.fileName = null;
+      app.fileHandle = null;
+    });
+  });
+
+  // Pustaka dokumen.
+  let libraryOpen = $state(false);
+  const openIds = $derived(tabs.list.map((t) => t.id));
+
+  function openEntry(entry) {
+    if (tabs.list.some((t) => t.id === entry.id)) return switchTab(entry.id);
+    try {
+      const doc = parseDocumentText(entry.json);
+      if (shared && !confirm(`Ganti dokumen${shared} dengan "${entry.title || 'SOP tanpa judul'}"? (bisa di-Undo)`)) return;
+      openInTab(doc, entry.fileName, null, entry.id);
+    } catch {
+      alert('Entri pustaka ini rusak dan tidak bisa dibuka.');
+    }
+  }
+
+  /** Dokumen baru dari templat: tanggal diatur ulang ke hari ini. */
+  function useTemplate(doc) {
+    if (shared && !confirm(`Ganti dokumen${shared} dengan dokumen baru dari templat? (bisa di-Undo)`)) return;
+    Object.assign(doc.header, { tglPembuatan: todayIso(), tglRevisi: '', tglEfektif: todayIso() });
+    openInTab(doc);
+  }
 
   // Langkah yang sedang diedit (isian baris langkah di halaman bertanda data-hot="r:<id>").
   function onFocusIn(e) {
@@ -423,6 +492,7 @@
         app.fileHandle = handle;
         app.fileName = handle.name;
         persist(current);
+        remember();
       }
       notify('Tersimpan sebagai ' + (handle?.name ?? name));
     } catch (e) {
@@ -488,6 +558,13 @@
   }
 
   onMount(() => {
+    // Tab yang sudah terbuka (dari sebelum ada pustaka) ikut dimasukkan ke pustaka.
+    for (const t of tabs.list) {
+      if (t.id === tabs.active) queueSave(t.id, current, app.fileName);
+      else if (stash.has(t.id)) saveDoc(t.id, stash.get(t.id).json, t.fileName).catch(() => {});
+    }
+    const onHide = () => document.visibilityState === 'hidden' && flushAll();
+    document.addEventListener('visibilitychange', onHide);
     checkInvite();
     window.addEventListener('hashchange', checkInvite);
     const onFs = () => (fullscreen = !!document.fullscreenElement);
@@ -502,6 +579,7 @@
       });
     }
     return () => {
+      document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('hashchange', checkInvite);
       document.removeEventListener('fullscreenchange', onFs);
       window.removeEventListener('wheel', onCtrlWheel);
@@ -543,6 +621,7 @@
     <nav class="toolbar">
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)">Buka</button>
+      <button class="btn ghost" onclick={() => (libraryOpen = true)} title="Semua SOP dan templat yang tersimpan otomatis di browser ini">Pustaka</button>
       <button class="btn ghost" onclick={() => save(false)} title="Simpan sebagai berkas .sop (Ctrl+S)">Simpan</button>
       <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP baru, impor SOP lama (PDF/Word), atau revisi SOP ini dengan bantuan asisten AI">Asisten AI</button>
       <span class="sep"></span>
@@ -750,6 +829,14 @@
     onjump={(f) => jumpTo(f.ref)}
   />
   <CheckPanel bind:open={checkOpen} {issues} onjump={jumpTo} />
+  <LibraryDialog
+    bind:open={libraryOpen}
+    {openIds}
+    active={tabs.active}
+    onopen={openEntry}
+    ontemplate={useTemplate}
+    onnotify={notify}
+  />
 
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
   {#if dragging}<div class="dropzone">Lepaskan berkas .sop untuk membuka</div>{/if}

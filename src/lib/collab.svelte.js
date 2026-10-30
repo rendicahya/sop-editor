@@ -82,7 +82,8 @@ export function joinRoom(invite) {
 
 async function connect(room, seed) {
   leaveRoom();
-  collab.room = room;
+  // joined: dokumen datang dari ruang (bukan dari tab ini), jadi tab disimpan sebagai entri pustaka tersendiri.
+  collab.room = { ...room, joined: !seed };
   collab.status = 'connecting';
   history.replaceState(null, '', `#room=${room.id}&key=${room.key}`);
   saveJson(ROOMS_KEY, [room.id, ...knownRooms().filter((r) => r !== room.id)].slice(0, 30));

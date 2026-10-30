@@ -50,6 +50,11 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   jadi tetap berlaku saat tata letak berubah. "Kembalikan jalur otomatis" menghapus pengaturan manualnya.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
 - **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Asisten AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab tersimpan otomatis di browser; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
+- **Pustaka dokumen**: setiap SOP yang diedit tersimpan otomatis di browser (IndexedDB), jadi tab bisa ditutup tanpa
+  kehilangan isi dan dibuka lagi kapan saja. Pustaka bisa dicari (nama, nomor, pelaksana, kegiatan, butir ketentuan),
+  dokumennya bisa diduplikasi atau dijadikan **templat**, dan templat (termasuk templat bawaan) dipakai untuk memulai SOP
+  baru dengan tanggal hari ini. Seluruh pustaka bisa dicadangkan ke satu .zip berisi berkas .sop dan dipulihkan lagi
+  (isi yang sudah ada tidak digandakan). Dokumen dari ruang kolaborasi orang lain disimpan sebagai entri tersendiri.
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
   halaman diagram alir menjadi tabel dengan kolom/baris berukuran sama persis seperti pratinjau. Teks semua sel bisa
@@ -171,6 +176,8 @@ Struktur utama:
 | `src/lib/docx.js` | Ekspor DOCX: WordprocessingML ditulis langsung (diagram sebagai shape Word) lalu dikemas dengan fflate |
 | `src/lib/png.js` | Ekspor PNG: tiap halaman digambar ke canvas lalu dikemas ZIP |
 | `src/lib/validate.js` | Pemeriksa dokumen: alur diagram dan isian penting |
+| `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan otomatis per tab (id tab = id entri), daftar, hapus |
+| `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, duplikat, templat, cadangkan/pulihkan .zip |
 | `src/lib/xlsx.js` | Ekspor XLSX: mengisi template SOP (gaya, tema, logo), diagram sebagai shape DrawingML |
 | `src/lib/fonts.js` | Font dokumen: Calibri dari perangkat (disimpan di IndexedDB) atau Carlito sebagai pengganti |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
@@ -228,7 +235,6 @@ tetap apa adanya. Kolom lain selalu teks polos.
 - QR code verifikasi atau tanda tangan digital pada bagian pengesahan.
 
 **Pengelolaan berkas**
-- Pustaka multi-dokumen di browser (IndexedDB): daftar, cari, duplikasi, dan templat SOP.
 - Keterkaitan antar-SOP yang bisa ditautkan ke dokumen lain di pustaka.
 - Berbagi via tautan (JSON terkompresi di URL) tanpa server.
 - Ekspor SVG per halaman; impor langkah dari Excel/CSV.
