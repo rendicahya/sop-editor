@@ -271,6 +271,11 @@ export function normalizeDocument(raw) {
     return a.id;
   };
   const stepActors = raw.steps.map((s) => findActor(s?.actor));
+  // `with`: pelaksana lain pada kegiatan bersama (id atau nama), tanpa pelaksana utama dan tanpa duplikat.
+  const stepWith = raw.steps.map((s, i) => {
+    const list = Array.isArray(s?.with) ? s.with : s?.with ? [s.with] : [];
+    return [...new Set(list.map(findActor).filter((id) => id && id !== stepActors[i]))];
+  });
   if (!actors.length) actors.push(...base.actors);
 
   usedIds.clear();
@@ -280,6 +285,7 @@ export function normalizeDocument(raw) {
     for (const k of Object.keys(d)) if (k !== 'next' && k !== 'alt' && s?.[k] != null) step[k] = RICH_STEP.has(k) ? rich(s[k]) : plain(s[k]);
     step.id = freshId(s?.id);
     step.actor = stepActors[i] ?? actors[0].id;
+    if (stepWith[i].length && stepActors[i]) step.with = stepWith[i];
     const shape = step.shape.trim().toLowerCase();
     step.shape = SHAPES.some((x) => x.value === shape) ? shape : (SHAPE_ALIAS[shape] ?? 'process');
     return step;

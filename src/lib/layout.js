@@ -338,9 +338,15 @@ function layoutFlow(doc, pages) {
       out: wrapRich(s.output, TS, col.out - 2 * pad),
       ket: wrapRich(s.keterangan, TS, col.ket - 2 * pad)
     };
-    const size = shapeSize(s.shape);
+    // Kegiatan bersama (`with`): simbol membentang dari lajur pelaksana paling kiri sampai paling kanan.
+    const own = actorIdx.get(s.actor) ?? 0;
+    const span = [own, ...(s.with ?? []).map((id) => actorIdx.get(id)).filter((j) => j !== undefined)];
+    const c0 = Math.min(...span);
+    const c1 = Math.max(...span);
+    const base = shapeSize(s.shape);
+    const size = { w: base.w + (c1 - c0) * actW, h: base.h };
     const textNeed = Math.max(...Object.values(cells).map((l) => textH(l, TS))) + 2 * pad;
-    return { step: s, cells, size, col: actorIdx.get(s.actor) ?? 0, h: Math.max(textNeed, size.h + 7, 12.5) };
+    return { step: s, cells, size, col: own, c0, c1, lanes: new Set(span), h: Math.max(textNeed, size.h + 7, 12.5) };
   });
 
   // Paginasi (selalu sisakan ruang untuk dua pita konektor)
@@ -426,13 +432,13 @@ function layoutFlow(doc, pages) {
       });
     }
     actors.forEach((a, j) => {
-      if (j !== r.col) page.fields.push({ id: `ln:${sid}:${a.id}`, kind: 'lane', hot, step: sid, actor: a.id, name: a.name, x: x.act + j * actW, y, w: actW, h: r.h });
+      if (!r.lanes.has(j)) page.fields.push({ id: `ln:${sid}:${a.id}`, kind: 'lane', hot, step: sid, actor: a.id, name: a.name, x: x.act + j * actW, y, w: actW, h: r.h });
     });
   });
 
   // Kotak bentuk
   const box = rows.map((r, i) => {
-    const cx = x.act + (r.col + 0.5) * actW;
+    const cx = x.act + ((r.c0 + r.c1 + 1) / 2) * actW;
     const cy = rowY[i] + r.h / 2;
     const { w, h } = r.size;
     return { cx, cy, w, h, top: cy - h / 2, bottom: cy + h / 2, shape: r.step.shape };
@@ -489,6 +495,7 @@ function layoutFlow(doc, pages) {
       const t = rowY[i];
       const h = rows[i].h;
       ys.push(t + 1, t + h - 1, t + h - 2, box[i].cy);
+      if (rows[i].c1 > rows[i].c0) xs.push(box[i].cx - box[i].w / 2 - 1, box[i].cx + box[i].w / 2 + 1);
       for (const p of [...boxPorts(box[i], true), ...boxPorts(box[i], false)]) xs.push(p.x), ys.push(p.y);
     }
     if (top[q]) xs.push(...connXs), ys.push(topPortY);

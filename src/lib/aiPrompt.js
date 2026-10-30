@@ -50,6 +50,7 @@ ${header}
   - "id": unik, misalnya "s1", "s2", …
   - "kegiatan": nama kegiatan
   - "actor": id pelaksana dari daftar actors
+  - "with" (opsional): daftar id pelaksana lain bila kegiatan dilakukan bersama (mis. rapat atau penandatanganan bersama), contoh ["a2", "a3"]; simbolnya membentang sampai lajur mereka
   - "shape": "terminator" (Mulai/Selesai, biasanya langkah pertama dan terakhir), "process" (kegiatan biasa), atau "decision" (pemeriksaan/persetujuan yang bisa ditolak)
   - "kelengkapan", "waktu" (contoh "1 Hari", "15 Menit"), "output", "keterangan": teks, boleh ""
   - "next" (opsional): bawaannya langkah berikutnya. Isi id langkah lain untuk melompat, atau "none" bila alur berhenti.
@@ -72,6 +73,32 @@ ${formatRules(`- header: isi semua kolom teks. "institution" boleh beberapa bari
 
 CONTOH STRUKTUR (isi dengan proses di atas, jangan disalin isinya):
 ${JSON.stringify(EXAMPLE, null, 2)}`;
+}
+
+/** Dokumen untuk dikirim ke AI: tanpa gambar tanda tangan dan jalur garis manual (dipulihkan saat jawaban dibuka). */
+export function docForAi(doc) {
+  const { signature: _, ...header } = doc.header;
+  return { ...doc, header, steps: doc.steps.map(({ route: _, ...s }) => s) };
+}
+
+/** Prompt untuk merevisi dokumen yang sedang dibuka sesuai instruksi pengguna. */
+export function aiRevisePrompt(doc, instruction = '') {
+  const ins = instruction.trim() || '[TULIS DI SINI: perubahan yang diinginkan, mis. "pecah langkah 3 menjadi dua", "rapikan keterangan", "tambahkan dasar hukum terbaru"]';
+  return `Berikut dokumen SOP (Standar Operasional Prosedur) dalam format JSON aplikasi "SOP Editor". Revisi dokumen ini sesuai instruksi, lalu kembalikan dokumen LENGKAP hasil revisinya.
+
+INSTRUKSI REVISI:
+${ins}
+
+ATURAN REVISI:
+- Ubah hanya bagian yang diminta instruksi; bagian lain disalin persis apa adanya (teks, format, urutan, dan "id").
+- Pertahankan "id" pelaksana dan langkah yang sudah ada. Langkah atau pelaksana baru diberi id baru yang belum dipakai.
+- Bila langkah dihapus atau disisipkan, periksa kembali "next" dan "alt" langkah lain agar alur tetap benar.
+- Bila instruksi tidak jelas atau tidak bisa dilakukan, tetap kembalikan dokumen utuh tanpa perubahan pada bagian itu.
+
+${formatRules(`- header: salin dari dokumen kecuali instruksi meminta perubahan. Tanggal memakai format YYYY-MM-DD.`)}
+
+DOKUMEN SAAT INI:
+${JSON.stringify(docForAi(doc), null, 2)}`;
 }
 
 /**

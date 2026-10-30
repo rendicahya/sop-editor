@@ -41,8 +41,18 @@
 
   function moveStep(f) {
     const s = app.doc.steps.find((s) => s.id === f.step);
-    if (s) s.actor = f.actor;
+    if (!s) return;
+    s.actor = f.actor;
+    if (s.with?.includes(f.actor)) setWith(s, s.with.filter((id) => id !== f.actor));
   }
+
+  /** Pelaksana lain pada kegiatan bersama; daftar kosong menghapus kuncinya. */
+  function setWith(s, ids) {
+    const list = actors.map((a) => a.id).filter((id) => ids.includes(id) && id !== s.actor);
+    if (list.length) s.with = list;
+    else delete s.with;
+  }
+  const toggleWith = (s, id) => setWith(s, s.with?.includes(id) ? s.with.filter((x) => x !== id) : [...(s.with ?? []), id]);
 
   // Kelompok isian yang sedang disorot/difokus (pelaksana atau baris langkah): alatnya ditampilkan.
   let hover = $state(null);
@@ -68,7 +78,12 @@
   const actorLock = (a) =>
     !a ? 'Tidak ditemukan' : actors.length <= 1 ? 'Minimal harus ada satu pelaksana' : usage(a.id) ? `Tidak bisa dihapus: ${usage(a.id)} langkah dilakukan pelaksana ini` : '';
   function removeActor(i) {
-    if (!actorLock(actors[i])) actors.splice(i, 1);
+    if (actorLock(actors[i])) return;
+    const id = actors[i].id;
+    asStep(() => {
+      actors.splice(i, 1);
+      for (const s of steps) if (s.with?.includes(id)) setWith(s, s.with);
+    });
   }
 
   function addStep(i) {
@@ -433,6 +448,19 @@
                 {/each}
               </select>
             </label>
+            {#if actors.length > 1}
+              <div class="with" role="group" aria-label="Kegiatan bersama">
+                <span title="Simbol membentang sampai lajur pelaksana yang dipilih">Dilakukan bersama</span>
+                <span class="chips">
+                  {#each actors as a, j (a.id)}
+                    {#if a.id !== s.actor}
+                      {@const on = !!s.with?.includes(a.id)}
+                      <button class:on aria-pressed={on} onclick={() => asStep(() => toggleWith(s, a.id))}>{a.name || `Pelaksana ${j + 1}`}</button>
+                    {/if}
+                  {/each}
+                </span>
+              </div>
+            {/if}
             {#if dec}
               <label>
                 <span>Label ya</span>
@@ -874,6 +902,32 @@
   .shape-menu label span {
     font-size: 11px;
     color: #5b6577;
+  }
+  .with {
+    display: grid;
+    gap: 3px;
+  }
+  .with > span:first-child {
+    font-size: 11px;
+    color: #5b6577;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+  .chips button {
+    padding: 3px 7px;
+    border: 1px solid rgb(var(--edit) / 0.5);
+    border-radius: 999px;
+    background: #fff;
+    color: rgb(var(--edit));
+    font: 600 11px/1.1 var(--ui-font);
+    cursor: pointer;
+  }
+  .chips button.on {
+    background: rgb(var(--edit));
+    color: #fff;
   }
   .shape-menu select,
   .shape-menu input {

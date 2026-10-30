@@ -24,6 +24,8 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   pelaksana (hanya bila tidak ada langkah di lajurnya); sorot baris langkah untuk menaikkan/menurunkan,
   menduplikat, menambah, atau menghapus kegiatan.
   Klik simbol untuk mengganti jenisnya dan tujuan alurnya (untuk Keputusan: cabang ya/tidak beserta labelnya).
+- **Kegiatan bersama beberapa pelaksana**: di menu simbol, pilih pelaksana lain pada "Dilakukan bersama"; simbolnya
+  membentang dari lajur pelaksana paling kiri sampai paling kanan (di pratinjau, PDF, dan DOCX).
 - **Format teks tebal, miring, dan garis bawah** pada butir ketentuan dan sel tabel langkah (Kegiatan, Kelengkapan,
   Waktu, Output, Keterangan): tombol **B / I / U** di bar tab atau Ctrl+B / Ctrl+I / Ctrl+U. Format ikut tercetak di
   pratinjau, PDF, dan DOCX.
@@ -38,7 +40,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   simbol, lalu seret kotak kecil pada ruas garis untuk menggesernya. Posisi disimpan relatif terhadap lajur dan baris,
   jadi tetap berlaku saat tata letak berubah. "Kembalikan jalur otomatis" menghapus pengaturan manualnya.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
-- **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Buat dengan AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab tersimpan otomatis di browser; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
+- **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Asisten AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab tersimpan otomatis di browser; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
   halaman diagram alir menjadi tabel dengan kolom/baris berukuran sama persis seperti pratinjau. Teks semua sel bisa
@@ -55,9 +57,10 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - Simpan/buka berkas `.sop` (berkas `.json` lama tetap bisa dibuka), seret-lepas berkas ke jendela, simpan otomatis ke browser, Undo/Redo.
 - **Kolaborasi real-time** tanpa server: edit satu dokumen bersama lewat tautan undangan, lihat siapa sedang
   mengedit bagian mana, dan ketik bersamaan di kolom yang sama tanpa saling menimpa.
-- **Buat dengan AI**: salin prompt siap pakai ke asisten AI, lalu tempel jawabannya untuk langsung
-  diedit dan diekspor. Bisa menyusun SOP baru dari deskripsi, atau **mengimpor SOP lama** (PDF, Word, foto/pindaian)
-  yang dilampirkan di chat AI, termasuk diagram alir dan formatnya.
+- **Asisten AI**: salin prompt siap pakai ke asisten AI, lalu tempel jawabannya untuk langsung
+  diedit dan diekspor. Bisa menyusun SOP baru dari deskripsi, **mengimpor SOP lama** (PDF, Word, foto/pindaian)
+  yang dilampirkan di chat AI, termasuk diagram alir dan formatnya, atau **merevisi SOP yang sedang dibuka** sesuai
+  instruksi ("pecah langkah 3", "rapikan keterangan").
 - **Cari & ganti** teks di seluruh dokumen (identitas, ketentuan, pelaksana, langkah), per kolom atau sekaligus.
 - Mode layar penuh serta mode terang/gelap (mengikuti sistem secara bawaan; halaman dokumen tetap putih).
 - Bisa dipasang sebagai aplikasi (PWA), bekerja offline, dan membuka berkas `.sop` lewat "Buka dengan".
@@ -85,9 +88,9 @@ Di browser lain, berkas diunduh.
 
 Tombol **Contoh** memuat contoh SOP Skripsi untuk melihat semua fitur.
 
-### Buat dengan AI
+### Asisten AI
 
-1. Klik **Buat dengan AI**, tulis deskripsi singkat prosesnya (opsional), lalu **Salin prompt**.
+1. Klik **Asisten AI**, tulis deskripsi singkat prosesnya (opsional), lalu **Salin prompt**.
 2. Tempel prompt ke asisten AI. Prompt berisi aturan format, contoh, serta nama dan NIP dekan bawaan sebagai pengesah, sehingga AI menjawab
    dengan JSON dokumen SOP.
 3. Salin jawabannya ke kolom **Tempel jawaban AI** lalu **Buka di editor**, atau unduh berkas `.json` dari AI lalu buka
@@ -98,6 +101,11 @@ meminta AI menyalin teks apa adanya, membaca pelaksana dari kolom letak simbol, 
 serta mempertahankan teks tebal/miring/garis bawah. Secara bawaan kop instansi dan pengesah diperbarui ke bawaan saat
 ini (bisa dimatikan). Catatan tambahan untuk AI bisa ditulis di dialog. Bandingkan hasilnya dengan dokumen asli,
 terutama arah panah.
+
+**Revisi SOP ini:** pilih tab **Revisi SOP ini**, tulis instruksi perubahan, lalu salin prompt. Prompt berisi seluruh
+dokumen yang sedang dibuka (tanpa gambar tanda tangan) dan meminta AI mengubah hanya bagian yang diminta serta
+mempertahankan id langkah. Jawaban yang ditempel menggantikan dokumen aktif sebagai satu langkah Undo; tanda tangan dan
+jalur garis manual dipertahankan.
 
 Pembuka JSON sengaja toleran terhadap jawaban AI: teks pengantar dan pembungkus ```` ```json ```` diabaikan,
 `format` boleh tidak ada, `<strong>`/`<em>`/`**tebal**` diseragamkan menjadi tag format, `actor` boleh berisi nama pelaksana (pelaksana baru ditambahkan otomatis), id yang hilang
@@ -176,6 +184,7 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
   "actors": [{ "id": "a1", "name": "Mahasiswa" }],
   "steps": [{
     "id": "s1", "kegiatan": "...", "actor": "a1", "shape": "terminator | process | decision",
+    "with": ["a2"], // opsional: pelaksana lain pada kegiatan bersama
     "kelengkapan": "", "waktu": "", "output": "", "keterangan": "",
     "next": "auto | none | <id langkah>", "alt": "<id langkah> | null",
     "yesLabel": "Ya", "noLabel": "Tidak"
@@ -191,7 +200,6 @@ tetap apa adanya. Kolom lain selalu teks polos.
 
 **Diagram alir**
 - Latar putih di belakang label cabang agar tidak tertimpa garis tabel.
-- Satu langkah dengan lebih dari satu pelaksana (aktivitas paralel / bersama).
 - Simbol tambahan: dokumen, data/arsip, dan sub-proses yang merujuk ke SOP lain.
 - Klik simbol di pratinjau untuk langsung membuka langkah terkait di editor.
 - Peringatan validasi: langkah yang tidak terjangkau, keputusan tanpa cabang "tidak", alur tanpa titik akhir.
@@ -219,7 +227,6 @@ tetap apa adanya. Kolom lain selalu teks polos.
 
 **AI**
 - Integrasi langsung dengan API penyedia AI (kunci API milik pengguna) agar SOP dibuat tanpa salin-tempel.
-- Revisi dengan AI: kirim dokumen yang sedang dibuka beserta instruksi ("pecah langkah 3", "rapikan keterangan").
 - Buat SOP dari notulen atau peraturan (impor SOP lama sudah tersedia).
 
 **Editor**

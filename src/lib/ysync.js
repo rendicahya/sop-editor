@@ -3,7 +3,7 @@
 import * as Y from 'yjs';
 
 // Nilai yang harus diganti utuh, bukan digabung per karakter (id, pilihan, tanggal, data gambar).
-const ATOMIC = new Set(['id', 'actor', 'step', 'from', 'to', 'shape', 'next', 'alt', 'src', 'format', 'tglPembuatan', 'tglRevisi', 'tglEfektif']);
+const ATOMIC = new Set(['id', 'actor', 'step', 'from', 'to', 'shape', 'next', 'alt', 'with', 'src', 'format', 'tglPembuatan', 'tglRevisi', 'tglEfektif']);
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const hasId = (v) => isObj(v) && typeof v.id === 'string';
@@ -12,7 +12,7 @@ const yId = (v) => (v instanceof Y.Map ? v.get('id') : undefined);
 function toY(v, key) {
   if (Array.isArray(v)) {
     const a = new Y.Array();
-    a.insert(0, v.map((x) => toY(x, null)));
+    a.insert(0, v.map((x) => toY(x, ATOMIC.has(key) ? key : null))); // daftar id (mis. `with`) tetap atomik
     return a;
   }
   if (isObj(v)) {
@@ -30,7 +30,7 @@ const same = (y, v) => JSON.stringify(plain(y)) === JSON.stringify(v);
 /** Memperbarui nilai Yjs `cur` menjadi `v` di tempat bila tipenya cocok; mengembalikan false bila harus diganti. */
 function update(cur, v, key) {
   if (cur instanceof Y.Map && isObj(v)) syncMap(cur, v);
-  else if (cur instanceof Y.Array && Array.isArray(v)) syncArray(cur, v);
+  else if (cur instanceof Y.Array && Array.isArray(v)) syncArray(cur, v, key);
   else if (cur instanceof Y.Text && typeof v === 'string' && !ATOMIC.has(key)) syncText(cur, v);
   else return cur === v;
   return true;
@@ -56,7 +56,8 @@ function syncText(ytext, s) {
   if (s.length - p - q > 0) ytext.insert(p, s.slice(p, s.length - q));
 }
 
-function syncArray(yarr, arr) {
+function syncArray(yarr, arr, key = null) {
+  const ek = ATOMIC.has(key) ? key : null;
   if (arr.every(hasId) && yarr.toArray().every((x) => yId(x) !== undefined)) {
     // Daftar ber-id (langkah, pelaksana): hapus, pindahkan, dan sisipkan per id.
     const ids = new Set(arr.map((x) => x.id));
@@ -84,9 +85,9 @@ function syncArray(yarr, arr) {
   // Daftar tanpa id (butir teks): bila panjang sama, edit per posisi; bila tidak, ganti bagian tengah yang berbeda.
   if (yarr.length === arr.length) {
     for (let i = 0; i < arr.length; i++) {
-      if (!update(yarr.get(i), arr[i], null)) {
+      if (!update(yarr.get(i), arr[i], ek)) {
         yarr.delete(i, 1);
-        yarr.insert(i, [toY(arr[i], null)]);
+        yarr.insert(i, [toY(arr[i], ek)]);
       }
     }
     return;
@@ -96,7 +97,7 @@ function syncArray(yarr, arr) {
   let q = 0;
   while (q < yarr.length - p && q < arr.length - p && same(yarr.get(yarr.length - 1 - q), arr[arr.length - 1 - q])) q++;
   if (yarr.length - p - q > 0) yarr.delete(p, yarr.length - p - q);
-  if (arr.length - p - q > 0) yarr.insert(p, arr.slice(p, arr.length - q).map((x) => toY(x, null)));
+  if (arr.length - p - q > 0) yarr.insert(p, arr.slice(p, arr.length - q).map((x) => toY(x, ek)));
 }
 
 /**

@@ -357,10 +357,21 @@
 
   // Jawaban AI yang ditempel: dokumen baru tanpa berkas.
   let aiOpen = $state(false);
-  function loadPasted(text) {
+  // `revise`: jawaban menggantikan dokumen aktif (bisa di-Undo); tanda tangan dan jalur manual dipulihkan.
+  function loadPasted(text, revise = false) {
     if (shared && !confirm(`Ganti dokumen${shared} dengan jawaban AI ini?`)) return false;
     try {
-      openInTab(parseDocumentText(text));
+      const doc = parseDocumentText(text);
+      if (revise) {
+        const old = $state.snapshot(app.doc);
+        doc.header.signature ??= old.header.signature;
+        const routes = new Map(old.steps.filter((s) => s.route).map((s) => [s.id, s.route]));
+        for (const s of doc.steps) if (routes.has(s.id)) s.route = routes.get(s.id);
+        replaceDocument(doc, app.fileName, app.fileHandle);
+        notify('Revisi dari AI diterapkan — periksa kembali isinya (Ctrl+Z untuk membatalkan)');
+        return true;
+      }
+      openInTab(doc);
       notify('Dokumen dari AI dibuka — periksa kembali isinya sebelum diekspor');
       return true;
     } catch (e) {
@@ -509,7 +520,7 @@
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)">Buka</button>
       <button class="btn ghost" onclick={() => save(false)} title="Simpan sebagai berkas .sop (Ctrl+S)">Simpan</button>
-      <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP baru atau impor SOP lama (PDF/Word) dengan bantuan asisten AI">Buat dengan AI</button>
+      <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP baru, impor SOP lama (PDF/Word), atau revisi SOP ini dengan bantuan asisten AI">Asisten AI</button>
       <span class="sep"></span>
       <button class="icon" onclick={undo} disabled={!undoable} title="Urungkan (Ctrl+Z)">↶</button>
       <button class="icon" onclick={redo} disabled={!redoable} title="Ulangi (Ctrl+Y)">↷</button>

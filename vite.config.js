@@ -16,7 +16,7 @@ export default defineConfig({
       manifest: {
         name: 'SOP Editor',
         short_name: 'SOP Editor',
-        description: 'Buat dan edit dokumen SOP, simpan sebagai berkas .sop, ekspor ke PDF dan Word.',
+        description: 'Buat dan edit dokumen SOP, ekspor ke PDF dan Word.',
         lang: 'id',
         theme_color: '#1f4e8c',
         background_color: '#f3f4f6',
