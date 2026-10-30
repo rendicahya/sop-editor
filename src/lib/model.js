@@ -298,9 +298,36 @@ export function normalizeDocument(raw) {
     const n = str(s?.next).trim().toLowerCase();
     steps[i].next = !n || n === 'auto' ? 'auto' : n === 'none' ? 'none' : (target(s.next) ?? 'auto');
     steps[i].alt = target(s?.alt);
+    const route = normalizeRoute(s?.route, actors, ids);
+    if (route) steps[i].route = route;
   });
 
   return { format: FORMAT, version: VERSION, header, sections, actors, steps };
+}
+
+const EXIT_SIDES = ['bottom', 'left', 'right'];
+const ENTRY_SIDES = ['top', 'bottom', 'left', 'right'];
+
+/**
+ * Jalur manual garis alur per cabang (`next`, `alt`): sisi keluar (`from`), sisi masuk (`to`),
+ * posisi ruas tegak `x` ({ actor, f }) dan ruas mendatar `y` ({ step, f }), f = pecahan 0–1 lebar lajur/tinggi baris.
+ */
+function normalizeRoute(raw, actors, ids) {
+  if (!raw || typeof raw !== 'object') return null;
+  const frac = (v) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : null);
+  const out = {};
+  for (const b of ['next', 'alt']) {
+    const r = raw[b];
+    if (!r || typeof r !== 'object') continue;
+    const o = {};
+    if (EXIT_SIDES.includes(r.from)) o.from = r.from;
+    if (ENTRY_SIDES.includes(r.to)) o.to = r.to;
+    if (actors.some((a) => a.id === r.x?.actor) && frac(r.x.f) !== null) o.x = { actor: r.x.actor, f: r.x.f };
+    const step = ids.get(String(r.y?.step ?? ''));
+    if (step && frac(r.y.f) !== null) o.y = { step, f: r.y.f };
+    if (Object.keys(o).length) out[b] = o;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 function isImage(v) {

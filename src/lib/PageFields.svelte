@@ -1,5 +1,12 @@
+<script module>
+  // Garis alur yang sedang dipilih ({ step, branch, fid, mx, my }); dipakai bersama semua halaman
+  // karena garis antarhalaman terdiri atas dua bagian.
+  let edgeSel = $state(null);
+</script>
+
 <script>
   import { tick } from 'svelte';
+  import { asStep } from './history.js';
   import { app } from './store.svelte.js';
   import { readImage } from './files.js';
   import { PT } from './layout.js';
@@ -75,7 +82,8 @@
     [steps[i], steps[j]] = [steps[j], steps[i]];
   }
   function duplicateStep(i) {
-    steps.splice(i + 1, 0, { ...$state.snapshot(steps[i]), id: uid(), next: 'auto', alt: null });
+    const { route: _, ...copy } = $state.snapshot(steps[i]);
+    steps.splice(i + 1, 0, { ...copy, id: uid(), next: 'auto', alt: null });
   }
   // Peserta kolaborasi yang sedang mengedit langkah ini.
   const editors = (id) => collab.peers.filter((p) => p.focus?.step === id);
@@ -88,7 +96,83 @@
   };
   function closeMenu(e) {
     if (menu && !e.target.closest?.('.f-shape')) menu = null;
+    if (edgeSel && !e.target.closest?.('.e-hit, .e-handle, .edge-menu')) edgeSel = null;
   }
+
+  // Jalur manual garis alur: pilih sisi keluar/masuk dan seret ruas garis (lihat layout.js).
+  const SIDE_OUT = [['', 'Otomatis'], ['bottom', 'Bawah'], ['left', 'Kiri'], ['right', 'Kanan']];
+  const SIDE_IN = [['', 'Otomatis'], ['top', 'Atas'], ['bottom', 'Bawah'], ['left', 'Kiri'], ['right', 'Kanan']];
+  const routeOf = (f) => steps.find((s) => s.id === f.step)?.route?.[f.branch] ?? null;
+  const isSel = (f) => edgeSel?.step === f.step && edgeSel?.branch === f.branch;
+  const clamp01 = (v) => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000;
+
+  /** Mengubah jalur manual satu cabang; nilai null menghapus kuncinya (semua kosong = otomatis). */
+  function setRoute(f, patch) {
+    const s = steps.find((s) => s.id === f.step);
+    if (!s) return;
+    asStep(() => {
+      const all = $state.snapshot(s.route) ?? {};
+      const r = { ...all[f.branch], ...patch };
+      for (const k of Object.keys(r)) if (r[k] == null) delete r[k];
+      if (Object.keys(r).length) all[f.branch] = r;
+      else delete all[f.branch];
+      if (Object.keys(all).length) s.route = all;
+      else delete s.route;
+    });
+  }
+
+  let root = $state();
+  /** Posisi penunjuk dalam mm halaman. */
+  function toMm(e) {
+    const r = root.getBoundingClientRect();
+    const k = 297 / r.width;
+    return [(e.clientX - r.left) * k, (e.clientY - r.top) * k];
+  }
+  function pickEdge(e, f) {
+    const [mx, my] = toMm(e);
+    edgeSel = { step: f.step, branch: f.branch, fid: f.id, mx, my };
+    menu = null;
+  }
+
+  // Seret ruas: ruas tegak bergeser mendatar (menjadi `x`), ruas mendatar bergeser tegak (menjadi `y`).
+  let drag = $state(null);
+  const segments = (pts) =>
+    pts.slice(1).map((b, i) => ({ i, a: pts[i], b, vertical: Math.abs(pts[i][0] - b[0]) < 0.01 })).filter((s) => Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]) >= 3);
+  function startDrag(e, f, seg) {
+    e.preventDefault();
+    const [mx, my] = toMm(e);
+    drag = { fid: f.id, f, seg, start: seg.vertical ? mx : my, d: 0 };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function moveDrag(e) {
+    if (!drag) return;
+    const [mx, my] = toMm(e);
+    drag.d = (drag.seg.vertical ? mx : my) - drag.start;
+  }
+  function endDrag() {
+    if (!drag) return;
+    const { f, seg, d } = drag;
+    drag = null;
+    if (Math.abs(d) < 0.5) return;
+    if (seg.vertical) {
+      const v = seg.a[0] + d;
+      const lane = f.lanes.find((l) => v >= l.x && v < l.x + l.w) ?? (v < f.lanes[0].x ? f.lanes[0] : f.lanes.at(-1));
+      setRoute(f, { x: { actor: lane.actor, f: clamp01((v - lane.x) / lane.w) } });
+    } else if (f.rows.length) {
+      const v = seg.a[1] + d;
+      const dist = (r) => (v < r.y ? r.y - v : v > r.y + r.h ? v - r.y - r.h : 0);
+      const row = f.rows.reduce((p, r) => (dist(r) < dist(p) ? r : p));
+      setRoute(f, { y: { step: row.step, f: clamp01((v - row.y) / row.h) } });
+    }
+  }
+  /** Titik garis, dengan ruas yang sedang diseret digeser (pratinjau). */
+  function shown(f) {
+    if (drag?.fid !== f.id) return f.pts;
+    const { seg, d } = drag;
+    const mv = (p) => (seg.vertical ? [p[0] + d, p[1]] : [p[0], p[1] + d]);
+    return [...f.pts.slice(0, seg.i + 1), mv(seg.a), mv(seg.b), ...f.pts.slice(seg.i + 1)];
+  }
+  const ptsAttr = (pts) => pts.map((p) => p.join(',')).join(' ');
 
   /** Fokus ke isian `id` setelah tata letak diperbarui, dengan kursor di posisi `caret`. */
   async function focusField(id, caret = null) {
@@ -187,7 +271,8 @@
     (f.pad ? `padding:calc(${f.pad} * var(--mm));` : '');
 </script>
 
-<svelte:window onpointerdown={closeMenu} onkeydown={(e) => e.key === 'Escape' && (menu = null)} /><div
+<svelte:window onpointerdown={closeMenu} onkeydown={(e) => e.key === 'Escape' && (menu = edgeSel = null)} /><div
+  bind:this={root}
   class="fields"
   inert={!editable}
   onpointerover={(e) => (hover = groupOf(e))}
@@ -370,6 +455,67 @@
           </div>
         {/if}
       </div>
+    {:else if f.kind === 'edge'}
+      {@const sel = isSel(f)}
+      {@const pts = shown(f)}
+      <svg class="f-edge" class:sel viewBox="0 0 297 210" aria-hidden={!sel}>
+        <polyline
+          class="e-hit"
+          points={ptsAttr(f.pts)}
+          role="button"
+          tabindex="-1"
+          aria-label="Atur jalur garis"
+          onpointerdown={(e) => pickEdge(e, f)}
+        ><title>Klik untuk mengatur jalur garis</title></polyline>
+        {#if sel}
+          <polyline class="e-line" points={ptsAttr(pts)} />
+          {#each segments(f.pts) as seg (seg.i)}
+            <rect
+              class="e-handle"
+              class:v={seg.vertical}
+              x={(seg.a[0] + seg.b[0]) / 2 - 1.1 + (drag?.fid === f.id && drag.seg.i === seg.i && seg.vertical ? drag.d : 0)}
+              y={(seg.a[1] + seg.b[1]) / 2 - 1.1 + (drag?.fid === f.id && drag.seg.i === seg.i && !seg.vertical ? drag.d : 0)}
+              width="2.2"
+              height="2.2"
+              rx="0.5"
+              role="slider"
+              tabindex="-1"
+              aria-label="Geser ruas garis"
+              aria-valuenow={seg.vertical ? seg.a[0] : seg.a[1]}
+              onpointerdown={(e) => startDrag(e, f, seg)}
+              onpointermove={moveDrag}
+              onpointerup={endDrag}
+              onpointercancel={() => (drag = null)}
+            ><title>Seret untuk menggeser ruas</title></rect>
+          {/each}
+        {/if}
+      </svg>
+      {#if sel && edgeSel.fid === f.id}
+        {@const r = routeOf(f)}
+        <div
+          class="edge-menu"
+          class:up={edgeSel.my > 120}
+          class:left={edgeSel.mx > 200}
+          style="left:calc({edgeSel.mx} * var(--mm));top:calc({edgeSel.my} * var(--mm))"
+          role="dialog"
+          aria-label="Jalur garis"
+        >
+          <span class="lbl">Keluar dari</span>
+          <div class="seg" role="group" aria-label="Sisi keluar">
+            {#each SIDE_OUT as [v, label] (v)}
+              <button class:on={(r?.from ?? '') === v} aria-pressed={(r?.from ?? '') === v} onclick={() => setRoute(f, { from: v || null })}>{label}</button>
+            {/each}
+          </div>
+          <span class="lbl">Masuk ke</span>
+          <div class="seg" role="group" aria-label="Sisi masuk">
+            {#each SIDE_IN as [v, label] (v)}
+              <button class:on={(r?.to ?? '') === v} aria-pressed={(r?.to ?? '') === v} onclick={() => setRoute(f, { to: v || null })}>{label}</button>
+            {/each}
+          </div>
+          <p class="hint">Seret kotak kecil pada garis untuk menggeser ruasnya.</p>
+          <button class="reset" disabled={!r} onclick={() => setRoute(f, { from: null, to: null, x: null, y: null })}>Kembalikan jalur otomatis</button>
+        </div>
+      {/if}
     {:else if f.kind === 'add-step'}
       <button class="f-empty f-hint" style={box(f)} onclick={() => addStep(-1)}>+ Tambah kegiatan</button>
     {:else if f.kind === 'empty'}
@@ -739,6 +885,90 @@
     border-radius: 5px;
     background: #fff;
     color: #1f2633;
+  }
+  .f-edge {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+  .f-edge.sel {
+    z-index: 4;
+  }
+  .e-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 2.2;
+    stroke-linejoin: round;
+    pointer-events: stroke;
+    cursor: pointer;
+    outline: none;
+  }
+  .e-hit:hover {
+    stroke: rgb(var(--edit) / 0.2);
+  }
+  .e-line {
+    fill: none;
+    stroke: rgb(var(--edit));
+    stroke-width: 0.6;
+    stroke-linejoin: round;
+  }
+  .e-handle {
+    fill: #fff;
+    stroke: rgb(var(--edit));
+    stroke-width: 0.35;
+    pointer-events: all;
+    cursor: ns-resize;
+    outline: none;
+  }
+  .e-handle.v {
+    cursor: ew-resize;
+  }
+  .e-handle:hover {
+    fill: rgb(var(--edit));
+  }
+  .edge-menu {
+    z-index: 6;
+    width: 260px;
+    display: grid;
+    gap: 5px;
+    margin: 10px 0 0 -20px;
+    padding: 8px;
+    font: 12px/1.2 var(--ui-font);
+    color: #1f2633;
+    background: #fff;
+    border: 1px solid rgb(var(--edit) / 0.4);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+  }
+  .edge-menu.up {
+    transform: translateY(calc(-100% - 20px));
+  }
+  .edge-menu.left {
+    margin-left: -240px;
+  }
+  .edge-menu .lbl {
+    font-size: 11px;
+    color: #5b6577;
+  }
+  .edge-menu .hint {
+    margin: 2px 0 0;
+    font-size: 11px;
+    color: #5b6577;
+  }
+  .edge-menu .reset {
+    padding: 5px 8px;
+    font: 600 11px/1.1 var(--ui-font);
+    border: 1px solid rgb(var(--edit) / 0.5);
+    border-radius: 6px;
+    background: #fff;
+    color: rgb(var(--edit));
+    cursor: pointer;
+  }
+  .edge-menu .reset:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
   .err {
     font: 11px var(--ui-font);

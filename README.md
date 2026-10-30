@@ -34,6 +34,9 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   daftar. Baris lanjutan butir menjorok rata dengan teksnya di pratinjau, PDF, dan DOCX.
 - Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" pada keputusan dan konektor antarhalaman (A, B, …). Jalur garis dicari otomatis agar tidak menembus simbol dan tidak saling menumpuk.
+- **Atur jalur garis secara manual** bila jalur otomatis kurang rapi: klik garis untuk memilih sisi keluar/masuk
+  simbol, lalu seret kotak kecil pada ruas garis untuk menggesernya. Posisi disimpan relatif terhadap lajur dan baris,
+  jadi tetap berlaku saat tata letak berubah. "Kembalikan jalur otomatis" menghapus pengaturan manualnya.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
 - **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Buat dengan AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab tersimpan otomatis di browser; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
@@ -187,7 +190,6 @@ tetap apa adanya. Kolom lain selalu teks polos.
 ## Rencana Pengembangan (Future Works)
 
 **Diagram alir**
-- Penyesuaian manual jalur konektor (geser titik belok, pilih sisi keluar/masuk) bila jalur otomatis bersilangan.
 - Latar putih di belakang label cabang agar tidak tertimpa garis tabel.
 - Satu langkah dengan lebih dari satu pelaksana (aktivitas paralel / bersama).
 - Simbol tambahan: dokumen, data/arsip, dan sub-proses yang merujuk ke SOP lain.

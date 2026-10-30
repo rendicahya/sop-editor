@@ -364,10 +364,10 @@ function layoutFlow(doc, pages) {
   steps.forEach((s, i) => {
     let to = s.next === 'auto' ? (i + 1 < steps.length ? i + 1 : null) : s.next === 'none' ? null : idx.get(s.next) ?? null;
     const dec = s.shape === 'decision';
-    if (to !== null && to !== i) edges.push({ from: i, to, alt: false, label: dec ? s.yesLabel : '' });
+    if (to !== null && to !== i) edges.push({ from: i, to, alt: false, label: dec ? s.yesLabel : '', branch: 'next', route: s.route?.next });
     if (dec && s.alt) {
       const a = idx.get(s.alt);
-      if (a !== undefined && a !== i) edges.push({ from: i, to: a, alt: true, label: s.noLabel });
+      if (a !== undefined && a !== i) edges.push({ from: i, to: a, alt: true, label: s.noLabel, branch: 'alt', route: s.route?.alt });
     }
   });
 
@@ -462,10 +462,29 @@ function layoutFlow(doc, pages) {
   }
   const topPortY = bodyTop + BAND / 2 + R; // ujung bawah konektor di pita atas
   const botPortY = (q) => bandBottomY[q] + BAND / 2 - R; // ujung atas konektor di pita bawah
+
+  // Jalur manual: ruas tegak digeser ke posisi di lajur pelaksana (`x`), ruas mendatar ke posisi di
+  // baris langkah (`y`). Posisi disimpan relatif (pelaksana/langkah + pecahan) agar tetap berlaku
+  // saat tata letak berubah; garisnya tetap dirutekan otomatis dengan preferensi melewati posisi itu.
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, Number(v) || 0));
+  for (const e of edges) {
+    const r = e.route;
+    if (!r) continue;
+    const j = actorIdx.get(r.x?.actor);
+    const via = {};
+    if (j !== undefined) via.x = snap(x.act + (j + clamp(r.x.f, 0.08, 0.92)) * actW);
+    const i = idx.get(r.y?.step);
+    if (i !== undefined) (via.y = snap(rowY[i] + clamp(r.y.f, 0.04, 0.96) * rows[i].h)), (via.page = pageOf[i]);
+    e.via = via;
+  }
   const grids = pageObjs.map((_, q) => {
     const ids = rows.map((_, i) => i).filter((i) => pageOf[i] === q);
     const xs = [...colXs];
     const ys = [];
+    for (const e of edges) {
+      if (e.via?.x != null) xs.push(e.via.x);
+      if (e.via?.page === q) ys.push(e.via.y);
+    }
     for (const i of ids) {
       const t = rowY[i];
       const h = rows[i].h;
@@ -490,6 +509,10 @@ function layoutFlow(doc, pages) {
     ...p, cost: p.off * 0.4 + (forward ? { top: 0, left: 14, right: 14, bottom: 20 } : { top: 15, left: 3, right: 3, bottom: 3 })[p.side]
   }));
 
+  // Geometri lajur dan baris untuk isian garis: posisi seret diubah menjadi posisi relatif jalur manual.
+  const lanes = actors.map((a, j) => ({ actor: a.id, x: x.act + j * actW, w: actW }));
+  const rowsOn = pageObjs.map((_, q) => rows.map((r, i) => ({ step: r.step.id, y: rowY[i], h: r.h })).filter((_, i) => pageOf[i] === q));
+
   const order = edges.map((_, k) => k).sort((a, b) => {
     const A = edges[a];
     const B = edges[b];
@@ -502,26 +525,35 @@ function layoutFlow(doc, pages) {
     const ps = pageOf[e.from];
     const pd = pageOf[e.to];
     const forward = e.to > e.from;
-    const starts = exits(s, forward && !e.alt);
+    const side = (ports, want) => (want && ports.some((p) => p.side === want) ? ports.filter((p) => p.side === want) : ports);
+    const starts = side(exits(s, forward && !e.alt), e.route?.from);
+    const goals = side(entries(d, forward), e.route?.to);
+    const via = (q) => (e.via ? { x: e.via.x, y: e.via.page === q ? e.via.y : undefined } : null);
+    const sid = steps[e.from].id;
+    const edgeField = (q, pts, part) =>
+      pageObjs[q].fields.push({ id: `cn:${sid}:${e.branch}${part}`, kind: 'edge', step: sid, branch: e.branch, pts, lanes, rows: rowsOn[q] });
 
     let first;
     if (ps === pd) {
-      first = findPath(grids[ps], starts, entries(d, forward)) ?? [[s.cx, s.bottom], [d.cx, d.top]];
+      first = findPath(grids[ps], starts, goals, via(ps)) ?? [[s.cx, s.bottom], [d.cx, d.top]];
       lines[ps].push(first);
+      edgeField(ps, first, '');
     } else {
       const tag = String.fromCharCode(65 + (letter++ % 26)) + (letter > 26 ? Math.floor((letter - 1) / 26) : '');
       const [srcUsed, srcY, srcD, dstUsed, dstY, dstD] = forward
         ? [bands[ps].bot, botPortY(ps), 1, bands[pd].top, topPortY, 1]
         : [bands[ps].top, topPortY, 3, bands[pd].bot, botPortY(pd), 3];
-      first = findPath(grids[ps], starts, connPorts(srcUsed, srcY, srcD)) ?? [[s.cx, s.bottom], [s.cx, srcY]];
+      first = findPath(grids[ps], starts, connPorts(srcUsed, srcY, srcD), via(ps)) ?? [[s.cx, s.bottom], [s.cx, srcY]];
       const x1 = first.at(-1)[0];
       srcUsed.push(x1);
       lines[ps].push(first);
+      edgeField(ps, first, '');
       labels[ps].push(...connector(x1, srcY + (forward ? R : -R), R, tag));
-      const second = findPath(grids[pd], connPorts(dstUsed, dstY, dstD, x1), entries(d, forward)) ?? [[x1, dstY], [d.cx, d.top]];
+      const second = findPath(grids[pd], connPorts(dstUsed, dstY, dstD, x1), goals, via(pd)) ?? [[x1, dstY], [d.cx, d.top]];
       const x2 = second[0][0];
       dstUsed.push(x2);
       lines[pd].push(second);
+      edgeField(pd, second, ':2');
       labels[pd].push(...connector(x2, dstY + (forward ? -R : R), R, tag));
     }
 
@@ -572,6 +604,7 @@ const CELL_FIELDS = [
 const BEND = 6;
 const OVER = 400;
 const CROSS = 2;
+const VIA = 8;
 const snap = (v) => Math.round(v * 100) / 100;
 
 function insideBox(b, px, py, mg) {
@@ -627,8 +660,13 @@ function makeGrid(xsIn, ysIn, boxes, yMin, yMax) {
   };
 }
 
-/** Jalur termurah dari salah satu `starts` ke salah satu `goals`; ditandai terpakai pada kisi. */
-function findPath(g, starts, goals) {
+/**
+ * Jalur termurah dari salah satu `starts` ke salah satu `goals`; ditandai terpakai pada kisi.
+ * `via` (opsional): ruas tegak diarahkan ke x = via.x dan ruas mendatar ke y = via.y (jalur manual).
+ */
+function findPath(g, starts, goals, via = null) {
+  const vx = via?.x ?? null;
+  const vy = via?.y ?? null;
   const S = g.N * 4;
   const avail = (list) => {
     const free = list.filter((p) => !g.ports.has(g.node(p.x, p.y)));
@@ -684,6 +722,7 @@ function findPath(g, starts, goals) {
       else if (g.pass[k] & (nd % 2 ? 1 : 2)) nc += CROSS;
       // Pemecah seri: ruas mendatar lebih disukai di bawah (belok dekat tujuan pada alur turun).
       if (nd % 2 === 0) nc += len * (g.yMax - g.ys[j]) * 1e-4;
+      if (nd % 2 ? vx !== null && Math.abs(g.xs[i] - vx) > 0.01 : vy !== null && Math.abs(g.ys[j] - vy) > 0.01) nc += len * VIA;
       const gk = goalAt.get(m * 4 + nd);
       if (gk !== undefined) {
         const gc = nc + goals[gk].cost;
