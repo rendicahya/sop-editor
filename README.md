@@ -1,7 +1,7 @@
 # SOP Editor
 
 Aplikasi web (front-end saja, PWA) untuk membuat dan mengedit dokumen SOP berformat standar
-(halaman identitas + diagram alir lintas pelaksana), menyimpannya sebagai berkas `.sop` (isinya JSON), dan mengekspornya ke PDF A4 lanskap atau Word.
+(halaman identitas + diagram alir lintas pelaksana), menyimpannya sebagai berkas `.sop` (isinya JSON), dan mengekspornya ke PDF A4 lanskap, Word, atau Excel.
 
 Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero untuk kolaborasi real-time.
 
@@ -47,6 +47,11 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   diedit di Word, sedangkan diagramnya (simbol, garis, label, konektor) disisipkan sebagai gambar vektor (SVG, dengan
   cadangan PNG untuk Word lama) di belakang tabel. Tinggi baris diagram dikunci agar tetap sejajar dengan gambar, jadi
   perubahan besar (teks bertambah banyak, langkah baru) sebaiknya dilakukan di aplikasi lalu diekspor ulang.
+- **Ekspor XLSX** (Excel) mengikuti template SOP (`src/assets/template-sop.xlsx`): sheet **Cover** berisi identitas
+  (logo, nomor, tanggal, pengesahan beserta tanda tangan, dan keenam bagian ketentuan) dan sheet **Flowchart** berisi
+  tabel langkah. Simbol, garis alur berpanah, label ya/tidak, dan konektor antarhalaman digambar sebagai **shape Excel
+  yang bisa diedit**, dengan posisi sama seperti PDF. Pemisah halaman cetak mengikuti PDF dan kepala tabel diulang di
+  tiap halaman.
 - PDF vektor (teks bisa diseleksi). Dokumen SOP wajib memakai **Calibri**, yang disematkan ke PDF. Karena file Calibri
   tidak boleh didistribusikan ulang, font diambil dari perangkat pengguna: tombol **Pakai Calibri perangkat**
   (Local Font Access API, Chrome/Edge desktop) atau **Pilih file Calibri…** (`calibri.ttf` + `calibrib.ttf`, di Windows
@@ -154,6 +159,7 @@ Struktur utama:
 | `src/assets/logo-ub.png` | Logo Universitas Brawijaya yang disematkan ke setiap dokumen |
 | `src/lib/pdf.js` | Renderer PDF (jsPDF) |
 | `src/lib/docx.js` | Ekspor DOCX: WordprocessingML ditulis langsung lalu dikemas dengan fflate |
+| `src/lib/xlsx.js` | Ekspor XLSX: mengisi template SOP (gaya, tema, logo), diagram sebagai shape DrawingML |
 | `src/lib/fonts.js` | Font dokumen: Calibri dari perangkat (disimpan di IndexedDB) atau Carlito sebagai pengganti |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
 | `src/lib/richtext.js` | Format tebal/miring/garis bawah: parse tag, pemenggalan baris berformat, isian contenteditable |

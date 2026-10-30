@@ -419,17 +419,19 @@
     }
   }
 
-  // Ekspor DOCX dimuat terpisah agar tidak memperbesar muatan awal.
-  let docxBusy = $state(false);
-  async function docx() {
-    docxBusy = true;
+  // Ekspor DOCX/XLSX dimuat terpisah agar tidak memperbesar muatan awal.
+  let exportBusy = $state('');
+  async function exportFile(kind) {
+    exportBusy = kind.toUpperCase();
     try {
-      const { exportDocx } = await import('./lib/docx.js');
-      downloadBlob(await exportDocx(app.doc), `SOP-${slug(app.doc.header.namaSop)}.docx`);
+      const blob = kind === 'docx'
+        ? await (await import('./lib/docx.js')).exportDocx(app.doc)
+        : await (await import('./lib/xlsx.js')).exportXlsx(app.doc);
+      downloadBlob(blob, `SOP-${slug(app.doc.header.namaSop)}.${kind}`);
     } catch (e) {
-      alert('Gagal membuat DOCX: ' + e.message);
+      alert(`Gagal membuat ${kind.toUpperCase()}: ` + e.message);
     } finally {
-      docxBusy = false;
+      exportBusy = '';
     }
   }
 
@@ -554,8 +556,8 @@
       {/if}
       <button class="btn ghost" onclick={loadSample} title="Muat contoh SOP Skripsi">Contoh</button>
       <div class="export">
-        <button class="btn primary" onclick={() => (exportOpen = !exportOpen)} aria-haspopup="menu" aria-expanded={exportOpen} disabled={docxBusy}>
-          {docxBusy ? 'Membuat DOCX…' : 'Ekspor'}
+        <button class="btn primary" onclick={() => (exportOpen = !exportOpen)} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy}>
+          {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
         </button>
         {#if exportOpen}
@@ -563,8 +565,11 @@
             <button role="menuitem" onclick={() => ((exportOpen = false), pdf())}>
               <strong>PDF</strong><small>Pratinjau lalu unduh · Ctrl+Shift+P</small>
             </button>
-            <button role="menuitem" onclick={() => ((exportOpen = false), docx())}>
+            <button role="menuitem" onclick={() => ((exportOpen = false), exportFile('docx'))}>
               <strong>Word (.docx)</strong><small>Dokumen yang bisa diedit</small>
+            </button>
+            <button role="menuitem" onclick={() => ((exportOpen = false), exportFile('xlsx'))}>
+              <strong>Excel (.xlsx)</strong><small>Sesuai template SOP, simbol bisa diedit</small>
             </button>
           </div>
         {/if}

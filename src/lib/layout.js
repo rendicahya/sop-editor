@@ -59,6 +59,10 @@ function wrapRich(text, size, width) {
 
 const textH = (lines, size) => lines.length * lineHeight(size);
 
+/** Jumlah baris isian (berformat) bila dibungkus selebar `width` mm; ekspor XLSX memakainya untuk tinggi baris. */
+export const countLines = (text, size, width, bold = false) =>
+  (bold ? wrap(plainText(text), size, true, width) : wrapRich(text, size, width)).length;
+
 function fit(img, maxW, maxH) {
   const s = Math.min(maxW / img.width, maxH / img.height);
   return { w: img.width * s, h: img.height * s };

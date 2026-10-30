@@ -34,7 +34,7 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,ttf,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,ttf,woff2,xlsx}'],
         // Modul opsional jsPDF (html2canvas, DOMPurify, canvg) tidak dipakai aplikasi ini.
         globIgnores: ['**/html2canvas-*.js', '**/purify.es-*.js', '**/index.es-*.js'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
