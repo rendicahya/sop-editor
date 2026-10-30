@@ -2,6 +2,8 @@
   // Garis alur yang sedang dipilih ({ step, branch, fid, mx, my }); dipakai bersama semua halaman
   // karena garis antarhalaman terdiri atas dua bagian.
   let edgeSel = $state(null);
+  // Isian yang sedang diseret untuk diurutkan ({ kind, index }); bisa dilepas di halaman mana pun.
+  let reorder = $state(null);
 </script>
 
 <script>
@@ -190,6 +192,96 @@
     return [...f.pts.slice(0, seg.i + 1), mv(seg.a), mv(seg.b), ...f.pts.slice(seg.i + 1)];
   }
   const ptsAttr = (pts) => pts.map((p) => p.join(',')).join(' ');
+
+  // Seret-lepas untuk mengurutkan langkah (step), pelaksana (actor), dan butir ketentuan (item:<bagian>).
+  // Sasaran lepas dicari di semua halaman; penanda posisinya digambar di atas viewport.
+  const listOf = (kind) => (kind === 'step' ? steps : kind === 'actor' ? actors : items(kind.slice(5)));
+  const isDragged = (kind, index) => reorder?.kind === kind && reorder.index === index;
+  let rd = null; // { kind, index, x, y, moved, px, py, slot, scroller, raf }
+  let mark = null;
+
+  function startReorder(e, kind, index) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    rd = { kind, index, x: e.clientX, y: e.clientY, moved: false, slot: null, scroller: root.closest('.preview-scroll') };
+  }
+  function moveReorder(e) {
+    if (!rd) return;
+    if (!rd.moved) {
+      if (Math.hypot(e.clientX - rd.x, e.clientY - rd.y) < 4) return;
+      rd.moved = true;
+      reorder = { kind: rd.kind, index: rd.index };
+      menu = edgeSel = null;
+      rd.raf = requestAnimationFrame(autoScroll);
+    }
+    rd.px = e.clientX;
+    rd.py = e.clientY;
+    locate();
+  }
+  // Menggulir sendiri saat penunjuk dekat tepi atas/bawah area halaman.
+  function autoScroll() {
+    if (!rd) return;
+    const s = rd.scroller;
+    if (s) {
+      const r = s.getBoundingClientRect();
+      const d = rd.py < r.top + 48 ? rd.py - r.top - 48 : rd.py > r.bottom - 48 ? rd.py - r.bottom + 48 : 0;
+      if (d) {
+        s.scrollTop += Math.max(-24, Math.min(24, d / 2));
+        locate();
+      }
+    }
+    rd.raf = requestAnimationFrame(autoScroll);
+  }
+  function locate() {
+    const horiz = rd.kind === 'actor';
+    let best = null;
+    let bd = Infinity;
+    for (const el of document.querySelectorAll(`.fields:not([inert]) [data-drop="${rd.kind}"]`)) {
+      const r = el.getBoundingClientRect();
+      const d = Math.max(r.left - rd.px, 0, rd.px - r.right) + Math.max(r.top - rd.py, 0, rd.py - r.bottom);
+      if (d < bd) [bd, best] = [d, { el, r }];
+    }
+    if (!best) return;
+    const { el, r } = best;
+    const after = horiz ? rd.px > r.left + r.width / 2 : rd.py > r.top + r.height / 2;
+    rd.slot = +el.dataset.index + (after ? 1 : 0);
+    if (!mark) {
+      mark = document.createElement('div');
+      mark.className = 'drop-mark';
+      document.body.append(mark);
+    }
+    Object.assign(
+      mark.style,
+      horiz
+        ? { left: `${(after ? r.right : r.left) - 1.5}px`, top: `${r.top}px`, width: '3px', height: `${r.height}px` }
+        : { left: `${r.left}px`, top: `${(after ? r.bottom : r.top) - 1.5}px`, width: `${r.width}px`, height: '3px' }
+    );
+  }
+  function endReorder(drop = true) {
+    if (!rd) return;
+    const { kind, index, moved, slot, raf } = rd;
+    rd = null;
+    reorder = null;
+    cancelAnimationFrame(raf);
+    mark?.remove();
+    mark = null;
+    if (!drop || !moved || slot == null) return;
+    const to = slot > index ? slot - 1 : slot;
+    if (to === index) return;
+    const list = listOf(kind);
+    asStep(() => list.splice(to, 0, ...list.splice(index, 1)));
+  }
+  const grip = (kind, index, what) => ({
+    tabindex: -1,
+    title: `Seret untuk memindahkan ${what}`,
+    'aria-label': `Seret untuk memindahkan ${what}`,
+    onpointerdown: (e) => startReorder(e, kind, index),
+    onpointermove: moveReorder,
+    onpointerup: () => endReorder(),
+    onpointercancel: () => endReorder(false),
+    onlostpointercapture: () => endReorder(false)
+  });
 
   /** Fokus ke isian `id` setelah tata letak diperbarui, dengan kursor di posisi `caret`. */
   async function focusField(id, caret = null) {
@@ -464,7 +556,7 @@
     (f.pad ? `padding:calc(${f.pad} * var(--mm));` : '');
 </script>
 
-<svelte:window onpointerdown={closeMenu} onkeydown={(e) => e.key === 'Escape' && (menu = edgeSel = null)} /><div
+<svelte:window onpointerdown={closeMenu} onkeydown={(e) => e.key === 'Escape' && (endReorder(false), (menu = edgeSel = null))} /><div
   bind:this={root}
   class="fields"
   inert={!editable}
@@ -505,7 +597,8 @@
         onkeydown={(e) => onTextKey(e, f)}
       ></textarea>
     {:else if f.kind === 'item'}
-      <div class="f-item" style={box({ ...f, size: 0, pad: 0 })} data-fid={f.id}>
+      <div class="f-item" class:dragged={isDragged('item:' + f.key, f.index)} style={box({ ...f, size: 0, pad: 0 })} data-fid={f.id} data-drop="item:{f.key}" data-index={f.index}>
+        <button class="grip" {...grip('item:' + f.key, f.index, 'butir')}>⠿</button>
         <RichField
           class="f-text"
           style="position:absolute;inset:0;font-size:calc({f.size * PT} * var(--mm))"
@@ -570,8 +663,9 @@
     {:else if f.kind === 'actor-tools'}
       {@const a = actors[f.index]}
       {@const lock = actorLock(a)}
-      <div class="f-group" class:hot={isHot(f)} style={box(f)} data-hot={f.hot} data-fid={f.id}>
+      <div class="f-group" class:hot={isHot(f)} class:dragged={isDragged('actor', f.index)} style={box(f)} data-hot={f.hot} data-fid={f.id} data-drop="actor" data-index={f.index}>
         <span class="g-tools g-top">
+          <button class="grip" {...grip('actor', f.index, 'pelaksana')}>⠿</button>
           <button tabindex="-1" title="Geser ke kiri" aria-label="Geser pelaksana ke kiri" aria-disabled={f.index === 0} onclick={() => moveActor(f.index, -1)}>◀</button>
           <button tabindex="-1" title="Tambah pelaksana di kanan" aria-label="Tambah pelaksana" onclick={() => addActor(f.index)}>＋</button>
           <button
@@ -587,8 +681,19 @@
       </div>
     {:else if f.kind === 'step-tools'}
       {@const peers = editors(f.step)}
-      <div class="f-group" class:hot={isHot(f)} class:shared={peers.length} style="{box(f)}--peer:{peers[0]?.color}" data-hot={f.hot} data-fid={f.id}>
+      <div
+        class="f-group"
+        class:hot={isHot(f)}
+        class:shared={peers.length}
+        class:dragged={isDragged('step', f.index)}
+        style="{box(f)}--peer:{peers[0]?.color}"
+        data-hot={f.hot}
+        data-fid={f.id}
+        data-drop="step"
+        data-index={f.index}
+      >
         <span class="g-tools g-left">
+          <button class="grip" {...grip('step', f.index, 'kegiatan')}>⠿</button>
           <button tabindex="-1" title="Naikkan" aria-label="Naikkan kegiatan" aria-disabled={f.index === 0} onclick={() => moveStepRow(f.index, -1)}>▲</button>
           <button tabindex="-1" title="Turunkan" aria-label="Turunkan kegiatan" aria-disabled={f.index === steps.length - 1} onclick={() => moveStepRow(f.index, 1)}>▼</button>
           <button tabindex="-1" title="Duplikat" aria-label="Duplikat kegiatan" onclick={() => duplicateStep(f.index)}>⧉</button>
@@ -833,8 +938,46 @@
     cursor: pointer;
   }
   .f-item:hover .f-del,
-  .f-item:focus-within .f-del {
+  .f-item:focus-within .f-del,
+  .f-item:hover .grip,
+  .f-item.dragged .grip {
     display: grid;
+  }
+  /* Pegangan seret butir: di kiri teks (di atas nomor butir), hanya saat disorot. */
+  .f-item .grip {
+    position: absolute;
+    right: 100%;
+    top: 0;
+    display: none;
+    place-items: center;
+    width: 12px;
+    height: 100%;
+    min-height: 14px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: rgb(var(--edit) / 0.12);
+    color: rgb(var(--edit));
+    font: 11px/1 var(--ui-font);
+  }
+  .grip {
+    cursor: grab;
+    touch-action: none;
+  }
+  .grip:active {
+    cursor: grabbing;
+  }
+  .fields .dragged {
+    background: rgb(var(--edit) / 0.14);
+    box-shadow: inset 0 0 0 1px rgb(var(--edit) / 0.5);
+  }
+  :global(.drop-mark) {
+    position: fixed;
+    z-index: 2000;
+    pointer-events: none;
+    border-radius: 2px;
+    background: rgb(47 102 176);
+    box-shadow: 0 0 0 1px #fff;
   }
 
   .f-date input {

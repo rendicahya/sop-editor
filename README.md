@@ -103,6 +103,10 @@ Pada butir ketentuan di halaman 1: **Enter** membuat butir baru (memecah di posi
 menggabungkannya dengan butir sebelumnya, **Alt+↑/↓** memindahkan butir, dan **↑/↓** di awal/akhir butir berpindah
 antarbutir.
 
+**Seret-lepas:** arahkan kursor ke langkah, pelaksana, atau butir ketentuan, lalu seret pegangan **⠿** (di kiri baris
+langkah, di atas kolom pelaksana, atau di kiri butir) ke posisi baru; garis biru menandai tempat lepasnya, dan halaman
+bergulir sendiri saat kursor mendekati tepi. Esc membatalkan, Ctrl+Z mengurungkan.
+
 Di Chrome/Edge, "Simpan" berikutnya langsung menimpa berkas yang sama (File System Access API).
 Di browser lain, berkas diunduh.
 
@@ -251,7 +255,6 @@ tetap apa adanya. Kolom lain selalu teks polos.
 - Buat SOP dari notulen atau peraturan (impor SOP lama sudah tersedia).
 
 **Editor**
-- Seret-lepas untuk mengurutkan langkah, butir, dan pelaksana.
 - Antarmuka dwibahasa (Indonesia/Inggris).
 - Cari & ganti dengan ekspresi reguler dan opsi "seluruh kata".
 
