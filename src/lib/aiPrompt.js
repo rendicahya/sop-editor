@@ -68,7 +68,7 @@ ${desc}
 ${formatRules(`- header: isi semua kolom teks. "institution" boleh beberapa baris (pisahkan dengan \\n), ditulis HURUF KAPITAL dari kementerian sampai unit kerja. Tanggal memakai format YYYY-MM-DD; kosongkan ("") bila tidak diketahui. Jangan menyertakan logo atau tanda tangan.
 - Pengesah: kecuali deskripsi menyebut pejabat lain, ${PENGESAH_RULE}.
 - Dasar hukum: gunakan peraturan yang benar-benar ada; bila ragu, tulis "[lengkapi: …]" alih-alih mengarang nomor peraturan.`)}
-- Tulis istilah asing dengan <i>miring</i>. Gunakan format lain seperlunya saja.
+- Tulis istilah asing dengan <i>miring</i>. Jangan memakai format tebal (<b>) sama sekali; format lain seperlunya saja.
 - Gunakan bahasa Indonesia baku.
 
 CONTOH STRUKTUR (isi dengan proses di atas, jangan disalin isinya):
@@ -93,6 +93,7 @@ ATURAN REVISI:
 - Ubah hanya bagian yang diminta instruksi; bagian lain disalin persis apa adanya (teks, format, urutan, dan "id").
 - Pertahankan "id" pelaksana dan langkah yang sudah ada. Langkah atau pelaksana baru diberi id baru yang belum dipakai.
 - Bila langkah dihapus atau disisipkan, periksa kembali "next" dan "alt" langkah lain agar alur tetap benar.
+- Teks baru atau yang diubah tidak memakai format tebal (<b>), kecuali instruksi memintanya.
 - Bila instruksi tidak jelas atau tidak bisa dilakukan, tetap kembalikan dokumen utuh tanpa perubahan pada bagian itu.
 
 ${formatRules(`- header: salin dari dokumen kecuali instruksi meminta perubahan. Tanggal memakai format YYYY-MM-DD.`)}
