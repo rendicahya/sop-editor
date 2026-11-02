@@ -240,7 +240,7 @@ function buildCover(doc, sh, rels) {
   heights[5] = need(hd.disahkanJabatan, wE);
   heights[11] = need(hd.disahkanNama, wE);
   heights[12] = need(hd.disahkanNip, wE);
-  put(13, 'NAMA SOP', hd.namaSop, { b: true });
+  put(13, 'NAMA SOP', hd.namaSop);
 
   // Blok kiri: logo di atas, nama instansi rata bawah. Bila kurang tinggi, area tanda tangan dipertinggi.
   sh.merge(1, 0, 13, 1, hd.institution, { b: true, h: 'center', v: 'bottom' });

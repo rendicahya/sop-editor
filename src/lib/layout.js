@@ -170,7 +170,7 @@ function layoutIdentity(doc, pages) {
     simple('TGL REVISI', 'tglRevisi', { date: true }),
     simple('TGL EFEKTIF', 'tglEfektif', { date: true }),
     signRow,
-    simple('NAMA SOP', 'namaSop', { bold: true, placeholder: 'NAMA SOP' })
+    simple('NAMA SOP', 'namaSop', { placeholder: 'NAMA SOP' })
   ];
   const blockH = rightRows.reduce((a, r) => a + r.h, 0);
 

@@ -234,7 +234,7 @@ function identityTable(doc, meta, media, numbering) {
     ['DISAHKAN OLEH',
       para(run(hd.disahkanJabatan), { size: S, align: 'center' }) + sig +
       para(run(hd.disahkanNama), { size: S, align: 'center' }) + para(run(hd.disahkanNip), { size: S, align: 'center' }), 40],
-    ['NAMA SOP', value(hd.namaSop, true)]
+    ['NAMA SOP', value(hd.namaSop)]
   ];
   const R = { padY: 2 * 1.4 + 0.25 }; // jarak dalam atas+bawah dan tebal garis
   const rows = right.map(([lab, val, h = 7], i) =>

@@ -17,6 +17,7 @@
   let tag = $state(null); // saringan label: null = semua, '' = tanpa label
   let tagEdit = $state(null); // id entri yang labelnya sedang diatur
   let newTag = $state('');
+  let picked = $state([]); // id entri yang dicentang untuk dihapus sekaligus
 
   // Templat bawaan, selalu tersedia dan tidak bisa dihapus.
   const BUILTIN = [
@@ -28,6 +29,7 @@
     if (open && !dialog.open) {
       query = '';
       tagEdit = null;
+      picked = [];
       dialog.showModal();
       refresh();
     } else if (!open && dialog.open) dialog.close();
@@ -59,6 +61,25 @@
     const byTag = (e) => tag === null || (tag === '' ? !e.tags.length : e.tags.includes(tag));
     return entries.filter((e) => e.kind === kind && byTag(e) && (!q || q.split(/\s+/).every((w) => e.text.includes(w))));
   });
+  // Pilihan untuk hapus sekaligus: hanya entri yang tampil dan tidak sedang terbuka di tab.
+  const deletable = $derived(shown.filter((e) => !openIds.includes(e.id)));
+  const chosen = $derived(deletable.filter((e) => picked.includes(e.id)));
+  const allChosen = $derived(deletable.length > 0 && chosen.length === deletable.length);
+  function togglePick(id) {
+    picked = picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id];
+  }
+  function pickAll() {
+    const ids = deletable.map((e) => e.id);
+    picked = allChosen ? picked.filter((x) => !ids.includes(x)) : [...new Set([...picked, ...ids])];
+  }
+  async function removePicked() {
+    const n = chosen.length;
+    if (!n || !confirm(`Hapus ${n} ${kind === 'doc' ? 'dokumen' : 'templat'} terpilih dari pustaka? Tindakan ini tidak bisa dibatalkan.`)) return;
+    for (const e of chosen) await deleteEntry(e.id);
+    picked = [];
+    await refresh();
+    onnotify(`${n} ${kind === 'doc' ? 'dokumen' : 'templat'} dihapus`);
+  }
   // Label pada jenis yang sedang ditampilkan beserta jumlahnya; daftar semua label untuk pengaturan label entri.
   const tagList = $derived.by(() => {
     const n = new Map();
@@ -112,7 +133,7 @@
   async function duplicate(e) {
     const d = JSON.parse(e.json);
     d.header.namaSop = (d.header.namaSop || 'SOP tanpa judul') + ' (salinan)';
-    await add({ kind: 'doc', title: d.header.namaSop, nomor: d.header.nomor, json: JSON.stringify(d), tags: e.tags });
+    await add({ kind: 'doc', title: d.header.namaSop, nomor: d.header.nomor, json: JSON.stringify(d), tags: [...e.tags] });
     onnotify('Salinan dibuat');
   }
 
@@ -161,7 +182,7 @@
     const name = prompt('Nama templat:', e.title);
     if (!name?.trim() || name.trim() === e.title) return;
     const { text, ...rest } = e;
-    await putEntry({ ...rest, title: name.trim(), updated: Date.now() });
+    await putEntry({ ...$state.snapshot(rest), title: name.trim(), updated: Date.now() });
     await refresh();
   }
 
@@ -289,6 +310,26 @@
     </div>
   {/if}
 
+  {#if shown.length}
+    <div class="selbar">
+      <label>
+        <input
+          type="checkbox"
+          checked={allChosen}
+          indeterminate={chosen.length > 0 && !allChosen}
+          disabled={!deletable.length}
+          onchange={pickAll}
+        />
+        Pilih semua{deletable.length < shown.length ? ' (kecuali yang terbuka di tab)' : ''}
+      </label>
+      {#if chosen.length}
+        <span>{chosen.length} dipilih</span>
+        <button class="btn small danger" onclick={removePicked}>Hapus terpilih</button>
+        <button class="link" onclick={() => (picked = [])}>Batal</button>
+      {/if}
+    </div>
+  {/if}
+
   <ul class="list">
     {#each builtins as b (b.id)}
       <li>
@@ -302,6 +343,15 @@
     {#each shown as e (e.id)}
       {@const isOpen = openIds.includes(e.id)}
       <li class:current={e.id === active}>
+        <input
+          type="checkbox"
+          class="pick"
+          checked={!isOpen && picked.includes(e.id)}
+          disabled={isOpen}
+          onchange={() => togglePick(e.id)}
+          aria-label={`Pilih ${titleOf(e)}`}
+          title={isOpen ? 'Tutup tabnya dulu untuk menghapus' : 'Pilih untuk dihapus sekaligus'}
+        />
         <button class="main" onclick={() => (e.kind === 'doc' ? pick(e) : useTpl(() => parseDocumentText(e.json)))}>
           <strong>
             {titleOf(e)}
@@ -515,6 +565,31 @@
     border-radius: 99px;
     padding: 0.05rem 0.45rem;
     margin-left: 0.3rem;
+  }
+  .selbar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+    min-height: 1.9rem;
+  }
+  .selbar label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding-left: 0.6rem;
+  }
+  .selbar .link {
+    border: 0;
+    background: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 0.8rem;
+  }
+  .pick {
+    flex: none;
+    margin: 0;
   }
   .acts {
     display: flex;
