@@ -12,7 +12,7 @@ const EXAMPLE = {
     tglRevisi: '',
     tglEfektif: '2026-02-01',
     ...DEFAULT_PENGESAH,
-    namaSop: 'PENGAJUAN CUTI AKADEMIK'
+    namaSop: 'Pengajuan Cuti Akademik'
   },
   sections: {
     dasarHukum: { numbered: true, items: ['Peraturan … tentang …'] },
@@ -28,9 +28,9 @@ const EXAMPLE = {
     { id: 'a3', name: 'Ketua Program Studi' }
   ],
   steps: [
-    { id: 's1', kegiatan: 'Mengajukan permohonan cuti', actor: 'a1', shape: 'terminator', kelengkapan: 'Formulir cuti', waktu: '10 Menit', output: 'Formulir terisi', keterangan: 'Mahasiswa mengisi formulir di <i>SIAKAD</i>' },
-    { id: 's2', kegiatan: 'Verifikasi berkas', actor: 'a2', shape: 'decision', kelengkapan: 'Formulir cuti, KRS', waktu: '1 Hari', output: 'Berkas terverifikasi', keterangan: 'Jika <b>tidak lengkap</b>, dikembalikan ke mahasiswa', yesLabel: 'Lengkap', noLabel: 'Tidak Lengkap', alt: 's1' },
-    { id: 's3', kegiatan: 'Persetujuan cuti', actor: 'a3', shape: 'process', kelengkapan: 'Berkas terverifikasi', waktu: '2 Hari', output: 'Surat persetujuan', keterangan: '' },
+    { id: 's1', kegiatan: 'Mengajukan permohonan cuti', actor: 'a1', shape: 'terminator', kelengkapan: 'Formulir cuti', waktu: '10 menit', output: 'Formulir terisi', keterangan: 'Mahasiswa mengisi formulir di <i>SIAKAD</i>' },
+    { id: 's2', kegiatan: 'Verifikasi berkas', actor: 'a2', shape: 'decision', kelengkapan: 'Formulir cuti, KRS', waktu: '1 hari', output: 'Berkas terverifikasi', keterangan: 'Jika tidak lengkap, dikembalikan ke mahasiswa', yesLabel: 'Lengkap', noLabel: 'Tidak Lengkap', alt: 's1' },
+    { id: 's3', kegiatan: 'Persetujuan cuti', actor: 'a3', shape: 'process', kelengkapan: 'Berkas terverifikasi', waktu: '2 hari', output: 'Surat persetujuan', keterangan: '' },
     { id: 's4', kegiatan: 'Selesai', actor: 'a1', shape: 'terminator', kelengkapan: '', waktu: '', output: 'Surat persetujuan', keterangan: '' }
   ]
 };
@@ -52,7 +52,7 @@ ${header}
   - "actor": id pelaksana dari daftar actors
   - "with" (opsional): daftar id pelaksana lain bila kegiatan dilakukan bersama (mis. rapat atau penandatanganan bersama), contoh ["a2", "a3"]; simbolnya membentang sampai lajur mereka
   - "shape": "terminator" (Mulai/Selesai, biasanya langkah pertama dan terakhir), "process" (kegiatan biasa), atau "decision" (pemeriksaan/persetujuan yang bisa ditolak)
-  - "kelengkapan", "waktu" (contoh "1 Hari", "15 Menit"), "output", "keterangan": teks, boleh ""
+  - "kelengkapan", "waktu" (contoh "1 hari", "15 menit"; satuan huruf kecil), "output", "keterangan": teks, boleh ""
   - "next" (opsional): bawaannya langkah berikutnya. Isi id langkah lain untuk melompat, atau "none" bila alur berhenti.
   - Khusus "decision": "yesLabel" dan "noLabel" (contoh "Valid"/"Tidak Valid"); jalur "ya" lanjut ke "next", jalur "tidak" ke "alt" yang berisi id langkah tujuan (biasanya kembali ke langkah sebelumnya untuk perbaikan).
 - Format teks: butir sections serta kolom kegiatan, kelengkapan, waktu, output, dan keterangan boleh memakai tag <b>tebal</b>, <i>miring</i>, dan <u>garis bawah</u> (boleh bertumpuk, mis. <b><i>…</i></b>). Jangan memakai Markdown (**…**) atau tag lain. Kolom lain selalu teks polos.
@@ -65,7 +65,7 @@ export function aiPrompt(description = '') {
 DESKRIPSI PROSES:
 ${desc}
 
-${formatRules(`- header: isi semua kolom teks. "institution" boleh beberapa baris (pisahkan dengan \\n), ditulis HURUF KAPITAL dari kementerian sampai unit kerja. Tanggal memakai format YYYY-MM-DD; kosongkan ("") bila tidak diketahui. Jangan menyertakan logo atau tanda tangan.
+${formatRules(`- header: isi semua kolom teks. "institution" boleh beberapa baris (pisahkan dengan \\n), ditulis HURUF KAPITAL dari kementerian sampai unit kerja. "namaSop" ditulis dengan huruf kapital di awal tiap kata (mis. "Pengajuan Cuti Akademik"), bukan huruf kapital semua. Tanggal memakai format YYYY-MM-DD; kosongkan ("") bila tidak diketahui. Jangan menyertakan logo atau tanda tangan.
 - Pengesah: kecuali deskripsi menyebut pejabat lain, ${PENGESAH_RULE}.
 - Dasar hukum: gunakan peraturan yang benar-benar ada; bila ragu, tulis "[lengkapi: …]" alih-alih mengarang nomor peraturan.`)}
 - Tulis istilah asing dengan <i>miring</i>. Jangan memakai format tebal (<b>) sama sekali; format lain seperlunya saja.
