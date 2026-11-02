@@ -1,4 +1,5 @@
-// Pustaka dokumen: semua SOP yang pernah diedit tersimpan otomatis di IndexedDB browser ini.
+// Pustaka dokumen di IndexedDB browser ini. Dokumen masuk pustaka bila pengguna setuju saat menutup tab;
+// setelah itu perubahannya tersimpan otomatis.
 // Entri: { id, kind: 'doc' | 'template', title, nomor, fileName, created, updated, json, tags }.
 // `tags` (label pengelompokan) hanya ada di pustaka, tidak ikut tersimpan di berkas .sop.
 // Dokumen tab memakai id tab sebagai id entri, jadi setiap perubahan tab memperbarui entrinya sendiri.
@@ -60,8 +61,12 @@ export function isBlank(doc) {
   return !doc.header.namaSop && doc.steps.length <= 2 && Object.values(doc.sections).every((s) => !s.items.length);
 }
 
-/** Menyimpan dokumen tab `id`; dilewati bila kosong atau isinya sama dengan yang tersimpan. */
-export async function saveDoc(id, json, fileName = null) {
+/**
+ * Menyimpan dokumen tab `id`; dilewati bila isinya sama dengan yang tersimpan.
+ * Entri baru hanya dibuat bila `create` (pengguna setuju menyimpan ke pustaka);
+ * dokumen yang sudah ada di pustaka diperbarui otomatis.
+ */
+export async function saveDoc(id, json, fileName = null, create = false) {
   const doc = JSON.parse(json);
   // Baca dan tulis dalam satu transaksi agar label yang baru diubah di dialog Pustaka tidak tertimpa.
   await run('readwrite', (s) => {
@@ -69,7 +74,7 @@ export async function saveDoc(id, json, fileName = null) {
     req.onsuccess = () => {
       const old = req.result;
       if (old && old.json === json && old.fileName === fileName) return;
-      if (!old && isBlank(doc)) return;
+      if (!old && (!create || isBlank(doc))) return;
       const now = Date.now();
       s.put({
         id,

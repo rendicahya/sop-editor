@@ -20,7 +20,7 @@
   import { collab, inviteFromUrl } from './lib/collab.svelte.js';
   import { connectHistory } from './lib/history.js';
   import LibraryDialog from './lib/LibraryDialog.svelte';
-  import { queueSave, flush, flushAll, saveDoc, isBlank } from './lib/library.js';
+  import { queueSave, flush, flushAll, saveDoc, isBlank, getEntry } from './lib/library.js';
 
   let toast = $state('');
   let toastTimer;
@@ -308,16 +308,23 @@
     activate(id);
   }
 
-  function closeTab(id) {
-    // Isi tab tetap ada di pustaka, jadi tab bisa ditutup tanpa konfirmasi.
+  async function closeTab(id) {
+    // Dokumen yang belum ada di pustaka hanya disimpan bila pengguna setuju.
     const tab = tabs.list.find((t) => t.id === id);
     if (id === tabs.active) {
       if (!canLeaveTab()) return;
       checkpoint();
       flush(id);
-    } else saveDoc(id, stash.get(id).json, tab.fileName).catch(() => {});
+    }
     const json = id === tabs.active ? current : stash.get(id).json;
-    if (!isBlank(JSON.parse(json))) notify(`"${tabTitle(tab)}" ditutup — buka lagi dari Pustaka`);
+    if (!isBlank(JSON.parse(json))) {
+      const inLib = await getEntry(id).catch(() => null);
+      if (inLib || confirm(`Simpan "${tabTitle(tab)}" ke Pustaka sebelum ditutup?\n\nOK = simpan, Batal = tutup tanpa menyimpan.`)) {
+        await saveDoc(id, json, tab.fileName, true).catch(() => {});
+        notify(`"${tabTitle(tab)}" ditutup — buka lagi dari Pustaka`);
+      }
+    }
+    if (!tabs.list.includes(tab)) return;
     if (tabs.list.length === 1) {
       rekey();
       replaceDocument(emptyDocument());
@@ -390,7 +397,16 @@
     untrack(() => {
       const id = 'room-' + r.id;
       if (tabs.active === id) return; // ruang yang sama dibuka lagi (mis. setelah muat ulang)
-      saveDoc(tabs.active, JSON.stringify(app.doc), app.fileName).catch(() => {});
+      // Dokumen lama diganti dokumen ruang: yang sudah di pustaka diperbarui, yang belum ditanyakan dulu.
+      const json = JSON.stringify(app.doc);
+      const [old, name] = [tabs.active, app.fileName];
+      getEntry(old)
+        .catch(() => null)
+        .then((e) => {
+          const ask = !e && !isBlank(JSON.parse(json));
+          const ok = ask && confirm('Simpan dokumen sebelumnya ke Pustaka sebelum diganti dokumen ruang kolaborasi?');
+          if (e || ok) saveDoc(old, json, name, true).catch(() => {});
+        });
       rekey(tabs.list.some((t) => t.id === id) ? newTabId() : id);
       app.fileName = null;
       app.fileHandle = null;
@@ -560,7 +576,7 @@
   }
 
   onMount(() => {
-    // Tab yang sudah terbuka (dari sebelum ada pustaka) ikut dimasukkan ke pustaka.
+    // Tab yang isinya sudah ada di pustaka diselaraskan (entri baru tidak dibuat otomatis).
     for (const t of tabs.list) {
       if (t.id === tabs.active) queueSave(t.id, current, app.fileName);
       else if (stash.has(t.id)) saveDoc(t.id, stash.get(t.id).json, t.fileName).catch(() => {});
@@ -623,7 +639,7 @@
     <nav class="toolbar">
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)">Buka</button>
-      <button class="btn ghost" onclick={() => (libraryOpen = true)} title="Semua SOP dan templat yang tersimpan otomatis di browser ini">Pustaka</button>
+      <button class="btn ghost" onclick={() => (libraryOpen = true)} title="SOP dan templat yang disimpan di browser ini">Pustaka</button>
       <button class="btn ghost" onclick={() => save(false)} title="Simpan sebagai berkas .sop (Ctrl+S)">Simpan</button>
       <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP baru, impor SOP lama (PDF/Word), atau revisi SOP ini dengan bantuan asisten AI">Asisten AI</button>
       <span class="sep"></span>
