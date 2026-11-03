@@ -468,7 +468,10 @@ function layoutFlow(doc, pages) {
     colXs.push(c, c0 + 1.2, c0 + 2.4, c0 + actW - 1.2, c0 + actW - 2.4);
     for (const sz of [shapeSize('decision'), shapeSize('process')]) colXs.push(c - sz.w / 2 - 1, c + sz.w / 2 + 1);
     connXs.push(c);
+    if (5.8 + R <= actW / 2 - 0.4) connXs.push(c - 5.8, c + 5.8);
   }
+  // Konektor di tengah kolom diutamakan, tetapi geser ke samping lebih murah daripada satu belokan garis.
+  const connCost = (cx) => (connXs.some((c) => Math.abs(c - cx) < 0.01 && Math.abs(((c - x.act) % actW) - actW / 2) < 0.01) ? 0 : 2);
   const topPortY = bodyTop + BAND / 2 + R; // ujung bawah konektor di pita atas
   const botPortY = (q) => bandBottomY[q] + BAND / 2 - R; // ujung atas konektor di pita bawah
 
@@ -509,7 +512,7 @@ function layoutFlow(doc, pages) {
   const connPorts = (used, y, d, prefX) => {
     const free = connXs.filter((cx) => used.every((u) => Math.abs(u - cx) >= 2 * R + 0.8));
     return (free.length ? free : connXs).map((cx) => ({
-      x: cx, y, d, cost: (free.length ? 0 : OVER) + (prefX == null || Math.abs(cx - prefX) < 0.01 ? 0 : 4)
+      x: cx, y, d, cost: (free.length ? 0 : OVER) + connCost(cx) + (prefX == null || Math.abs(cx - prefX) < 0.01 ? 0 : 4)
     }));
   };
   // Biaya titik sambung: alur utama keluar dari bawah dan masuk dari atas; cabang "tidak" keluar dari samping;
