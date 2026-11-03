@@ -473,6 +473,10 @@ textarea:focus {
   display: flex;
   flex-direction: column;
 }
+.export-menu.left {
+  right: auto;
+  left: 0;
+}
 .export-menu button {
   display: flex;
   flex-direction: column;

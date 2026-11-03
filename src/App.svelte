@@ -528,6 +528,26 @@
     }
   }
 
+  // Menu Simpan: ke Pustaka (browser ini) atau ke berkas .sop.
+  let saveOpen = $state(false);
+  let inLibrary = $state(false);
+  async function toggleSaveMenu() {
+    exportOpen = false;
+    if (saveOpen) return (saveOpen = false);
+    inLibrary = !!(await getEntry(tabs.active).catch(() => null));
+    saveOpen = true;
+  }
+
+  async function saveToLibrary() {
+    checkpoint();
+    try {
+      await saveDoc(tabs.active, JSON.stringify(app.doc), app.fileName, true);
+      notify(inLibrary ? 'Pustaka sudah diperbarui' : 'Tersimpan di Pustaka — perubahan berikutnya tersimpan otomatis');
+    } catch (e) {
+      alert('Gagal menyimpan ke Pustaka: ' + e.message);
+    }
+  }
+
   // Ekspor PDF selalu lewat pratinjau dulu; unduhan dilakukan dari dialog.
   let pdfDoc = $state(null);
   function pdf() {
@@ -616,10 +636,14 @@
 
 <svelte:window
   onkeydown={(e) => {
-    if (e.key === 'Escape') exportOpen = false;
+    if (e.key === 'Escape') exportOpen = saveOpen = false;
     onKey(e);
   }}
-  onpointerdown={(e) => exportOpen && !e.target.closest?.('.export') && (exportOpen = false)}
+  onpointerdown={(e) => {
+    if (e.target.closest?.('.export')) return;
+    exportOpen = false;
+    saveOpen = false;
+  }}
 />
 
 <div
@@ -649,7 +673,26 @@
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)">Buka</button>
       <button class="btn ghost" onclick={() => (libraryOpen = true)} title="SOP dan templat yang disimpan di browser ini">Pustaka</button>
-      <button class="btn ghost" onclick={() => save(false)} title="Simpan sebagai berkas .sop (Ctrl+S)">Simpan</button>
+      <div class="export">
+        <button class="btn ghost" onclick={toggleSaveMenu} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka atau sebagai berkas .sop">
+          Simpan
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+        </button>
+        {#if saveOpen}
+          <div class="export-menu left" role="menu">
+            <button role="menuitem" onclick={() => ((saveOpen = false), saveToLibrary())}>
+              <strong>Ke Pustaka{inLibrary ? ' ✓' : ''}</strong>
+              <small>{inLibrary ? 'Sudah di Pustaka, perubahan tersimpan otomatis' : 'Disimpan di browser ini, buka lagi dari Pustaka'}</small>
+            </button>
+            <button role="menuitem" onclick={() => ((saveOpen = false), save(false))}>
+              <strong>Sebagai berkas .sop</strong><small>{app.fileHandle ? `Timpa ${app.fileName}` : 'Pilih lokasi di perangkat'} · Ctrl+S</small>
+            </button>
+            <button role="menuitem" onclick={() => ((saveOpen = false), save(true))}>
+              <strong>Simpan berkas sebagai…</strong><small>Berkas .sop baru · Ctrl+Shift+S</small>
+            </button>
+          </div>
+        {/if}
+      </div>
       <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP baru, impor SOP lama (PDF/Word), atau revisi SOP ini dengan bantuan asisten AI">Asisten AI</button>
       <span class="sep"></span>
       <button class="icon" onclick={undo} disabled={!undoable} title="Urungkan (Ctrl+Z)">↶</button>
@@ -697,7 +740,7 @@
         {/if}
       </button>
       <div class="export">
-        <button class="btn primary" onclick={() => (exportOpen = !exportOpen)} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy}>
+        <button class="btn primary" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy}>
           {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
         </button>
