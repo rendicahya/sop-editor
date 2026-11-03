@@ -824,14 +824,44 @@ class Heap {
 }
 
 function arrowLine(pts) {
-  const clean = pts.filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 0.01);
+  const clean = pts
+    .filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 0.01)
+    .map((p) => [...p]);
   if (clean.length < 2) return [];
+  const HEAD = 1.6;
+  const NEED = HEAD + 1; // ruas terakhir minimal sepanjang ini agar belokannya tidak tertutup mata panah
+  const n = clean.length;
+  {
+    const [a, b] = clean.slice(-2);
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    // Ruas terakhir terlalu pendek setelah belok: geser ruas sebelumnya mundur (sejajar) agar ruas terakhir memanjang.
+    if (n >= 3 && len < NEED) {
+      const ux = (b[0] - a[0]) / len;
+      const uy = (b[1] - a[1]) / len;
+      const p = clean[n - 3];
+      const prevLen = Math.hypot(a[0] - p[0], a[1] - p[1]);
+      // Ruas sebelumnya tegak lurus: titik awalnya ikut digeser hanya bila ia bukan titik awal garis.
+      const along = Math.abs((a[0] - p[0]) * ux + (a[1] - p[1]) * uy);
+      const room = along > 0.01 ? Math.max(0, prevLen - 0.6) : n >= 4 ? Infinity : 0;
+      const dlt = Math.min(NEED - len, room);
+      if (dlt > 0) {
+        clean[n - 2] = [a[0] - ux * dlt, a[1] - uy * dlt];
+        if (!(along > 0.01)) {
+          const pp = clean[n - 4];
+          const pl = Math.hypot(p[0] - pp[0], p[1] - pp[1]);
+          const d2 = Math.min(dlt, Math.max(0, pl - 0.6));
+          clean[n - 2] = [a[0] - ux * d2, a[1] - uy * d2];
+          clean[n - 3] = [p[0] - ux * d2, p[1] - uy * d2];
+        }
+      }
+    }
+  }
   const [a, b] = clean.slice(-2);
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
   const ux = (b[0] - a[0]) / len;
   const uy = (b[1] - a[1]) / len;
-  const L = Math.min(1.6, len);
-  const Wd = 0.72;
+  const L = Math.min(HEAD, len * 0.6);
+  const Wd = 0.72 * (L / HEAD);
   const base = [b[0] - ux * L, b[1] - uy * L];
   const shaft = [...clean.slice(0, -1), base];
   return [
