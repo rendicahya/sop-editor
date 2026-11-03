@@ -459,6 +459,26 @@ textarea:focus {
 .export {
   position: relative;
 }
+.no-doc {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+.no-doc strong {
+  color: var(--text, inherit);
+  font-size: 1.1rem;
+}
+.no-doc .actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
 .export-menu {
   position: absolute;
   right: 0;

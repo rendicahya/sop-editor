@@ -232,6 +232,22 @@
     restore(json);
   }
 
+  // Tidak ada SOP terbuka (tab terakhir ditutup); diingat agar tetap kosong setelah muat ulang.
+  let empty = $state((() => {
+    try {
+      return localStorage.getItem('sop-empty') === '1';
+    } catch {
+      return false;
+    }
+  })());
+  function setEmpty(v) {
+    empty = v;
+    try {
+      if (v) localStorage.setItem('sop-empty', '1');
+      else localStorage.removeItem('sop-empty');
+    } catch {}
+  }
+
   // Tab: beberapa SOP terbuka sekaligus. Tab aktif ada di app.doc; tab lain (beserta riwayat undo-nya) di stash.
   const activeTab = $derived(tabs.list.find((t) => t.id === tabs.active));
   const tabTitle = (t) => (t.id === tabs.active ? app.doc.header.namaSop : t.title) || 'SOP tanpa judul';
@@ -293,6 +309,7 @@
    * `id`: entri pustaka yang dibuka; tanpa id, dokumen menjadi entri baru.
    */
   function openInTab(doc, name = null, handle = null, id = newTabId()) {
+    setEmpty(false);
     if (collab.status !== 'off') return replaceDocument(doc, name, handle);
     if (pristine()) {
       rekey(id);
@@ -302,6 +319,7 @@
   }
 
   function addTab(doc, name = null, handle = null, id = newTabId()) {
+    if (empty) return openInTab(doc, name, handle, id);
     stashActive();
     tabs.list.splice(tabs.list.indexOf(activeTab) + 1, 0, { id, title: doc.header.namaSop, fileName: name });
     stash.set(id, { json: JSON.stringify(doc), handle, past: [], future: [] });
@@ -326,10 +344,12 @@
     }
     if (!tabs.list.includes(tab)) return;
     if (tabs.list.length === 1) {
+      // Tab terakhir ditutup: tampilan dikosongkan sampai pengguna membuat atau membuka SOP.
       rekey();
       replaceDocument(emptyDocument());
       past = [];
       future = [];
+      setEmpty(true);
       return syncFlags();
     }
     const i = tabs.list.indexOf(tab);
@@ -396,6 +416,7 @@
     keyedRoom = r.id;
     untrack(() => {
       const id = 'room-' + r.id;
+      setEmpty(false);
       if (tabs.active === id) return; // ruang yang sama dibuka lagi (mis. setelah muat ulang)
       // Dokumen lama diganti dokumen ruang: yang sudah di pustaka diperbarui, yang belum ditanyakan dulu.
       const json = JSON.stringify(app.doc);
@@ -578,6 +599,7 @@
   function onKey(e) {
     if (!(e.ctrlKey || e.metaKey)) return;
     const k = e.key.toLowerCase();
+    if (empty && (k === 's' || k === 'p' || k === 'f' || k === 'h')) return e.preventDefault();
     if (k === 's') {
       e.preventDefault();
       save(e.shiftKey);
@@ -674,7 +696,7 @@
       <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)">Buka</button>
       <button class="btn ghost" onclick={() => (libraryOpen = true)} title="SOP dan templat yang disimpan di browser ini">Pustaka</button>
       <div class="export">
-        <button class="btn ghost" onclick={toggleSaveMenu} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka atau sebagai berkas .sop">
+        <button class="btn ghost" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka atau sebagai berkas .sop">
           Simpan
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
         </button>
@@ -740,7 +762,7 @@
         {/if}
       </button>
       <div class="export">
-        <button class="btn primary" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy}>
+        <button class="btn primary" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
           {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
         </button>
@@ -776,7 +798,7 @@
         e.currentTarget.scrollLeft += e.deltaY;
       }}
     >
-      {#each tabs.list as t (t.id)}
+      {#each empty ? [] : tabs.list as t (t.id)}
         <div
           class="doc-tab"
           class:active={t.id === tabs.active}
@@ -879,9 +901,21 @@
           />
         </div>
       {/if}
-      <div class="preview-scroll" bind:this={previewScroll}>
-        <Preview {pages} {zoom} editable={collab.status !== 'connecting'} />
-      </div>
+      {#if empty}
+        <div class="no-doc">
+          <strong>Tidak ada SOP yang terbuka</strong>
+          <span>Buat SOP baru, buka berkas, atau pilih dari Pustaka.</span>
+          <span class="actions">
+            <button class="btn primary" onclick={newDoc}>Baru</button>
+            <button class="btn" onclick={open}>Buka</button>
+            <button class="btn" onclick={() => (libraryOpen = true)}>Pustaka</button>
+          </span>
+        </div>
+      {:else}
+        <div class="preview-scroll" bind:this={previewScroll}>
+          <Preview {pages} {zoom} editable={collab.status !== 'connecting'} />
+        </div>
+      {/if}
     </section>
   </main>
 
