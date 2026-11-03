@@ -7,7 +7,15 @@
   let dialog;
   // Browser seluler (mis. Chrome Android) tidak bisa menampilkan PDF di dalam halaman.
   const inline = navigator.pdfViewerEnabled !== false;
-  const url = $derived(pdf ? URL.createObjectURL(pdf.output('blob')) : null);
+  const blob = $derived(pdf ? pdf.output('blob') : null);
+  const url = $derived(blob ? URL.createObjectURL(blob) : null);
+  const size = $derived.by(() => {
+    if (!blob) return '';
+    const b = blob.size;
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toLocaleString('id-ID', { maximumFractionDigits: 0 })} KB`;
+    return `${(b / 1024 / 1024).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB`;
+  });
 
   $effect(() => {
     const u = url;
@@ -29,7 +37,7 @@
   <header>
     <div>
       <h2>Pratinjau PDF</h2>
-      <small>{filename}{fontNote ? ' · ' + fontNote : ''}</small>
+      <small>{filename}{size ? ' · ' + size : ''}{fontNote ? ' · ' + fontNote : ''}</small>
     </div>
     <div class="actions">
       <button type="button" class="btn" onclick={() => (pdf = null)}>Kembali ke editor</button>
