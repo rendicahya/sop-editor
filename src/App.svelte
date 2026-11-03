@@ -2,7 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist, tabs, stash, newTabId } from './lib/store.svelte.js';
-  import { emptyDocument, sampleDocument, parseDocumentText, todayIso } from './lib/model.js';
+  import { emptyDocument, parseDocumentText, todayIso } from './lib/model.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf, sopFromPdf } from './lib/pdf.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
@@ -466,11 +466,6 @@
     openInTab(emptyDocument());
   }
 
-  function loadSample() {
-    if (shared && !confirm(`Ganti dokumen${shared} dengan contoh SOP Skripsi? (bisa di-Undo)`)) return;
-    openInTab(sampleDocument());
-  }
-
   /** Membuka berkas .sop/.json, atau PDF hasil ekspor app ini (data SOP tersimpan sebagai lampiran). */
   async function loadFile(file, handle) {
     if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
@@ -747,7 +742,6 @@
       {:else}
         <button class="btn ghost" onclick={() => (collabOpen = true)} title="Edit bersama secara real-time">Kolaborasi</button>
       {/if}
-      <button class="btn ghost" onclick={loadSample} title="Muat contoh SOP Skripsi">Contoh</button>
       <button
         class="btn ghost check-btn"
         class:on={checkOpen}
