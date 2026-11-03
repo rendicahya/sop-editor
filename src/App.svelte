@@ -4,7 +4,7 @@
   import { app, persist, tabs, stash, newTabId } from './lib/store.svelte.js';
   import { emptyDocument, sampleDocument, parseDocumentText, todayIso } from './lib/model.js';
   import { layoutDocument } from './lib/layout.js';
-  import { exportPdf } from './lib/pdf.js';
+  import { exportPdf, sopFromPdf } from './lib/pdf.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
   import { saveJson, openJsonFile, slug, sopName, downloadBlob } from './lib/files.js';
   import Preview from './lib/Preview.svelte';
@@ -450,6 +450,16 @@
     openInTab(sampleDocument());
   }
 
+  /** Membuka berkas .sop/.json, atau PDF hasil ekspor app ini (data SOP tersimpan sebagai lampiran). */
+  async function loadFile(file, handle) {
+    if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
+      const text = sopFromPdf(new Uint8Array(await file.arrayBuffer()));
+      if (!text) return alert('PDF ini tidak berisi data SOP (bukan hasil ekspor SOP Editor).'), false;
+      return loadText(text, sopName(file.name.replace(/\.pdf$/i, '')), null);
+    }
+    return loadText(await file.text(), file.name, handle);
+  }
+
   function loadText(text, name, handle) {
     try {
       const doc = parseDocumentText(text);
@@ -495,7 +505,7 @@
   async function open() {
     try {
       const f = await openJsonFile();
-      if (f) loadText(f.text, f.name, f.handle);
+      if (f) await loadFile(f.file, f.handle);
     } catch (e) {
       alert('Gagal membuka berkas: ' + e.message);
     }
@@ -572,7 +582,7 @@
   async function onDrop(e) {
     e.preventDefault();
     dragging = false;
-    for (const file of e.dataTransfer?.files ?? []) loadText(await file.text(), file.name, null);
+    for (const file of e.dataTransfer?.files ?? []) await loadFile(file, null);
   }
 
   onMount(() => {
@@ -591,8 +601,7 @@
     if ('launchQueue' in window) {
       window.launchQueue.setConsumer(async (params) => {
         for (const handle of params.files ?? []) {
-          const file = await handle.getFile();
-          loadText(await file.text(), file.name, handle);
+          await loadFile(await handle.getFile(), handle);
         }
       });
     }

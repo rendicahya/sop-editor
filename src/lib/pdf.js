@@ -1,6 +1,8 @@
 import { jsPDF } from 'jspdf';
 import { layoutDocument, baseline, PAGE, PT } from './layout.js';
 import { pdfFont, registerFonts } from './fonts.js';
+import { zlibSync, unzlibSync, strToU8, strFromU8 } from 'fflate';
+import { slug } from './files.js';
 
 export function exportPdf(doc) {
   const pages = layoutDocument(doc);
@@ -13,7 +15,58 @@ export function exportPdf(doc) {
     if (i > 0) pdf.addPage('a4', 'landscape');
     for (const it of page.items) drawItem(pdf, it);
   });
+  attachSop(pdf, doc);
   return pdf;
+}
+
+// Data SOP disisipkan sebagai lampiran PDF (embedded file, dikompres Flate) agar PDF ini bisa dibuka & diedit lagi.
+// Penanda /SOPEditor pada kamus stream dipakai saat membaca kembali (lihat sopFromPdf).
+function attachSop(pdf, doc) {
+  const json = JSON.stringify(doc);
+  const raw = strToU8(json);
+  const z = zlibSync(raw, { level: 9 });
+  let bin = '';
+  for (let i = 0; i < z.length; i += 0x8000) bin += String.fromCharCode.apply(null, z.subarray(i, i + 0x8000));
+  const name = (slug(doc.header.namaSop).normalize('NFKD').replace(/[^A-Za-z0-9-]/g, '') || 'dokumen') + '.sop';
+  let fileSpec;
+  pdf.internal.events.subscribe('postPutResources', function () {
+    const ef = this.internal.newObject();
+    this.internal.out(
+      `<< /Type /EmbeddedFile /Subtype /application#2Fjson /SOPEditor 1 /Filter /FlateDecode /Length ${z.length} /Params << /Size ${raw.length} >> >>`
+    );
+    this.internal.out('stream');
+    this.internal.out(bin);
+    this.internal.out('endstream');
+    this.internal.out('endobj');
+    fileSpec = this.internal.newObject();
+    this.internal.out(
+      `<< /Type /Filespec /F (${name}) /UF (${name}) /Desc (Data SOP Editor) /AFRelationship /Source /EF << /F ${ef} 0 R >> >>`
+    );
+    this.internal.out('endobj');
+  });
+  pdf.internal.events.subscribe('putCatalog', function () {
+    this.internal.out(`/Names << /EmbeddedFiles << /Names [(${name}) ${fileSpec} 0 R] >> >>`);
+    this.internal.out(`/AF [${fileSpec} 0 R]`);
+  });
+}
+
+/** Mengambil JSON SOP dari PDF hasil ekspor app ini; null bila tidak ada. */
+export function sopFromPdf(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  const at = s.lastIndexOf('/SOPEditor 1');
+  if (at < 0) return null;
+  const dictStart = s.lastIndexOf('<<', at);
+  const m = /\/Length (\d+)/.exec(s.slice(dictStart, s.indexOf('stream', at)));
+  if (!m) return null;
+  let p = s.indexOf('stream', at) + 6;
+  if (s[p] === '\r') p++;
+  if (s[p] === '\n') p++;
+  try {
+    return strFromU8(unzlibSync(bytes.subarray(p, p + Number(m[1]))));
+  } catch {
+    return null;
+  }
 }
 
 function style(pdf, it) {

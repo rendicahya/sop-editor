@@ -2,7 +2,9 @@
 // Isi berkas berupa JSON, tetapi disimpan berekstensi .sop; .json lama (dan berkas dari AI) tetap bisa dibuka.
 
 const SAVE_TYPES = [{ description: 'Dokumen SOP', accept: { 'application/json': ['.sop'] } }];
-const OPEN_TYPES = [{ description: 'Dokumen SOP', accept: { 'application/json': ['.sop', '.json'] } }];
+const OPEN_TYPES = [
+  { description: 'Dokumen SOP', accept: { 'application/json': ['.sop', '.json'], 'application/pdf': ['.pdf'] } }
+];
 
 /** Nama berkas dengan ekstensi .sop (mengganti .json lama). */
 export function sopName(name) {
@@ -56,8 +58,7 @@ export async function openJsonFile() {
   if ('showOpenFilePicker' in window) {
     try {
       const [handle] = await window.showOpenFilePicker({ types: OPEN_TYPES });
-      const file = await handle.getFile();
-      return { text: await file.text(), name: file.name, handle };
+      return { file: await handle.getFile(), handle };
     } catch (e) {
       if (e?.name === 'AbortError') return null;
       throw e;
@@ -66,10 +67,10 @@ export async function openJsonFile() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.sop,.json,application/json';
-    input.onchange = async () => {
+    input.accept = '.sop,.json,.pdf,application/json,application/pdf';
+    input.onchange = () => {
       const file = input.files?.[0];
-      resolve(file ? { text: await file.text(), name: file.name, handle: null } : null);
+      resolve(file ? { file, handle: null } : null);
     };
     input.click();
   });
