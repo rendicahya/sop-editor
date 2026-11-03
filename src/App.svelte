@@ -103,7 +103,7 @@
   $effect(() => {
     if (checkOpen) findOpen = false;
   });
-  const issues = $derived(checkDocument(app.doc));
+  const issues = $derived(empty ? [] : checkDocument(app.doc));
   const issueErrors = $derived(issues.filter((i) => i.level === 'error').length);
   const issueWarns = $derived(issues.filter((i) => i.level === 'warn').length);
   const duration = $derived(estimateDuration(app.doc));
