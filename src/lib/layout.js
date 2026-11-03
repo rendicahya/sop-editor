@@ -517,7 +517,8 @@ function layoutFlow(doc, pages) {
   // garis balik keluar dari samping dan masuk dari bawah/samping.
   const exits = (b, fwdMain) => boxPorts(b, false).map((p) => ({ ...p, cost: p.side === 'bottom' ? (fwdMain ? 0 : 6) : fwdMain ? 20 : 0 }));
   const entries = (b, forward) => boxPorts(b, true).map((p) => ({
-    ...p, cost: p.off * 0.4 + (forward ? { top: 0, left: 14, right: 14, bottom: 20 } : { top: 15, left: 3, right: 3, bottom: 3 })[p.side]
+    // Masuk di tengah sisi kecuali titik tengah sudah dipakai/terhalang garis lain.
+    ...p, cost: p.off * 6 + (forward ? { top: 0, left: 14, right: 14, bottom: 20 } : { top: 15, left: 3, right: 3, bottom: 3 })[p.side]
   }));
 
   // Geometri lajur dan baris untuk isian garis: posisi seret diubah menjadi posisi relatif jalur manual.
@@ -624,7 +625,7 @@ const CELL_FIELDS = [
 const BEND = 6;
 const OVER = 400;
 const CROSS = 2;
-const VIA = 8;
+const VIA_MISS = 150; // jalur manual: cukup satu ruas melewati posisi yang dipilih, sisanya bebas lurus
 const snap = (v) => Math.round(v * 100) / 100;
 
 function insideBox(b, px, py, mg) {
@@ -687,7 +688,10 @@ function makeGrid(xsIn, ysIn, boxes, yMin, yMax) {
 function findPath(g, starts, goals, via = null) {
   const vx = via?.x ?? null;
   const vy = via?.y ?? null;
-  const S = g.N * 4;
+  // Status = (titik, arah, bendera): bit 1 = sudah ada ruas tegak di x = via.x, bit 2 = ruas mendatar di y = via.y.
+  const S = g.N * 16;
+  const F0 = (vx === null ? 1 : 0) | (vy === null ? 2 : 0);
+  const miss = (f) => (f & 1 ? 0 : VIA_MISS) + (f & 2 ? 0 : VIA_MISS);
   const avail = (list) => {
     const free = list.filter((p) => !g.ports.has(g.node(p.x, p.y)));
     return free.length ? free : list.map((p) => ({ ...p, cost: p.cost + OVER }));
@@ -703,7 +707,7 @@ function findPath(g, starts, goals, via = null) {
   const prev = new Int32Array(S + goals.length).fill(-1);
   const heap = new Heap();
   for (const p of starts) {
-    const st = g.node(p.x, p.y) * 4 + p.d;
+    const st = (g.node(p.x, p.y) * 4 + p.d) * 4 + F0;
     if (p.cost < dist[st]) (dist[st] = p.cost), heap.push(p.cost, st);
   }
   let end = -1;
@@ -714,8 +718,9 @@ function findPath(g, starts, goals, via = null) {
       end = st;
       break;
     }
-    const nd0 = st & 3;
-    const k = st >> 2;
+    const f = st & 3;
+    const nd0 = (st >> 2) & 3;
+    const k = st >> 4;
     const i = k % g.nx;
     const j = (k - i) / g.nx;
     for (let nd = 0; nd < 4; nd++) {
@@ -742,15 +747,17 @@ function findPath(g, starts, goals, via = null) {
       else if (g.pass[k] & (nd % 2 ? 1 : 2)) nc += CROSS;
       // Pemecah seri: ruas mendatar lebih disukai di bawah (belok dekat tujuan pada alur turun).
       if (nd % 2 === 0) nc += len * (g.yMax - g.ys[j]) * 1e-4;
-      if (nd % 2 ? vx !== null && Math.abs(g.xs[i] - vx) > 0.01 : vy !== null && Math.abs(g.ys[j] - vy) > 0.01) nc += len * VIA;
+      let nf = f;
+      if (nd % 2 && vx !== null && Math.abs(g.xs[i] - vx) < 0.01) nf |= 1;
+      if (nd % 2 === 0 && vy !== null && Math.abs(g.ys[j] - vy) < 0.01) nf |= 2;
       const gk = goalAt.get(m * 4 + nd);
       if (gk !== undefined) {
-        const gc = nc + goals[gk].cost;
+        const gc = nc + goals[gk].cost + miss(nf);
         if (gc < dist[S + gk]) (dist[S + gk] = gc), (prev[S + gk] = st), heap.push(gc, S + gk);
       }
       if (g.blocked[m] === 2) continue;
       if (g.blocked[m]) nc += CROSS;
-      const t = m * 4 + nd;
+      const t = (m * 4 + nd) * 4 + nf;
       if (nc < dist[t]) (dist[t] = nc), (prev[t] = st), heap.push(nc, t);
     }
   }
@@ -758,7 +765,7 @@ function findPath(g, starts, goals, via = null) {
 
   const goal = goals[end - S];
   const nodes = [g.node(goal.x, goal.y)];
-  for (let st = prev[end]; st >= 0; st = prev[st]) nodes.push(st >> 2);
+  for (let st = prev[end]; st >= 0; st = prev[st]) nodes.push(st >> 4);
   nodes.reverse();
   const pt = (k) => [g.xs[k % g.nx], g.ys[Math.floor(k / g.nx)]];
   const pts = [pt(nodes[0])];
