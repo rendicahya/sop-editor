@@ -31,8 +31,15 @@
     else if (!pdf && dialog.open) dialog.close();
   });
 
+  // Nama berkas unduhan bisa diubah; diisi ulang setiap pratinjau baru dibuka.
+  let name = $state('');
+  $effect(() => {
+    if (pdf) name = filename.replace(/\.pdf$/i, '');
+  });
+
   function download() {
-    pdf.save(filename);
+    const n = name.trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\.pdf$/i, '') || filename.replace(/\.pdf$/i, '');
+    pdf.save(n + '.pdf');
     pdf = null;
   }
 </script>
@@ -41,9 +48,13 @@
   <header>
     <div>
       <h2>Pratinjau PDF</h2>
-      <small>{filename}{size ? ' · ' + size : ''}{fontNote ? ' · ' + fontNote : ''}</small>
+      <small>{size}{fontNote ? ' · ' + fontNote : ''}</small>
     </div>
     <div class="actions">
+      <label class="fname" title="Nama berkas PDF yang diunduh">
+        <input bind:value={name} aria-label="Nama berkas PDF" onkeydown={(e) => e.key === 'Enter' && download()} />
+        <span>.pdf</span>
+      </label>
       <button type="button" class="btn" onclick={() => (pdf = null)}>Kembali ke editor</button>
       <button type="button" class="btn primary" onclick={download}>Unduh PDF</button>
     </div>
@@ -103,6 +114,34 @@
   .actions {
     display: flex;
     gap: 0.5rem;
+  }
+  .actions {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .fname {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0 0.5rem;
+    background: var(--bg);
+    font-size: 0.85rem;
+  }
+  .fname input {
+    border: 0;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    width: min(18rem, 50vw);
+    padding: 0.4rem 0;
+    outline: none;
+  }
+  .fname:focus-within {
+    border-color: var(--accent, #2563eb);
+  }
+  .fname span {
+    color: var(--muted);
   }
   iframe {
     flex: 1;
