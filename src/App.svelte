@@ -624,11 +624,22 @@
   }
 
   onMount(() => {
-    // Tab yang isinya sudah ada di pustaka diselaraskan (entri baru tidak dibuat otomatis).
+    // Aplikasi selalu dibuka kosong: tab dari sesi sebelumnya disimpan ke Pustaka (bisa dibuka lagi dari sana).
     for (const t of tabs.list) {
-      if (t.id === tabs.active) queueSave(t.id, current, app.fileName);
-      else if (stash.has(t.id)) saveDoc(t.id, stash.get(t.id).json, t.fileName).catch(() => {});
+      const [json, name] = t.id === tabs.active ? [current, app.fileName] : [stash.get(t.id)?.json, t.fileName];
+      if (json) saveDoc(t.id, json, name, true).catch(() => {});
     }
+    const blank = JSON.stringify(emptyDocument());
+    const id = newTabId();
+    stash.clear();
+    tabs.list.splice(0, tabs.list.length, { id, title: '', fileName: null });
+    tabs.active = id;
+    app.fileName = null;
+    app.fileHandle = null;
+    past = [];
+    future = [];
+    restore(blank);
+    setEmpty(true);
     const onHide = () => document.visibilityState === 'hidden' && flushAll();
     document.addEventListener('visibilitychange', onHide);
     checkInvite();
