@@ -468,7 +468,6 @@ function layoutFlow(doc, pages) {
     colXs.push(c, c0 + 1.2, c0 + 2.4, c0 + actW - 1.2, c0 + actW - 2.4);
     for (const sz of [shapeSize('decision'), shapeSize('process')]) colXs.push(c - sz.w / 2 - 1, c + sz.w / 2 + 1);
     connXs.push(c);
-    if (5.8 + R <= actW / 2 - 0.4) connXs.push(c - 5.8, c + 5.8);
   }
   const topPortY = bodyTop + BAND / 2 + R; // ujung bawah konektor di pita atas
   const botPortY = (q) => bandBottomY[q] + BAND / 2 - R; // ujung atas konektor di pita bawah

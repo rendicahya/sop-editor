@@ -9,12 +9,16 @@
   const inline = navigator.pdfViewerEnabled !== false;
   const blob = $derived(pdf ? pdf.output('blob') : null);
   const url = $derived(blob ? URL.createObjectURL(blob) : null);
+  const PAPERS = { A3: [297, 420], A4: [210, 297], A5: [148, 210], Letter: [215.9, 279.4], Legal: [215.9, 355.6], F4: [215, 330] };
   const size = $derived.by(() => {
-    if (!blob) return '';
-    const b = blob.size;
-    if (b < 1024) return `${b} B`;
-    if (b < 1024 * 1024) return `${(b / 1024).toLocaleString('id-ID', { maximumFractionDigits: 0 })} KB`;
-    return `${(b / 1024 / 1024).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB`;
+    if (!pdf) return '';
+    const w = pdf.internal.pageSize.getWidth();
+    const h = pdf.internal.pageSize.getHeight();
+    const [a, b] = [Math.min(w, h), Math.max(w, h)];
+    const name = Object.keys(PAPERS).find((k) => Math.abs(PAPERS[k][0] - a) < 1 && Math.abs(PAPERS[k][1] - b) < 1);
+    const mm = `${Math.round(w)} × ${Math.round(h)} mm`;
+    const n = pdf.getNumberOfPages();
+    return `${name ? `${name} ${w > h ? 'landscape' : 'portrait'} (${mm})` : mm} · ${n} halaman`;
   });
 
   $effect(() => {
