@@ -102,6 +102,7 @@
   });
   $effect(() => {
     if (checkOpen) findOpen = false;
+    if (empty) checkOpen = false;
   });
   const issues = $derived(empty ? [] : checkDocument(app.doc));
   const issueErrors = $derived(issues.filter((i) => i.level === 'error').length);
@@ -745,6 +746,7 @@
       <button
         class="btn ghost check-btn"
         class:on={checkOpen}
+        disabled={empty}
         onclick={() => (checkOpen = !checkOpen)}
         title={issueErrors + issueWarns ? `${issueErrors} salah, ${issueWarns} peringatan pada alur dan isian` : 'Alur dan isian penting sudah lengkap'}
       >

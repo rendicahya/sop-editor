@@ -830,8 +830,8 @@ function arrowLine(pts) {
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
   const ux = (b[0] - a[0]) / len;
   const uy = (b[1] - a[1]) / len;
-  const L = Math.min(2, len);
-  const Wd = 0.9;
+  const L = Math.min(1.6, len);
+  const Wd = 0.72;
   const base = [b[0] - ux * L, b[1] - uy * L];
   const shaft = [...clean.slice(0, -1), base];
   return [
