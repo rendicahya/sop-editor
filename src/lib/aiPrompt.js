@@ -1,6 +1,8 @@
 // Prompt siap salin agar asisten AI menghasilkan JSON yang bisa dibuka aplikasi ini:
 // menyusun SOP baru dari deskripsi, atau menyalin SOP lama (PDF/Word/foto) ke format aplikasi.
-import { DEFAULT_INSTITUTION, DEFAULT_PENGESAH } from './model.js';
+import { DEFAULT_INSTITUTION, DEFAULT_PENGESAH, todayIso } from './model.js';
+
+const NOMOR_PREFIX = 'UN10/F15/';
 
 const EXAMPLE = {
   format: 'sop-editor',
@@ -60,19 +62,26 @@ ${header}
 
 export function aiPrompt(description = '') {
   const desc = description.trim() || '[TULIS DI SINI: nama SOP, unit kerja, siapa saja yang terlibat, dan urutan prosesnya]';
+  const today = todayIso();
+  const example = {
+    ...EXAMPLE,
+    header: { ...EXAMPLE.header, nomor: NOMOR_PREFIX, tglPembuatan: today, tglRevisi: today, tglEfektif: today }
+  };
   return `Buatkan dokumen SOP (Standar Operasional Prosedur) instansi pemerintah/perguruan tinggi Indonesia dalam format JSON untuk aplikasi "SOP Editor".
 
 DESKRIPSI PROSES:
 ${desc}
 
-${formatRules(`- header: isi semua kolom teks. "institution" boleh beberapa baris (pisahkan dengan \\n), ditulis HURUF KAPITAL dari kementerian sampai unit kerja. "namaSop" ditulis dengan huruf kapital di awal tiap kata (mis. "Pengajuan Cuti Akademik"), bukan huruf kapital semua. Tanggal memakai format YYYY-MM-DD; kosongkan ("") bila tidak diketahui. Jangan menyertakan logo atau tanda tangan.
+${formatRules(`- header: isi semua kolom teks. "institution" boleh beberapa baris (pisahkan dengan \\n), ditulis HURUF KAPITAL dari kementerian sampai unit kerja. "namaSop" ditulis dengan huruf kapital di awal tiap kata (mis. "Pengajuan Cuti Akademik"), bukan huruf kapital semua. Jangan menyertakan logo atau tanda tangan.
+- Nomor SOP: "nomor" selalu diawali "${NOMOR_PREFIX}". Lanjutkan hanya bila deskripsi menyebut nomor lengkapnya; bila tidak, isi "${NOMOR_PREFIX}" saja tanpa mengarang kelanjutannya.
+- Tanggal: isi "tglPembuatan", "tglRevisi", dan "tglEfektif" dengan tanggal hari ini, "${today}" (format YYYY-MM-DD).
 - Pengesah: kecuali deskripsi menyebut pejabat lain, ${PENGESAH_RULE}.
 - Dasar hukum: gunakan peraturan yang benar-benar ada; bila ragu, tulis "[lengkapi: …]" alih-alih mengarang nomor peraturan.`)}
 - Tulis istilah asing dengan <i>miring</i>. Jangan memakai format tebal (<b>) sama sekali; format lain seperlunya saja.
 - Gunakan bahasa Indonesia baku.
 
-CONTOH STRUKTUR (isi dengan proses di atas, jangan disalin isinya):
-${JSON.stringify(EXAMPLE, null, 2)}`;
+CONTOH STRUKTUR (isi dengan proses di atas, jangan disalin isinya, kecuali nomor dan tanggal sesuai aturan di atas):
+${JSON.stringify(example, null, 2)}`;
 }
 
 /** Dokumen untuk dikirim ke AI: tanpa gambar tanda tangan dan jalur garis manual (dipulihkan saat jawaban dibuka). */

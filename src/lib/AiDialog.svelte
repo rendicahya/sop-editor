@@ -21,15 +21,16 @@
     return drafts.get(docKey);
   });
   let copied = $state(false);
-  // Prompt revisi memuat seluruh dokumen; hanya dihitung saat dibutuhkan.
+  // Hanya dihitung saat dialog terbuka: prompt revisi memuat seluruh dokumen, dan tanggal di prompt
+  // SOP baru harus tanggal saat dialog dibuka, bukan saat aplikasi dimuat.
   const prompt = $derived(
-    draft.mode === 'import'
-      ? aiImportPrompt(draft.note, draft.update)
-      : draft.mode === 'revise'
-        ? open
+    !open
+      ? ''
+      : draft.mode === 'import'
+        ? aiImportPrompt(draft.note, draft.update)
+        : draft.mode === 'revise'
           ? aiRevisePrompt(app.doc, draft.instruction)
-          : ''
-        : aiPrompt(draft.description)
+          : aiPrompt(draft.description)
   );
 
   $effect(() => {
