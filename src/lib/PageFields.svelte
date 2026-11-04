@@ -153,26 +153,62 @@
     menu = null;
   }
 
-  // Dialog jalur garis bisa digeser dari bagian mana pun selain tombol. Pergeseran disimpan dalam mm
-  // agar tetap sebanding saat pratinjau di-zoom.
-  let menuDrag = null;
-  function startMenuDrag(e) {
-    if (e.button !== 0 || e.target.closest('button')) return;
-    e.preventDefault();
-    const [mx, my] = toMm(e);
-    menuDrag = { mx, my, dx: edgeSel.dx ?? 0, dy: edgeSel.dy ?? 0 };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }
-  function moveMenuDrag(e) {
-    if (!menuDrag || !edgeSel) return;
-    // Dialog terpotong di tepi area pratinjau. Penunjuk dibatasi di dalamnya, sehingga bagian yang
-    // dipegang tetap terlihat dan dialog bisa dipegang lagi.
-    const a = root.closest('.preview-scroll').getBoundingClientRect();
-    const clientX = Math.min(a.right - 8, Math.max(a.left + 8, e.clientX));
-    const clientY = Math.min(a.bottom - 8, Math.max(a.top + 8, e.clientY));
-    const [mx, my] = toMm({ clientX, clientY });
-    edgeSel.dx = menuDrag.dx + mx - menuDrag.mx;
-    edgeSel.dy = menuDrag.dy + my - menuDrag.my;
+  /**
+   * Dialog bisa digeser dari bagian mana pun selain kontrolnya. Pergeseran disimpan dalam mm agar
+   * tetap sebanding saat pratinjau di-zoom, dan hilang saat dialog ditutup.
+   * `anchor` ({x, y} dalam mm, opsional): titik acuan dialog. Bila acuannya berpindah karena tata letak
+   * berubah, dialog yang sudah digeser tetap di tempatnya; yang belum digeser ikut berpindah.
+   */
+  function movable(el, anchor) {
+    let dx = 0;
+    let dy = 0;
+    let grab = null;
+    const place = () => (el.style.translate = `calc(${dx} * var(--mm)) calc(${dy} * var(--mm))`);
+    const stop = () => {
+      grab = null;
+      removeEventListener('pointermove', move);
+      removeEventListener('pointerup', stop);
+      removeEventListener('pointercancel', stop);
+    };
+    const down = (e) => {
+      if (e.button !== 0 || e.target.closest('button, input, select, textarea')) return;
+      const [mx, my] = toMm(e);
+      grab = { mx, my, dx, dy, x: e.clientX, y: e.clientY, moved: false };
+      // Didengarkan di window: seretan cepat bisa keluar dari dialog sebelum gerakan pertama terbaca.
+      addEventListener('pointermove', move);
+      addEventListener('pointerup', stop);
+      addEventListener('pointercancel', stop);
+    };
+    function move(e) {
+      if (!e.buttons) return stop();
+      if (!grab.moved) {
+        // Penunjuk baru ditangkap setelah benar-benar bergerak, agar klik pada label tetap memfokuskan isiannya.
+        if (Math.hypot(e.clientX - grab.x, e.clientY - grab.y) < 3) return;
+        grab.moved = true;
+        el.setPointerCapture(e.pointerId);
+      }
+      // Dialog terpotong di tepi area pratinjau. Penunjuk dibatasi di dalamnya, sehingga bagian yang
+      // dipegang tetap terlihat dan dialog bisa dipegang lagi.
+      const a = root.closest('.preview-scroll').getBoundingClientRect();
+      const clientX = Math.min(a.right - 8, Math.max(a.left + 8, e.clientX));
+      const clientY = Math.min(a.bottom - 8, Math.max(a.top + 8, e.clientY));
+      const [mx, my] = toMm({ clientX, clientY });
+      dx = grab.dx + mx - grab.mx;
+      dy = grab.dy + my - grab.my;
+      place();
+    }
+    el.addEventListener('pointerdown', down);
+    return {
+      update(next) {
+        if ((dx || dy) && anchor && next) {
+          dx -= next.x - anchor.x;
+          dy -= next.y - anchor.y;
+          place();
+        }
+        anchor = next;
+      },
+      destroy: stop
+    };
   }
 
   // Seret ruas: ruas tegak bergeser mendatar (menjadi `x`), ruas mendatar bergeser tegak (menjadi `y`).
@@ -741,7 +777,7 @@
         ></button>
         {#if open}
           {@const dec = s.shape === 'decision'}
-          <div class="shape-menu" class:up={f.y > 115} role="dialog" aria-label="Simbol langkah {f.index + 1}">
+          <div class="shape-menu" class:up={f.y > 115} role="dialog" aria-label="Simbol langkah {f.index + 1}" use:movable={{ x: f.x + f.w / 2, y: f.y > 115 ? f.y : f.y + f.h }}>
             <div class="seg" role="group" aria-label="Simbol">
               {#each SHAPES as sh (sh.value)}
                 <button class:on={s.shape === sh.value} aria-pressed={s.shape === sh.value} onclick={() => (s.shape = sh.value)}>{sh.label}</button>
@@ -830,18 +866,15 @@
       </svg>
       {#if sel && edgeSel.fid === f.id}
         {@const r = routeOf(f)}
+        {#key edgeSel}
         <div
           class="edge-menu"
-          tabindex="-1"
           class:up={edgeSel.my > 120}
           class:left={edgeSel.mx > 200}
-          style="left:calc({edgeSel.mx} * var(--mm));top:calc({edgeSel.my} * var(--mm));translate:calc({edgeSel.dx ?? 0} * var(--mm)) calc({edgeSel.dy ?? 0} * var(--mm))"
+          style="left:calc({edgeSel.mx} * var(--mm));top:calc({edgeSel.my} * var(--mm))"
           role="dialog"
           aria-label="Jalur garis"
-          onpointerdown={startMenuDrag}
-          onpointermove={moveMenuDrag}
-          onpointerup={() => (menuDrag = null)}
-          onpointercancel={() => (menuDrag = null)}
+          use:movable
         >
           <span class="lbl">Keluar dari</span>
           <div class="seg" role="group" aria-label="Sisi keluar">
@@ -858,6 +891,7 @@
           <p class="hint">Seret kotak kecil pada garis untuk menggeser ruasnya.</p>
           <button class="reset" disabled={!r} onclick={() => setRoute(f, { from: null, to: null, x: null, y: null })}>Kembalikan jalur otomatis</button>
         </div>
+        {/key}
       {/if}
     {:else if f.kind === 'add-step'}
       <button class="f-empty f-hint" style={box(f)} data-fid={f.id} onclick={() => addStep(-1)}>+ Tambah kegiatan</button>
@@ -1224,6 +1258,9 @@
     border: 1px solid rgb(var(--edit) / 0.4);
     border-radius: 8px;
     box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+    cursor: move;
+    user-select: none;
+    touch-action: none;
   }
   .shape-menu.up {
     top: auto;
@@ -1295,6 +1332,7 @@
     border-radius: 5px;
     background: #fff;
     color: #1f2633;
+    user-select: text;
   }
   .f-edge {
     inset: 0;
