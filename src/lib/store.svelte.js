@@ -77,3 +77,34 @@ export function persist(json) {
     // kuota penuh / mode privat: abaikan, pengguna tetap bisa simpan JSON manual
   }
 }
+
+// Keadaan tab browser ini untuk dipulihkan setelah muat ulang. Tersimpan per tab browser, jadi jendela lain
+// yang membuka aplikasi tidak menimpanya (berbeda dari localStorage di atas).
+const SESSION_KEY = 'sop-editor:session';
+
+export function saveSession(session) {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    // Kuota penuh: jangan sampai muat ulang memulihkan keadaan lama.
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+    } catch {}
+  }
+}
+
+/** Keadaan yang dipulihkan, atau null bila halaman ini bukan hasil muat ulang (aplikasi baru dibuka). */
+export function loadSession() {
+  try {
+    if (performance.getEntriesByType('navigation')[0]?.type !== 'reload') return null;
+    const s = JSON.parse(sessionStorage.getItem(SESSION_KEY));
+    const list = [];
+    for (const t of s.tabs) {
+      const doc = valid(safeParse(t.json));
+      if (doc) list.push({ ...t, doc, json: JSON.stringify(doc) });
+    }
+    return list.some((t) => t.id === s.active) ? { ...s, tabs: list } : null;
+  } catch {
+    return null;
+  }
+}

@@ -1,7 +1,7 @@
 <script>
   import { onMount, tick, untrack } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
-  import { app, persist, tabs, stash, newTabId } from './lib/store.svelte.js';
+  import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
   import { emptyDocument, parseDocumentText, todayIso } from './lib/model.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf, sopFromPdf } from './lib/pdf.js';
@@ -211,6 +211,41 @@
     checkpoint(); // ketikan terakhir ikut tersimpan bila pengguna tetap memuat ulang
     e.preventDefault();
     e.returnValue = '';
+  }
+
+  /** Halaman benar-benar ditinggalkan: catat semua tab agar kembali bila ini muat ulang. */
+  function onPageHide() {
+    const json = JSON.stringify(app.doc);
+    if (json !== current) commit(json);
+    saveSession({
+      active: tabs.active,
+      empty,
+      room: collab.room?.id ?? null,
+      tabs: tabs.list.map((t) => {
+        if (t.id === tabs.active) return { id: t.id, fileName: app.fileName, json: current, dirty: current !== clean };
+        const s = stash.get(t.id);
+        return { id: t.id, fileName: t.fileName, json: s.json, dirty: s.json !== s.clean };
+      })
+    });
+  }
+
+  /** Mengembalikan tab setelah muat ulang. Riwayat undo dan handle berkas tidak ikut (tidak tersimpan). */
+  function resumeSession(s) {
+    stash.clear();
+    for (const t of s.tabs) {
+      if (t.id !== s.active) stash.set(t.id, { json: t.json, handle: null, past: [], future: [], clean: t.dirty ? null : t.json });
+    }
+    tabs.list.splice(0, tabs.list.length, ...s.tabs.map((t) => ({ id: t.id, title: t.doc.header.namaSop, fileName: t.fileName })));
+    tabs.active = s.active;
+    const a = s.tabs.find((t) => t.id === s.active);
+    app.fileName = a.fileName;
+    app.fileHandle = null;
+    past = [];
+    future = [];
+    restore(a.json);
+    clean = a.dirty ? null : a.json;
+    keyedRoom = s.room; // ruang yang sama dimasuki lagi: tab ini memang dokumennya, tidak perlu entri baru
+    setEmpty(s.empty);
   }
 
   // Setiap perubahan lokal langsung dikirim ke ruang kolaborasi.
@@ -681,23 +716,27 @@
   }
 
   onMount(() => {
-    // Aplikasi selalu dibuka kosong: tab dari sesi sebelumnya disimpan ke Pustaka (bisa dibuka lagi dari sana).
-    for (const t of tabs.list) {
-      const [json, name] = t.id === tabs.active ? [current, app.fileName] : [stash.get(t.id)?.json, t.fileName];
-      if (json) saveDoc(t.id, json, name, true).catch(() => {});
+    const session = loadSession();
+    if (session) resumeSession(session);
+    else {
+      // Aplikasi dibuka kosong: tab dari sesi sebelumnya disimpan ke Pustaka (bisa dibuka lagi dari sana).
+      for (const t of tabs.list) {
+        const [json, name] = t.id === tabs.active ? [current, app.fileName] : [stash.get(t.id)?.json, t.fileName];
+        if (json) saveDoc(t.id, json, name, true).catch(() => {});
+      }
+      const blank = JSON.stringify(emptyDocument());
+      const id = newTabId();
+      stash.clear();
+      tabs.list.splice(0, tabs.list.length, { id, title: '', fileName: null });
+      tabs.active = id;
+      app.fileName = null;
+      app.fileHandle = null;
+      past = [];
+      future = [];
+      restore(blank);
+      clean = blank;
+      setEmpty(true);
     }
-    const blank = JSON.stringify(emptyDocument());
-    const id = newTabId();
-    stash.clear();
-    tabs.list.splice(0, tabs.list.length, { id, title: '', fileName: null });
-    tabs.active = id;
-    app.fileName = null;
-    app.fileHandle = null;
-    past = [];
-    future = [];
-    restore(blank);
-    clean = blank;
-    setEmpty(true);
     const onHide = () => document.visibilityState === 'hidden' && flushAll();
     document.addEventListener('visibilitychange', onHide);
     checkInvite();
@@ -723,6 +762,7 @@
 
 <svelte:window
   onbeforeunload={onBeforeUnload}
+  onpagehide={onPageHide}
   onkeydown={(e) => {
     if (e.key === 'Escape') exportOpen = saveOpen = false;
     onKey(e);

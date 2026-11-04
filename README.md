@@ -54,7 +54,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   simbol, lalu seret kotak kecil pada ruas garis untuk menggesernya. Posisi disimpan relatif terhadap lajur dan baris,
   jadi tetap berlaku saat tata letak berubah. "Kembalikan jalur otomatis" menghapus pengaturan manualnya.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
-- **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Asisten AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab tersimpan otomatis di browser; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
+- **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Asisten AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab kembali seperti semula setelah halaman dimuat ulang (riwayat Undo tidak ikut), sedangkan aplikasi yang baru dibuka selalu kosong; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
 - **Pustaka dokumen**: SOP yang disimpan ke Pustaka berada di browser (IndexedDB) dan perubahannya tersimpan otomatis,
   jadi tab bisa ditutup dan dibuka lagi kapan saja. Pustaka bisa dicari (nama, nomor, pelaksana, kegiatan, butir ketentuan),
   dokumennya bisa diduplikasi atau dijadikan **templat**, dan templat (termasuk templat bawaan) dipakai untuk memulai SOP
