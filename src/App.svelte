@@ -561,9 +561,12 @@
 
   async function saveToLibrary() {
     checkpoint();
+    const id = tabs.active;
     try {
-      await saveDoc(tabs.active, JSON.stringify(app.doc), app.fileName, true);
-      notify(inLibrary ? 'Pustaka sudah diperbarui' : 'Tersimpan di Pustaka — perubahan berikutnya tersimpan otomatis');
+      const had = !!(await getEntry(id));
+      await saveDoc(id, JSON.stringify(app.doc), app.fileName, true);
+      if (!had && !(await getEntry(id))) return notify('Dokumen masih kosong, belum ada yang disimpan');
+      notify(had ? 'Pustaka sudah diperbarui' : 'Tersimpan di Pustaka — perubahan berikutnya tersimpan otomatis');
     } catch (e) {
       alert('Gagal menyimpan ke Pustaka: ' + e.message);
     }
@@ -597,6 +600,14 @@
   }
 
   function onKey(e) {
+    // Tutup tab dokumen: Alt+W. Ctrl+W dicadangkan browser dan hanya sampai ke sini di aplikasi terpasang.
+    // altKey !== ctrlKey menyingkirkan AltGr (Ctrl+Alt) yang dipakai mengetik di sebagian papan ketik.
+    if (e.code === 'KeyW' && !e.shiftKey && !e.metaKey && e.altKey !== e.ctrlKey) {
+      if (empty) return;
+      e.preventDefault();
+      if (!e.repeat && !document.querySelector('dialog[open]')) closeTab(tabs.active);
+      return;
+    }
     if (!(e.ctrlKey || e.metaKey)) return;
     const k = e.key.toLowerCase();
     if (empty && (k === 's' || k === 'p' || k === 'f' || k === 'h')) return e.preventDefault();
@@ -844,7 +855,7 @@
           <button role="tab" aria-selected={t.id === tabs.active} onclick={() => switchTab(t.id)}>
             {tabTitle(t)}
           </button>
-          <button class="close" onclick={() => closeTab(t.id)} title="Tutup tab" aria-label="Tutup {tabTitle(t)}">×</button>
+          <button class="close" onclick={() => closeTab(t.id)} title="Tutup tab (Alt+W)" aria-label="Tutup {tabTitle(t)}">×</button>
         </div>
       {/each}
       <button class="add" onclick={() => addTab(emptyDocument())} disabled={collab.status !== 'off'} title={collab.status !== 'off' ? 'Keluar dari ruang kolaborasi untuk membuka tab baru' : 'Tab baru'} aria-label="Tab baru">+</button>
@@ -963,6 +974,8 @@
     active={tabs.active}
     onopen={openEntry}
     ontemplate={useTemplate}
+    onsave={saveToLibrary}
+    cansave={!empty}
     onnotify={notify}
   />
 

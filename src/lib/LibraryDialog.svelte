@@ -1,13 +1,13 @@
 <script>
   import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
-  import { app, newTabId } from './store.svelte.js';
+  import { newTabId } from './store.svelte.js';
   import { emptyDocument, sampleDocument, parseDocumentText } from './model.js';
   import { plainText } from './richtext.js';
   import { listEntries, putEntry, patchEntry, deleteEntry, flushAll, cleanTags } from './library.js';
   import { slug, downloadBlob } from './files.js';
 
   /** openIds: id tab yang sedang terbuka (= id entri pustaka). */
-  let { open = $bindable(false), openIds = [], active, onopen, ontemplate, onnotify } = $props();
+  let { open = $bindable(false), openIds = [], active, onopen, ontemplate, onsave, cansave = true, onnotify } = $props();
 
   let dialog;
   let restoreInput;
@@ -178,6 +178,13 @@
     onnotify(`Templat "${name.trim()}" disimpan`);
   }
 
+  async function saveCurrent() {
+    await onsave();
+    setKind('doc');
+    query = '';
+    await refresh();
+  }
+
   async function rename(e) {
     const name = prompt('Nama templat:', e.title);
     if (!name?.trim() || name.trim() === e.title) return;
@@ -276,8 +283,8 @@
     <button class="x" onclick={() => (open = false)} aria-label="Tutup">×</button>
   </header>
   <p class="hint">
-    Semua SOP yang diedit tersimpan otomatis di browser ini. Cadangkan secara berkala; data hilang bila data situs browser
-    dihapus.
+    SOP yang disimpan ke Pustaka berada di browser ini, dan perubahannya tersimpan otomatis. Cadangkan secara berkala; data
+    hilang bila data situs browser dihapus.
   </p>
 
   <div class="bar">
@@ -337,7 +344,7 @@
           <strong>{b.title}</strong>
           <small>Bawaan · {b.note}</small>
         </button>
-        <span class="acts"><button class="btn small primary" onclick={() => useTpl(b.make)}>Pakai</button></span>
+        <span class="acts"><button class="btn small primary" onclick={() => useTpl(b.make)}>Gunakan</button></span>
       </li>
     {/each}
     {#each shown as e (e.id)}
@@ -376,7 +383,7 @@
             <button class="btn small" onclick={() => duplicate(e)} title="Buat salinan di pustaka">Duplikat</button>
             <button class="btn small" onclick={() => makeTemplate(e.json, e.title)} title="Simpan sebagai titik awal SOP baru">Jadikan templat</button>
           {:else}
-            <button class="btn small primary" onclick={() => useTpl(() => parseDocumentText(e.json))}>Pakai</button>
+            <button class="btn small primary" onclick={() => useTpl(() => parseDocumentText(e.json))}>Gunakan</button>
             <button class="btn small" onclick={() => rename(e)}>Ubah nama</button>
           {/if}
           <button
@@ -410,16 +417,14 @@
     {:else}
       {#if !builtins.length}
         <li class="empty">
-          {query.trim() ? 'Tidak ada yang cocok.' : kind === 'doc' ? 'Belum ada dokumen. SOP yang Anda edit akan muncul di sini.' : 'Belum ada templat buatan sendiri.'}
+          {query.trim() ? 'Tidak ada yang cocok.' : kind === 'doc' ? 'Belum ada dokumen. SOP yang disimpan ke Pustaka akan muncul di sini.' : 'Belum ada templat buatan sendiri.'}
         </li>
       {/if}
     {/each}
   </ul>
 
   <footer>
-    <button class="btn" onclick={() => makeTemplate(JSON.stringify(app.doc), app.doc.header.namaSop)}>
-      Jadikan dokumen ini templat
-    </button>
+    <button class="btn" onclick={saveCurrent} disabled={!cansave}>Simpan dokumen ini ke pustaka</button>
     <span class="grow"></span>
     <button class="btn" onclick={backup} disabled={!entries.length} title="Unduh semua dokumen dan templat sebagai .zip">Cadangkan (.zip)</button>
     <button class="btn" onclick={() => restoreInput.click()} title="Tambahkan isi cadangan .zip atau berkas .sop ke pustaka">Pulihkan…</button>
