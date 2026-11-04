@@ -2,7 +2,7 @@
   import Preview from './Preview.svelte';
 
   /** pdf: objek jsPDF hasil exportPdf; pages: tata letak (cadangan bila browser tak bisa menampilkan PDF). */
-  let { pdf = $bindable(null), pages, filename, fontNote = '' } = $props();
+  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload } = $props();
 
   let dialog;
   // Browser seluler (mis. Chrome Android) tidak bisa menampilkan PDF di dalam halaman.
@@ -40,6 +40,7 @@
   function download() {
     const n = name.trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\.pdf$/i, '') || filename.replace(/\.pdf$/i, '');
     pdf.save(n + '.pdf');
+    ondownload?.();
     pdf = null;
   }
 </script>

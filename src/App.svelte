@@ -184,6 +184,35 @@
   }
   connectHistory({ checkpoint, undo: () => undo(), redo: () => redo() });
 
+  // Isi tab aktif saat terakhir disimpan atau diekspor (null: belum pernah, mis. hasil AI). Tab lain menyimpannya di stash.
+  let clean = current;
+
+  /** Dipanggil sebelum menyimpan; fungsi hasilnya menandai isi saat ini tersimpan setelah penyimpanan berhasil. */
+  function saveMark() {
+    const id = tabs.active;
+    const json = JSON.stringify(app.doc);
+    return () => {
+      if (id === tabs.active) clean = json;
+      else if (stash.has(id)) stash.get(id).clean = json;
+    };
+  }
+
+  // Isi ruang kolaborasi tersimpan otomatis dan ikut diubah peserta lain, jadi tidak diperingatkan.
+  function hasUnsaved() {
+    if (!empty && collab.status === 'off' && JSON.stringify(app.doc) !== clean) return true;
+    return tabs.list.some((t) => {
+      const s = t.id !== tabs.active && stash.get(t.id);
+      return s && s.json !== s.clean;
+    });
+  }
+
+  function onBeforeUnload(e) {
+    if (!hasUnsaved()) return;
+    checkpoint(); // ketikan terakhir ikut tersimpan bila pengguna tetap memuat ulang
+    e.preventDefault();
+    e.returnValue = '';
+  }
+
   // Setiap perubahan lokal langsung dikirim ke ruang kolaborasi.
   $effect(() => {
     const doc = JSON.parse(JSON.stringify(app.doc));
@@ -261,7 +290,7 @@
       future = [];
       current = json;
     }
-    stash.set(tabs.active, { json, handle: app.fileHandle, past, future });
+    stash.set(tabs.active, { json, handle: app.fileHandle, past, future, clean });
     Object.assign(activeTab, { title: app.doc.header.namaSop, fileName: app.fileName });
     queueSave(tabs.active, json, app.fileName);
   }
@@ -278,6 +307,7 @@
     tabs.active = id;
     past = s.past;
     future = s.future;
+    clean = s.clean;
     app.fileHandle = s.handle;
     app.fileName = activeTab.fileName;
     restore(s.json);
@@ -317,7 +347,9 @@
     }
     if (pristine()) {
       rekey(id);
-      return replaceDocument(doc, name, handle);
+      replaceDocument(doc, name, handle);
+      clean = current;
+      return;
     }
     addTab(doc, name, handle, id);
   }
@@ -326,7 +358,8 @@
     if (empty) return openInTab(doc, name, handle, id);
     stashActive();
     tabs.list.splice(tabs.list.indexOf(activeTab) + 1, 0, { id, title: doc.header.namaSop, fileName: name });
-    stash.set(id, { json: JSON.stringify(doc), handle, past: [], future: [] });
+    const json = JSON.stringify(doc);
+    stash.set(id, { json, handle, past: [], future: [], clean: json });
     activate(id);
   }
 
@@ -511,6 +544,7 @@
         return true;
       }
       openInTab(doc);
+      clean = null; // hasil AI belum ada salinannya di mana pun
       notify('Dokumen dari AI dibuka — periksa kembali isinya sebelum diekspor');
       return true;
     } catch (e) {
@@ -534,9 +568,11 @@
 
   async function save(saveAs = false) {
     const name = sopName(app.fileName || `SOP-${slug(app.doc.header.namaSop)}`);
+    const saved = saveMark();
     try {
       const handle = await saveJson(JSON.stringify(app.doc, null, 2), name, app.fileHandle, saveAs);
       if (handle === undefined) return;
+      saved();
       if (handle) {
         app.fileHandle = handle;
         app.fileName = handle.name;
@@ -562,10 +598,12 @@
   async function saveToLibrary() {
     checkpoint();
     const id = tabs.active;
+    const saved = saveMark();
     try {
       const had = !!(await getEntry(id));
       await saveDoc(id, JSON.stringify(app.doc), app.fileName, true);
       if (!had && !(await getEntry(id))) return notify('Dokumen masih kosong, belum ada yang disimpan');
+      saved();
       notify(had ? 'Pustaka sudah diperbarui' : 'Tersimpan di Pustaka — perubahan berikutnya tersimpan otomatis');
     } catch (e) {
       alert('Gagal menyimpan ke Pustaka: ' + e.message);
@@ -574,8 +612,10 @@
 
   // Ekspor PDF selalu lewat pratinjau dulu; unduhan dilakukan dari dialog.
   let pdfDoc = $state(null);
+  let pdfSaved;
   function pdf() {
     try {
+      pdfSaved = saveMark();
       pdfDoc = exportPdf(app.doc);
     } catch (e) {
       alert('Gagal membuat PDF: ' + e.message);
@@ -586,12 +626,14 @@
   let exportBusy = $state('');
   async function exportFile(kind) {
     exportBusy = kind.toUpperCase();
+    const saved = saveMark();
     try {
       const blob =
         kind === 'docx' ? await (await import('./lib/docx.js')).exportDocx(app.doc)
         : kind === 'xlsx' ? await (await import('./lib/xlsx.js')).exportXlsx(app.doc)
         : await (await import('./lib/png.js')).exportPngZip(app.doc, `SOP-${slug(app.doc.header.namaSop)}`);
       downloadBlob(blob, `SOP-${slug(app.doc.header.namaSop)}.${kind === 'png' ? 'zip' : kind}`);
+      saved();
     } catch (e) {
       alert(`Gagal membuat ${kind.toUpperCase()}: ` + e.message);
     } finally {
@@ -654,6 +696,7 @@
     past = [];
     future = [];
     restore(blank);
+    clean = blank;
     setEmpty(true);
     const onHide = () => document.visibilityState === 'hidden' && flushAll();
     document.addEventListener('visibilitychange', onHide);
@@ -679,6 +722,7 @@
 </script>
 
 <svelte:window
+  onbeforeunload={onBeforeUnload}
   onkeydown={(e) => {
     if (e.key === 'Escape') exportOpen = saveOpen = false;
     onKey(e);
@@ -958,6 +1002,7 @@
   <AiDialog bind:open={aiOpen} docKey={`${tabs.active}:${roomDocs}`} onpaste={loadPasted} />
   <PdfPreviewDialog
     bind:pdf={pdfDoc}
+    ondownload={() => pdfSaved?.()}
     {pages}
     filename={`SOP-${slug(app.doc.header.namaSop)}.pdf`}
     fontNote={docFont === 'calibri' ? '' : 'Calibri belum tersedia, PDF memakai Carlito (ukuran identik)'}
