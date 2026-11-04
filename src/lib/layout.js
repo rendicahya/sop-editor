@@ -642,15 +642,16 @@ function insideBox(b, px, py, mg) {
 function boxPorts(b, entry) {
   const dec = b.shape === 'decision';
   // Simbol di atas garis kolom tidak memakai titik tengahnya, agar garis alur tidak menumpuk garis kolom.
-  // Sudut belah ketupat tetap dipakai: titik di sisi miringnya tidak berada di tepi atas/bawah.
-  const seam = b.seam && !dec;
+  const seam = b.seam;
   const along = (seam ? (entry ? [-2, 2, -4, 4] : [-2, 2]) : entry && !dec ? [0, -2, 2, -4, 4] : [0]).filter((o) => Math.abs(o) <= b.w / 2 - 1.2);
   const across = entry && !dec ? [0, -1.5, 1.5] : [0];
   const ports = [];
   for (const o of along) {
     const off = Math.abs(o) - (seam ? 2 : 0); // pada simbol di atas garis kolom, ±2 setara titik tengah
-    ports.push({ side: 'bottom', x: b.cx + o, y: b.bottom, d: entry ? 3 : 1, off });
-    if (entry) ports.push({ side: 'top', x: b.cx + o, y: b.top, d: 1, off });
+    // Di luar sudut belah ketupat, titik sambung turun mengikuti sisi miringnya.
+    const inset = dec ? (b.h / 2) * (Math.abs(o) / (b.w / 2)) : 0;
+    ports.push({ side: 'bottom', x: b.cx + o, y: b.bottom - inset, d: entry ? 3 : 1, off });
+    if (entry) ports.push({ side: 'top', x: b.cx + o, y: b.top + inset, d: 1, off });
   }
   for (const o of across) {
     ports.push({ side: 'left', x: b.cx - b.w / 2, y: b.cy + o, d: entry ? 0 : 2, off: Math.abs(o) });
