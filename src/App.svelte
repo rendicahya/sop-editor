@@ -955,7 +955,7 @@
   {/if}
 
   <CollabDialog bind:open={collabOpen} bind:invite onsave={() => save(true)} />
-  <AiDialog bind:open={aiOpen} docKey={`${tabs.active}:${roomDocs}`} onpaste={loadPasted} onopen={open} />
+  <AiDialog bind:open={aiOpen} docKey={`${tabs.active}:${roomDocs}`} onpaste={loadPasted} />
   <PdfPreviewDialog
     bind:pdf={pdfDoc}
     {pages}

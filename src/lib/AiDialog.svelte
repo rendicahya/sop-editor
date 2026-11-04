@@ -4,7 +4,7 @@
   import { app } from './store.svelte.js';
 
   /** onpaste(text, revise) → true bila jawaban berhasil dibuka. */
-  let { open = $bindable(false), docKey, onpaste, onopen } = $props();
+  let { open = $bindable(false), docKey, onpaste } = $props();
 
   let dialog;
   // mode: 'new' = susun SOP baru dari deskripsi; 'import' = salin SOP lama yang dilampirkan di chat AI;
@@ -66,11 +66,6 @@
       Object.assign(d, blank, { mode: d.mode });
       open = false;
     }
-  }
-
-  function openFile() {
-    open = false;
-    onopen();
   }
 </script>
 
@@ -150,16 +145,14 @@
     {#if navigator.clipboard?.readText}
       <button type="button" class="btn paste" onclick={pasteAnswer}><i>Paste</i></button>
     {/if}
-    <small class="hint">
-      {#if draft.mode === 'revise'}
+    {#if draft.mode === 'revise'}
+      <small class="hint">
         Bila AI memberikan berkas .json, buka berkasnya di editor teks lalu <i>paste</i> isinya di sini.
-      {:else}
-        Bila AI memberikan berkas .json, unduh lalu
-        <button type="button" class="link" onclick={openFile}>buka berkasnya</button> atau seret ke jendela aplikasi.
-      {/if}
-      {#if draft.mode === 'import'}Bandingkan hasilnya dengan dokumen asli, terutama arah panah dan cabang keputusan.{/if}
-      {#if draft.mode === 'revise'}Tanda tangan dan jalur garis yang diatur manual tetap dipertahankan.{/if}
-    </small>
+        Tanda tangan dan jalur garis yang diatur manual tetap dipertahankan.
+      </small>
+    {:else if draft.mode === 'import'}
+      <small class="hint">Bandingkan hasilnya dengan dokumen asli, terutama arah panah dan cabang keputusan.</small>
+    {/if}
   </section>
 
   <div class="actions">
@@ -292,14 +285,5 @@
   }
   .actions h3 {
     margin: 0;
-  }
-  .link {
-    border: 0;
-    background: none;
-    padding: 0;
-    color: var(--accent);
-    text-decoration: underline;
-    cursor: pointer;
-    font-size: inherit;
   }
 </style>
