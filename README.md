@@ -122,7 +122,7 @@ Tombol **Contoh** memuat contoh SOP Skripsi untuk melihat semua fitur.
 
 ### Asisten AI
 
-1. Klik **Asisten AI**, tulis deskripsi singkat prosesnya (opsional), lalu ***Copy* prompt**.
+1. Klik **Asisten AI**, tulis deskripsi singkat prosesnya (opsional), lalu ***Copy***.
 2. *Paste* prompt ke asisten AI. Prompt berisi aturan format, contoh, serta nama dan NIP dekan bawaan sebagai pengesah, sehingga AI menjawab
    dengan JSON dokumen SOP.
 3. *Copy* jawabannya ke kolom ***Paste* jawaban AI** lalu **Buka di editor**, atau unduh berkas `.json` dari AI lalu buka

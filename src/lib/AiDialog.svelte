@@ -122,7 +122,7 @@
       </label>
     {/if}
     <div class="row">
-      <button type="button" class="btn primary" onclick={copy}><span>{#if copied}<i>Copy</i> berhasil ✓{:else}<i>Copy</i> prompt{/if}</span></button>
+      <button type="button" class="btn primary" onclick={copy}><span><i>Copy</i>{copied ? ' berhasil ✓' : ''}</span></button>
       <details>
         <summary>Lihat prompt</summary>
         <textarea class="prompt" readonly rows="10" value={prompt} onfocus={(e) => e.currentTarget.select()}></textarea>
@@ -137,7 +137,7 @@
       <textarea rows="5" class="mono" bind:value={draft.answer} placeholder={'{ "format": "sop-editor", … }'}></textarea>
     </label>
     {#if navigator.clipboard?.readText}
-      <button type="button" class="btn paste" onclick={pasteAnswer}><span><i>Paste</i> dari clipboard</span></button>
+      <button type="button" class="btn paste" onclick={pasteAnswer}><i>Paste</i></button>
     {/if}
     <small class="hint">
       {#if draft.mode === 'revise'}
