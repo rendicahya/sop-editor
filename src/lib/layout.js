@@ -445,7 +445,8 @@ function layoutFlow(doc, pages) {
     const cx = x.act + ((r.c0 + r.c1 + 1) / 2) * actW;
     const cy = rowY[i] + r.h / 2;
     const { w, h } = r.size;
-    return { cx, cy, w, h, top: cy - h / 2, bottom: cy + h / 2, shape: r.step.shape };
+    // `seam`: membentang di jumlah lajur genap, sehingga titik tengahnya tepat di garis kolom.
+    return { cx, cy, w, h, top: cy - h / 2, bottom: cy + h / 2, shape: r.step.shape, seam: (r.c1 - r.c0) % 2 === 1 };
   });
   // Isian bentuk: diklik untuk mengganti simbol dan tujuan alurnya.
   rows.forEach((r, i) => {
@@ -640,12 +641,16 @@ function insideBox(b, px, py, mg) {
 /** Titik sambung bentuk. d = arah gerak garis di titik itu (0 kanan, 1 bawah, 2 kiri, 3 atas). */
 function boxPorts(b, entry) {
   const dec = b.shape === 'decision';
-  const along = entry && !dec ? [0, -2, 2, -4, 4].filter((o) => Math.abs(o) <= b.w / 2 - 1.2) : [0];
+  // Simbol di atas garis kolom tidak memakai titik tengahnya, agar garis alur tidak menumpuk garis kolom.
+  // Sudut belah ketupat tetap dipakai: titik di sisi miringnya tidak berada di tepi atas/bawah.
+  const seam = b.seam && !dec;
+  const along = (seam ? (entry ? [-2, 2, -4, 4] : [-2, 2]) : entry && !dec ? [0, -2, 2, -4, 4] : [0]).filter((o) => Math.abs(o) <= b.w / 2 - 1.2);
   const across = entry && !dec ? [0, -1.5, 1.5] : [0];
   const ports = [];
   for (const o of along) {
-    ports.push({ side: 'bottom', x: b.cx + o, y: b.bottom, d: entry ? 3 : 1, off: Math.abs(o) });
-    if (entry) ports.push({ side: 'top', x: b.cx + o, y: b.top, d: 1, off: Math.abs(o) });
+    const off = Math.abs(o) - (seam ? 2 : 0); // pada simbol di atas garis kolom, ±2 setara titik tengah
+    ports.push({ side: 'bottom', x: b.cx + o, y: b.bottom, d: entry ? 3 : 1, off });
+    if (entry) ports.push({ side: 'top', x: b.cx + o, y: b.top, d: 1, off });
   }
   for (const o of across) {
     ports.push({ side: 'left', x: b.cx - b.w / 2, y: b.cy + o, d: entry ? 0 : 2, off: Math.abs(o) });
