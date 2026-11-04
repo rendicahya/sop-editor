@@ -55,14 +55,13 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   jadi tetap berlaku saat tata letak berubah. "Kembalikan jalur otomatis" menghapus pengaturan manualnya.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
 - **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Asisten AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab tersimpan otomatis di browser; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
-- **Pustaka dokumen**: setiap SOP yang diedit tersimpan otomatis di browser (IndexedDB), jadi tab bisa ditutup tanpa
-  kehilangan isi dan dibuka lagi kapan saja. Pustaka bisa dicari (nama, nomor, pelaksana, kegiatan, butir ketentuan),
+- **Pustaka dokumen**: SOP yang disimpan ke Pustaka berada di browser (IndexedDB) dan perubahannya tersimpan otomatis,
+  jadi tab bisa ditutup dan dibuka lagi kapan saja. Pustaka bisa dicari (nama, nomor, pelaksana, kegiatan, butir ketentuan),
   dokumennya bisa diduplikasi atau dijadikan **templat**, dan templat (termasuk templat bawaan) dipakai untuk memulai SOP
-  baru dengan tanggal hari ini. Seluruh pustaka bisa dicadangkan ke satu .zip berisi berkas .sop dan dipulihkan lagi
-  (isi yang sudah ada tidak digandakan). Dokumen dari ruang kolaborasi orang lain disimpan sebagai entri tersendiri.
+  baru dengan tanggal hari ini. Dokumen dari ruang kolaborasi orang lain disimpan sebagai entri tersendiri.
   **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen dan templat: satu entri boleh berlabel lebih dari satu,
   daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
-  Label hanya ada di pustaka (tidak masuk berkas .sop) dan ikut tersimpan di cadangan .zip (`pustaka.json`).
+  Label hanya ada di pustaka (tidak masuk berkas .sop).
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
   halaman diagram alir menjadi tabel dengan kolom/baris berukuran sama persis seperti pratinjau. Teks semua sel bisa
@@ -190,7 +189,7 @@ Struktur utama:
 | `src/lib/validate.js` | Pemeriksa dokumen: alur diagram dan isian penting |
 | `src/lib/duration.js` | Estimasi total waktu: membaca kolom Waktu dan menjumlahkannya di jalur utama |
 | `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan otomatis per tab (id tab = id entri), daftar, hapus |
-| `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, duplikat, templat, cadangkan/pulihkan .zip |
+| `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, label, duplikat, templat |
 | `src/lib/xlsx.js` | Ekspor XLSX: mengisi template SOP (gaya, tema, logo), diagram sebagai shape DrawingML |
 | `src/lib/fonts.js` | Font dokumen: Calibri dari perangkat (disimpan di IndexedDB) atau Carlito sebagai pengganti |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |

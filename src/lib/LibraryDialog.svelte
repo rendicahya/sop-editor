@@ -1,16 +1,13 @@
 <script>
-  import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
   import { newTabId } from './store.svelte.js';
   import { emptyDocument, sampleDocument, parseDocumentText } from './model.js';
   import { plainText } from './richtext.js';
   import { listEntries, putEntry, patchEntry, deleteEntry, flushAll, cleanTags } from './library.js';
-  import { slug, downloadBlob } from './files.js';
 
   /** openIds: id tab yang sedang terbuka (= id entri pustaka). */
   let { open = $bindable(false), openIds = [], active, onopen, ontemplate, onsave, cansave = true, onnotify } = $props();
 
   let dialog;
-  let restoreInput;
   let entries = $state([]);
   let kind = $state('doc');
   let query = $state('');
@@ -198,83 +195,6 @@
     await deleteEntry(e.id);
     await refresh();
   }
-
-  // Label disimpan di pustaka.json dalam cadangan (berkas .sop sendiri tidak memuat label).
-  const MANIFEST = 'pustaka.json';
-
-  /** Cadangan semua entri sebagai berkas .sop di dalam satu .zip. */
-  function backup() {
-    const files = {};
-    const used = new Set();
-    const tags = {};
-    for (const e of entries) {
-      const dir = e.kind === 'template' ? 'Templat' : 'Dokumen';
-      let name = `${dir}/${slug(titleOf(e))}`;
-      for (let n = 2; used.has(name); n++) name = `${dir}/${slug(titleOf(e))}-${n}`;
-      used.add(name);
-      files[name + '.sop'] = strToU8(JSON.stringify(JSON.parse(e.json), null, 2));
-      if (e.tags.length) tags[name + '.sop'] = e.tags;
-    }
-    if (Object.keys(tags).length) files[MANIFEST] = strToU8(JSON.stringify({ tags }, null, 2));
-    const d = new Date();
-    const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    downloadBlob(new Blob([zipSync(files)], { type: 'application/zip' }), `Pustaka-SOP-${stamp}.zip`);
-  }
-
-  /** Memulihkan cadangan .zip (atau berkas .sop lepas) sebagai entri baru. */
-  async function restore(files) {
-    let ok = 0;
-    let bad = 0;
-    let same = 0;
-    const known = new Map(entries.map((e) => [e.kind + e.json, e]));
-    const take = async (path, text, loose, tags = []) => {
-      try {
-        const doc = parseDocumentText(text);
-        const json = JSON.stringify(doc);
-        const template = /^templat\//i.test(path);
-        const key = (template ? 'template' : 'doc') + json;
-        const old = known.get(key);
-        if (old) {
-          // Sudah ada: cukup gabungkan labelnya.
-          if (old.id && tags.length) await patchEntry(old.id, { tags: cleanTags([...old.tags, ...tags]) });
-          return same++;
-        }
-        known.set(key, {});
-        const base = path.split('/').pop().replace(/\.(sop|json)$/i, '');
-        await add({
-          kind: template ? 'template' : 'doc',
-          title: template ? base.replace(/-/g, ' ') : doc.header.namaSop,
-          nomor: doc.header.nomor,
-          fileName: loose ? path : null,
-          json,
-          tags: cleanTags(tags)
-        });
-        ok++;
-      } catch {
-        bad++;
-      }
-    };
-    for (const f of files) {
-      if (/\.zip$/i.test(f.name)) {
-        try {
-          const zip = unzipSync(new Uint8Array(await f.arrayBuffer()));
-          let tags = {};
-          try {
-            if (zip[MANIFEST]) tags = JSON.parse(strFromU8(zip[MANIFEST])).tags ?? {};
-          } catch {}
-          for (const [path, data] of Object.entries(zip)) {
-            if (path !== MANIFEST && /\.(sop|json)$/i.test(path)) await take(path, strFromU8(data), false, Array.isArray(tags[path]) ? tags[path] : []);
-          }
-        } catch {
-          bad++;
-        }
-      } else await take(f.name, await f.text(), true);
-    }
-    await refresh();
-    onnotify(
-      `${ok} dokumen ditambahkan` + (same ? `, ${same} sudah ada` : '') + (bad ? `, ${bad} berkas tidak valid` : '')
-    );
-  }
 </script>
 
 <dialog bind:this={dialog} class="dialog" onclose={() => (open = false)}>
@@ -283,8 +203,8 @@
     <button class="x" onclick={() => (open = false)} aria-label="Tutup">×</button>
   </header>
   <p class="hint">
-    SOP yang disimpan ke Pustaka berada di browser ini, dan perubahannya tersimpan otomatis. Cadangkan secara berkala; data
-    hilang bila data situs browser dihapus.
+    SOP yang disimpan ke Pustaka berada di browser ini, dan perubahannya tersimpan otomatis. Data hilang bila data situs
+    browser dihapus, jadi simpan juga SOP penting sebagai berkas .sop.
   </p>
 
   <div class="bar">
@@ -425,21 +345,6 @@
 
   <footer>
     <button class="btn" onclick={saveCurrent} disabled={!cansave}>Simpan dokumen ini ke pustaka</button>
-    <span class="grow"></span>
-    <button class="btn" onclick={backup} disabled={!entries.length} title="Unduh semua dokumen dan templat sebagai .zip">Cadangkan (.zip)</button>
-    <button class="btn" onclick={() => restoreInput.click()} title="Tambahkan isi cadangan .zip atau berkas .sop ke pustaka">Pulihkan…</button>
-    <input
-      bind:this={restoreInput}
-      type="file"
-      accept=".zip,.sop,.json"
-      multiple
-      hidden
-      onchange={async (ev) => {
-        const files = [...ev.currentTarget.files];
-        ev.currentTarget.value = '';
-        if (files.length) await restore(files);
-      }}
-    />
   </footer>
 </dialog>
 
