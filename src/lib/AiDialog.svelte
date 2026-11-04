@@ -107,7 +107,7 @@
       </label>
     {:else if draft.mode === 'new'}
       <label class="field">
-        <span class="label">Deskripsi proses (opsional, bisa juga ditulis langsung di chat AI)</span>
+        <span class="label">Deskripsi proses</span>
         <textarea rows="4" bind:value={draft.description} placeholder="Contoh: SOP pengajuan cuti akademik di Fakultas Ilmu Komputer. Mahasiswa mengisi formulir, operator memverifikasi berkas, Kaprodi menyetujui, lalu dekan menerbitkan surat."></textarea>
       </label>
     {:else}
@@ -144,7 +144,7 @@
   <section>
     <h3><span class="num">4</span><span><i>Paste</i> jawaban dari AI</span></h3>
     <label class="field">
-      <span class="label">Jawaban AI (JSON, boleh beserta teks atau pembungkus ```json)</span>
+      <span class="label">Jawaban AI</span>
       <textarea rows="5" class="mono" bind:value={draft.answer} placeholder={'{ "format": "sop-editor", … }'}></textarea>
     </label>
     {#if navigator.clipboard?.readText}
