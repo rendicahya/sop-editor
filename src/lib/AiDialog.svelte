@@ -75,7 +75,10 @@
 </script>
 
 <dialog bind:this={dialog} class="dialog" onclose={() => (open = false)}>
-  <h2>SOP dengan bantuan AI</h2>
+  <header>
+    <h2>SOP dengan bantuan AI</h2>
+    <button type="button" class="x" onclick={() => (open = false)} aria-label="Tutup">×</button>
+  </header>
   <div class="seg" role="tablist" aria-label="Jenis">
     <button role="tab" aria-selected={draft.mode === 'new'} class:on={draft.mode === 'new'} onclick={() => (draft.mode = 'new')}>Susun SOP baru</button>
     <button role="tab" aria-selected={draft.mode === 'import'} class:on={draft.mode === 'import'} onclick={() => (draft.mode = 'import')}>Impor SOP lama</button>
@@ -152,7 +155,6 @@
   </section>
 
   <div class="actions">
-    <button type="button" class="btn" onclick={() => (open = false)}>Tutup</button>
     <button type="button" class="btn primary" disabled={!draft.answer.trim()} onclick={load}>{draft.mode === 'revise' ? 'Terapkan revisi' : 'Buka di editor'}</button>
   </div>
 </dialog>
@@ -170,9 +172,24 @@
   .dialog::backdrop {
     background: rgb(15 23 42 / 0.45);
   }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
   h2 {
-    margin: 0 0 0.6rem;
+    margin: 0;
     font-size: 1.1rem;
+  }
+  .x {
+    border: 0;
+    background: none;
+    font-size: 1.4rem;
+    line-height: 1;
+    color: var(--muted);
+    cursor: pointer;
   }
   h3 {
     display: flex;
