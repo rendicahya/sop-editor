@@ -153,6 +153,26 @@
     menu = null;
   }
 
+  // Dialog jalur garis bisa digeser dari bagian mana pun selain tombol. Pergeseran disimpan dalam mm
+  // agar tetap sebanding saat pratinjau di-zoom.
+  let menuDrag = null;
+  function startMenuDrag(e) {
+    if (e.button !== 0 || e.target.closest('button')) return;
+    e.preventDefault();
+    const [mx, my] = toMm(e);
+    menuDrag = { mx, my, dx: edgeSel.dx ?? 0, dy: edgeSel.dy ?? 0 };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function moveMenuDrag(e) {
+    if (!menuDrag || !edgeSel) return;
+    // Penunjuk dibatasi di dalam jendela, sehingga bagian yang dipegang tidak hilang dari layar.
+    const clientX = Math.min(innerWidth, Math.max(0, e.clientX));
+    const clientY = Math.min(innerHeight, Math.max(0, e.clientY));
+    const [mx, my] = toMm({ clientX, clientY });
+    edgeSel.dx = menuDrag.dx + mx - menuDrag.mx;
+    edgeSel.dy = menuDrag.dy + my - menuDrag.my;
+  }
+
   // Seret ruas: ruas tegak bergeser mendatar (menjadi `x`), ruas mendatar bergeser tegak (menjadi `y`).
   let drag = $state(null);
   const segments = (pts) =>
@@ -808,13 +828,18 @@
       </svg>
       {#if sel && edgeSel.fid === f.id}
         {@const r = routeOf(f)}
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div
           class="edge-menu"
           class:up={edgeSel.my > 120}
           class:left={edgeSel.mx > 200}
-          style="left:calc({edgeSel.mx} * var(--mm));top:calc({edgeSel.my} * var(--mm))"
+          style="left:calc({edgeSel.mx} * var(--mm));top:calc({edgeSel.my} * var(--mm));translate:calc({edgeSel.dx ?? 0} * var(--mm)) calc({edgeSel.dy ?? 0} * var(--mm))"
           role="dialog"
           aria-label="Jalur garis"
+          onpointerdown={startMenuDrag}
+          onpointermove={moveMenuDrag}
+          onpointerup={() => (menuDrag = null)}
+          onpointercancel={() => (menuDrag = null)}
         >
           <span class="lbl">Keluar dari</span>
           <div class="seg" role="group" aria-label="Sisi keluar">
@@ -1324,6 +1349,9 @@
     border: 1px solid rgb(var(--edit) / 0.4);
     border-radius: 8px;
     box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+    cursor: move;
+    user-select: none;
+    touch-action: none;
   }
   .edge-menu.up {
     transform: translateY(calc(-100% - 20px));
