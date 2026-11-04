@@ -596,6 +596,7 @@ function layoutFlow(doc, pages) {
     }
   }
 
+  const laneXs = Array.from({ length: n + 1 }, (_, j) => x.act + j * actW);
   // Metadata untuk ekspor DOCX: struktur tabel per halaman dan awal item diagram (garis, bentuk, label).
   pageObjs.forEach((page, q) => {
     page.flow = {
@@ -603,7 +604,7 @@ function layoutFlow(doc, pages) {
       rows: rows.map((r, i) => ({ index: i, h: r.h })).filter((r) => pageOf[r.index] === q)
     };
     page.diagram = page.items.length;
-    for (const pts of lines[q]) page.items.push(...arrowLine(pts));
+    for (const pts of lines[q]) page.items.push(...arrowLine(pts, laneXs));
   });
   rows.forEach((r, i) => pageObjs[pageOf[i]].items.push(shapeItem(box[i])));
   pageObjs.forEach((page, q) => page.items.push(...labels[q]));
@@ -629,6 +630,10 @@ const BEND = 6;
 const OVER = 400;
 const CROSS = 2;
 const VIA_MISS = 150; // jalur manual: cukup satu ruas melewati posisi yang dipilih, sisanya bebas lurus
+const HEAD = 1.6; // panjang mata panah
+const NEED = HEAD + 1; // ruas terakhir minimal sepanjang ini agar belokannya tidak tertutup mata panah
+const TIGHT = 12; // penalti belok terlalu dekat dengan titik tujuan
+const LANE_CLEAR = 0.8; // jarak minimal ruas tegak yang digeser arrowLine dari garis kolom
 const snap = (v) => Math.round(v * 100) / 100;
 
 function insideBox(b, px, py, mg) {
@@ -711,6 +716,16 @@ function findPath(g, starts, goals, via = null) {
     const key = g.node(p.x, p.y) * 4 + p.d;
     if (!goalAt.has(key) || goals[goalAt.get(key)].cost > p.cost) goalAt.set(key, k);
   });
+  // Masuk dari samping: titik yang bila dipakai berbelok menyisakan ruas terakhir terlalu pendek. Ruas tegaknya
+  // akan digeser arrowLine, dan di lajur sempit pergeseran itu mengenai garis kolom.
+  const tight = new Set();
+  for (const p of goals) {
+    if (p.d % 2) continue;
+    const back = p.d === 0 ? -1 : 1; // mundur berlawanan dengan arah gerak garis
+    for (let q = g.xs.indexOf(snap(p.x)) + back; q >= 0 && q < g.nx && Math.abs(g.xs[q] - p.x) < NEED; q += back) {
+      tight.add(g.node(g.xs[q], p.y) * 4 + p.d);
+    }
+  }
   const dist = new Float64Array(S + goals.length).fill(Infinity);
   const prev = new Int32Array(S + goals.length).fill(-1);
   const heap = new Heap();
@@ -751,7 +766,7 @@ function findPath(g, starts, goals, via = null) {
       }
       if (bad) continue;
       let nc = c + len + (used ? OVER : 0);
-      if (turn) nc += BEND + (g.pass[k] ? OVER : 0);
+      if (turn) nc += BEND + (g.pass[k] ? OVER : 0) + (tight.has(k * 4 + nd) ? TIGHT : 0);
       else if (g.pass[k] & (nd % 2 ? 1 : 2)) nc += CROSS;
       // Pemecah seri: ruas mendatar lebih disukai di bawah (belok dekat tujuan pada alur turun).
       if (nd % 2 === 0) nc += len * (g.yMax - g.ys[j]) * 1e-4;
@@ -831,13 +846,12 @@ class Heap {
   }
 }
 
-function arrowLine(pts) {
+/** `laneXs`: posisi garis kolom; ruas tegak tidak boleh digeser sampai menumpuknya. */
+function arrowLine(pts, laneXs = []) {
   const clean = pts
     .filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 0.01)
     .map((p) => [...p]);
   if (clean.length < 2) return [];
-  const HEAD = 1.6;
-  const NEED = HEAD + 1; // ruas terakhir minimal sepanjang ini agar belokannya tidak tertutup mata panah
   const n = clean.length;
   {
     const [a, b] = clean.slice(-2);
@@ -851,7 +865,14 @@ function arrowLine(pts) {
       // Ruas sebelumnya tegak lurus: titik awalnya ikut digeser hanya bila ia bukan titik awal garis.
       const along = Math.abs((a[0] - p[0]) * ux + (a[1] - p[1]) * uy);
       const room = along > 0.01 ? Math.max(0, prevLen - 0.6) : n >= 4 ? Infinity : 0;
-      const dlt = Math.min(NEED - len, room);
+      let dlt = Math.min(NEED - len, room);
+      // Ruas sebelumnya tegak: berhenti sebelum garis kolom terdekat di arah pergeseran.
+      if (ux) {
+        for (const lx of laneXs) {
+          const gap = (a[0] - lx) * ux;
+          if (gap > 0) dlt = Math.min(dlt, Math.max(0, gap - LANE_CLEAR));
+        }
+      }
       if (dlt > 0) {
         clean[n - 2] = [a[0] - ux * dlt, a[1] - uy * dlt];
         if (!(along > 0.01)) {
