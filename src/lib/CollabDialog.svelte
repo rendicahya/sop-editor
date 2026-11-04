@@ -40,7 +40,7 @@
       copied = true;
       setTimeout(() => (copied = false), 2000);
     } catch {
-      alert('Tidak bisa menyalin otomatis. Salin tautan secara manual.');
+      alert('Copy otomatis gagal. Copy tautan secara manual.');
     }
   }
 
@@ -70,7 +70,7 @@
       <span class="label">Tautan undangan</span>
       <div class="row">
         <input readonly value={roomLink()} onfocus={(e) => e.currentTarget.select()} />
-        <button type="button" class="btn" onclick={copy}>{copied ? 'Tersalin ✓' : 'Salin'}</button>
+        <button type="button" class="btn" onclick={copy}><span><i>Copy</i>{copied ? ' berhasil ✓' : ''}</span></button>
       </div>
       <small class="hint">Siapa pun yang memegang tautan ini bisa melihat dan mengedit dokumen. Bagikan hanya kepada rekan kerja.</small>
     </div>

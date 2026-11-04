@@ -44,7 +44,7 @@
       copied = true;
       setTimeout(() => (copied = false), 2000);
     } catch {
-      alert('Tidak bisa menyalin otomatis. Buka "Lihat prompt" lalu salin secara manual.');
+      alert('Copy otomatis gagal. Buka "Lihat prompt" lalu copy secara manual.');
     }
   }
 
@@ -57,7 +57,7 @@
       return;
     }
     if (text.trim()) draft.answer = text;
-    else alert('Clipboard kosong. Salin dulu jawaban dari asisten AI.');
+    else alert('Clipboard kosong. Copy dulu jawaban dari asisten AI.');
   }
 
   function load() {
@@ -96,7 +96,7 @@
   {/if}
 
   <section>
-    <h3><span class="num">1</span>{draft.mode === 'import' ? 'Lampirkan SOP lama dan salin prompt ke AI' : 'Salin prompt ke AI'}</h3>
+    <h3><span class="num">1</span><span>{#if draft.mode === 'import'}Lampirkan SOP lama dan <i>copy</i> prompt ke AI{:else}<i>Copy</i> prompt ke AI{/if}</span></h3>
     {#if draft.mode === 'revise'}
       <label class="field">
         <span class="label">Instruksi revisi</span>
@@ -110,7 +110,7 @@
     {:else}
       <ol class="steps">
         <li>Buka chat baru di asisten AI, lalu lampirkan berkas SOP lama (unggah PDF/DOCX atau foto setiap halaman).</li>
-        <li>Salin prompt di bawah, tempel ke chat yang sama, lalu kirim.</li>
+        <li><i>Copy</i> prompt di bawah, <i>paste</i> ke chat yang sama, lalu kirim.</li>
       </ol>
       <label class="check">
         <input type="checkbox" bind:checked={draft.update} />
@@ -122,7 +122,7 @@
       </label>
     {/if}
     <div class="row">
-      <button type="button" class="btn primary" onclick={copy}>{copied ? 'Tersalin ✓' : 'Salin prompt'}</button>
+      <button type="button" class="btn primary" onclick={copy}><span>{#if copied}<i>Copy</i> berhasil ✓{:else}<i>Copy</i> prompt{/if}</span></button>
       <details>
         <summary>Lihat prompt</summary>
         <textarea class="prompt" readonly rows="10" value={prompt} onfocus={(e) => e.currentTarget.select()}></textarea>
@@ -131,17 +131,17 @@
   </section>
 
   <section>
-    <h3><span class="num">2</span>Tempel jawaban AI</h3>
+    <h3><span class="num">2</span><span><i>Paste</i> jawaban AI</span></h3>
     <label class="field">
       <span class="label">Jawaban AI (JSON, boleh beserta teks atau pembungkus ```json)</span>
       <textarea rows="5" class="mono" bind:value={draft.answer} placeholder={'{ "format": "sop-editor", … }'}></textarea>
     </label>
     {#if navigator.clipboard?.readText}
-      <button type="button" class="btn paste" onclick={pasteAnswer}>Tempel dari clipboard</button>
+      <button type="button" class="btn paste" onclick={pasteAnswer}><span><i>Paste</i> dari clipboard</span></button>
     {/if}
     <small class="hint">
       {#if draft.mode === 'revise'}
-        Bila AI memberikan berkas .json, buka berkasnya di editor teks lalu tempel isinya di sini.
+        Bila AI memberikan berkas .json, buka berkasnya di editor teks lalu <i>paste</i> isinya di sini.
       {:else}
         Bila AI memberikan berkas .json, unduh lalu
         <button type="button" class="link" onclick={openFile}>buka berkasnya</button> atau seret ke jendela aplikasi.

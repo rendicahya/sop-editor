@@ -1,5 +1,5 @@
 <script>
-  // Menu klik kanan. Item: { label, run, disabled, danger, checked, hint, title } | { sep: true } | { head }.
+  // Menu klik kanan. Item: { label, italic, run, disabled, danger, checked, hint, title } | { sep: true } | { head }.
   // Menu tidak mengambil fokus (isian yang diklik kanan tetap fokus dengan seleksinya), jadi navigasi
   // keyboard (↑/↓, Enter, Esc) ditangkap di window pada fase capture.
   let { x, y, items, onclose } = $props();
@@ -88,7 +88,7 @@
         onclick={() => pick(it)}
       >
         <span class="cm-check">{it.checked ? '✓' : ''}</span>
-        <span class="cm-label">{it.label}</span>
+        <span class="cm-label" class:italic={it.italic}>{it.label}</span>
         {#if it.hint}<span class="cm-hint">{it.hint}</span>{/if}
       </button>
     {/if}
@@ -172,6 +172,9 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .ctx .cm-label.italic {
+    font-style: italic;
   }
   .ctx .cm-hint {
     margin: 0 0 0 12px;

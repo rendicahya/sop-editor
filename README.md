@@ -46,7 +46,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - **Menu klik kanan** di halaman, isinya sesuai yang diklik: langkah/simbol (ganti simbol, atur alur, pindah
   pelaksana, tambah di atas/bawah, duplikat, naik/turun, hapus), kepala pelaksana (tambah di kiri/kanan, geser,
   hapus), butir ketentuan (tambah di atas/bawah, naik/turun, hapus, bernomor), garis alur (atur jalur, kembalikan
-  otomatis), dan tanda tangan. Pada isian teks ada juga potong/salin/tempel/pilih semua serta tebal/miring/garis
+  otomatis), dan tanda tangan. Pada isian teks ada juga potong/*copy*/*paste*/pilih semua serta tebal/miring/garis
   bawah. Bisa dinavigasi dengan ↑/↓, Enter, dan Esc; Shift+klik kanan membuka menu bawaan browser.
 - Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" (labelnya berlatar putih agar tidak tertimpa garis tabel) pada keputusan dan konektor antarhalaman (A, B, …). Jalur garis dicari otomatis agar tidak menembus simbol dan tidak saling menumpuk.
@@ -84,7 +84,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - Simpan/buka berkas `.sop` (berkas `.json` lama tetap bisa dibuka), seret-lepas berkas ke jendela, simpan otomatis ke browser, Undo/Redo.
 - **Kolaborasi real-time** tanpa server: edit satu dokumen bersama lewat tautan undangan, lihat siapa sedang
   mengedit bagian mana, dan ketik bersamaan di kolom yang sama tanpa saling menimpa.
-- **Asisten AI**: salin prompt siap pakai ke asisten AI, lalu tempel jawabannya untuk langsung
+- **Asisten AI**: *copy* prompt siap pakai ke asisten AI, lalu *paste* jawabannya untuk langsung
   diedit dan diekspor. Bisa menyusun SOP baru dari deskripsi, **mengimpor SOP lama** (PDF, Word, foto/pindaian)
   yang dilampirkan di chat AI, termasuk diagram alir dan formatnya, atau **merevisi SOP yang sedang dibuka** sesuai
   instruksi ("pecah langkah 3", "rapikan keterangan").
@@ -99,6 +99,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 | --- | --- |
 | Ctrl+S / Ctrl+Shift+S | Simpan / Simpan sebagai |
 | Ctrl+O | Buka berkas |
+| Alt+W | Tutup tab dokumen (Ctrl+W juga bisa di aplikasi terpasang) |
 | Ctrl+Shift+P | Pratinjau & ekspor PDF |
 | Ctrl+F / Ctrl+H | Cari & ganti (Esc untuk menutup) |
 | Ctrl+Z / Ctrl+Y | Urungkan / Ulangi per langkah (format dan ubah huruf menjadi langkah tersendiri) |
@@ -121,21 +122,21 @@ Tombol **Contoh** memuat contoh SOP Skripsi untuk melihat semua fitur.
 
 ### Asisten AI
 
-1. Klik **Asisten AI**, tulis deskripsi singkat prosesnya (opsional), lalu **Salin prompt**.
-2. Tempel prompt ke asisten AI. Prompt berisi aturan format, contoh, serta nama dan NIP dekan bawaan sebagai pengesah, sehingga AI menjawab
+1. Klik **Asisten AI**, tulis deskripsi singkat prosesnya (opsional), lalu ***Copy* prompt**.
+2. *Paste* prompt ke asisten AI. Prompt berisi aturan format, contoh, serta nama dan NIP dekan bawaan sebagai pengesah, sehingga AI menjawab
    dengan JSON dokumen SOP.
-3. Salin jawabannya ke kolom **Tempel jawaban AI** lalu **Buka di editor**, atau unduh berkas `.json` dari AI lalu buka
+3. *Copy* jawabannya ke kolom ***Paste* jawaban AI** lalu **Buka di editor**, atau unduh berkas `.json` dari AI lalu buka
    seperti biasa. Periksa kembali isinya (terutama dasar hukum) sebelum diekspor.
 
-**Impor SOP lama:** pilih tab **Impor SOP lama**, lampirkan berkas SOP lama di chat AI, lalu tempel promptnya. Prompt
+**Impor SOP lama:** pilih tab **Impor SOP lama**, lampirkan berkas SOP lama di chat AI, lalu *paste* promptnya. Prompt
 meminta AI menyalin teks apa adanya, membaca pelaksana dari kolom letak simbol, mengikuti panah dan cabang keputusan,
 serta mempertahankan teks tebal/miring/garis bawah. Secara bawaan kop instansi dan pengesah diperbarui ke bawaan saat
 ini (bisa dimatikan). Catatan tambahan untuk AI bisa ditulis di dialog. Bandingkan hasilnya dengan dokumen asli,
 terutama arah panah.
 
-**Revisi SOP ini:** pilih tab **Revisi SOP ini**, tulis instruksi perubahan, lalu salin prompt. Prompt berisi seluruh
+**Revisi SOP ini:** pilih tab **Revisi SOP ini**, tulis instruksi perubahan, lalu *copy* prompt. Prompt berisi seluruh
 dokumen yang sedang dibuka (tanpa gambar tanda tangan) dan meminta AI mengubah hanya bagian yang diminta serta
-mempertahankan id langkah. Jawaban yang ditempel menggantikan dokumen aktif sebagai satu langkah Undo; tanda tangan dan
+mempertahankan id langkah. Jawaban yang di-*paste* menggantikan dokumen aktif sebagai satu langkah Undo; tanda tangan dan
 jalur garis manual dipertahankan.
 
 Pembuka JSON sengaja toleran terhadap jawaban AI: teks pengantar dan pembungkus ```` ```json ```` diabaikan,
@@ -146,7 +147,7 @@ atau ganda dibuat ulang, `next`/`alt` boleh berisi nomor urut atau nama kegiatan
 ### Kolaborasi
 
 1. Klik **Kolaborasi**, isi nama, lalu **Buat ruang**. Dokumen yang sedang terbuka menjadi isi ruang.
-2. Salin tautan undangan dan bagikan. Penerima mengisi nama lalu **Gabung**; dokumennya diganti dengan dokumen ruang.
+2. *Copy* tautan undangan dan bagikan. Penerima mengisi nama lalu **Gabung**; dokumennya diganti dengan dokumen ruang.
 3. Semua perubahan langsung tersinkron. Avatar peserta tampil di toolbar, dan kartu langkah yang sedang diedit orang lain diberi bingkai berwarna beserta namanya.
 4. Undo/Redo di dalam ruang hanya membatalkan perubahan Anda sendiri.
 
@@ -259,7 +260,7 @@ tetap apa adanya. Kolom lain selalu teks polos.
 - Daftar ruang yang pernah diikuti dan riwayat versi (snapshot Yjs) yang bisa dipulihkan.
 
 **AI**
-- Integrasi langsung dengan API penyedia AI (kunci API milik pengguna) agar SOP dibuat tanpa salin-tempel.
+- Integrasi langsung dengan API penyedia AI (kunci API milik pengguna) agar SOP dibuat tanpa *copy-paste*.
 - Buat SOP dari notulen atau peraturan (impor SOP lama sudah tersedia).
 
 **Editor**
