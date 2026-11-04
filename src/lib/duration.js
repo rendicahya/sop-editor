@@ -1,9 +1,10 @@
 // Estimasi total waktu proses dari kolom Waktu (mutu baku) setiap langkah.
-// Satuan dijumlahkan terpisah (menit digabung ke jam, minggu/bulan tidak diubah ke hari) karena
+// Satuan dijumlahkan terpisah (menit digabung ke jam, semester/bulan/minggu tidak diubah ke hari) karena
 // "1 hari" di SOP bisa berarti hari kerja; yang dikonversi hanya yang pasti (detik → menit → jam).
 import { plainText } from './richtext.js';
 
 const UNITS = [
+  ['semester', /^(semester|smt|sem)$/],
   ['bulan', /^(bulan|bln)$/],
   ['minggu', /^(minggu|mgg|pekan)$/],
   ['hari', /^(hari|hr)$/],
