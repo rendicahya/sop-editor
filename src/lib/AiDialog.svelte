@@ -99,7 +99,7 @@
   {/if}
 
   <section>
-    <h3><span class="num">1</span><span>{#if draft.mode === 'import'}Lampirkan SOP lama ke AI{:else if draft.mode === 'revise'}Tulis instruksi revisi{:else}Tulis nama dan deskripsi AI{/if}</span></h3>
+    <h3><span class="num">1</span><span>{#if draft.mode === 'import'}Lampirkan SOP lama ke AI{:else if draft.mode === 'revise'}Tulis instruksi revisi{:else}Tulis nama dan deskripsi SOP{/if}</span></h3>
     {#if draft.mode === 'revise'}
       <label class="field">
         <span class="label">Instruksi revisi</span>
