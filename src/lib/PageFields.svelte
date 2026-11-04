@@ -165,9 +165,11 @@
   }
   function moveMenuDrag(e) {
     if (!menuDrag || !edgeSel) return;
-    // Penunjuk dibatasi di dalam jendela, sehingga bagian yang dipegang tidak hilang dari layar.
-    const clientX = Math.min(innerWidth, Math.max(0, e.clientX));
-    const clientY = Math.min(innerHeight, Math.max(0, e.clientY));
+    // Dialog terpotong di tepi area pratinjau. Penunjuk dibatasi di dalamnya, sehingga bagian yang
+    // dipegang tetap terlihat dan dialog bisa dipegang lagi.
+    const a = root.closest('.preview-scroll').getBoundingClientRect();
+    const clientX = Math.min(a.right - 8, Math.max(a.left + 8, e.clientX));
+    const clientY = Math.min(a.bottom - 8, Math.max(a.top + 8, e.clientY));
     const [mx, my] = toMm({ clientX, clientY });
     edgeSel.dx = menuDrag.dx + mx - menuDrag.mx;
     edgeSel.dy = menuDrag.dy + my - menuDrag.my;
@@ -828,9 +830,9 @@
       </svg>
       {#if sel && edgeSel.fid === f.id}
         {@const r = routeOf(f)}
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div
           class="edge-menu"
+          tabindex="-1"
           class:up={edgeSel.my > 120}
           class:left={edgeSel.mx > 200}
           style="left:calc({edgeSel.mx} * var(--mm));top:calc({edgeSel.my} * var(--mm));translate:calc({edgeSel.dx ?? 0} * var(--mm)) calc({edgeSel.dy ?? 0} * var(--mm))"
