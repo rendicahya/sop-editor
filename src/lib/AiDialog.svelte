@@ -36,6 +36,18 @@
     }
   }
 
+  async function pasteAnswer() {
+    let text;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      alert('Browser tidak mengizinkan membaca clipboard. Klik kolom jawaban lalu tekan Ctrl+V.');
+      return;
+    }
+    if (text.trim()) answer = text;
+    else alert('Clipboard kosong. Salin dulu jawaban dari asisten AI.');
+  }
+
   function load() {
     if (onpaste(answer, mode === 'revise')) {
       answer = '';
@@ -111,6 +123,9 @@
       <span class="label">Jawaban AI (JSON, boleh beserta teks atau pembungkus ```json)</span>
       <textarea rows="5" class="mono" bind:value={answer} placeholder={'{ "format": "sop-editor", … }'}></textarea>
     </label>
+    {#if navigator.clipboard?.readText}
+      <button type="button" class="btn paste" onclick={pasteAnswer}>Tempel dari clipboard</button>
+    {/if}
     <small class="hint">
       {#if mode === 'revise'}
         Bila AI memberikan berkas .json, buka berkasnya di editor teks lalu tempel isinya di sini.
@@ -231,6 +246,10 @@
     width: 100%;
     font-family: ui-monospace, Consolas, monospace;
     font-size: 0.78rem;
+  }
+  .paste {
+    display: block;
+    margin-bottom: 0.5rem;
   }
   .actions {
     display: flex;
