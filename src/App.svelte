@@ -311,7 +311,10 @@
    */
   function openInTab(doc, name = null, handle = null, id = newTabId()) {
     setEmpty(false);
-    if (collab.status !== 'off') return replaceDocument(doc, name, handle);
+    if (collab.status !== 'off') {
+      roomDocs++; // tab tetap sama, tetapi dokumennya baru
+      return replaceDocument(doc, name, handle);
+    }
     if (pristine()) {
       rekey(id);
       return replaceDocument(doc, name, handle);
@@ -492,6 +495,7 @@
 
   // Jawaban AI yang ditempel: dokumen baru tanpa berkas.
   let aiOpen = $state(false);
+  let roomDocs = $state(0);
   // `revise`: jawaban menggantikan dokumen aktif (bisa di-Undo); tanda tangan dan jalur manual dipulihkan.
   function loadPasted(text, revise = false) {
     if (shared && !confirm(`Ganti dokumen${shared} dengan jawaban AI ini?`)) return false;
@@ -940,7 +944,7 @@
   {/if}
 
   <CollabDialog bind:open={collabOpen} bind:invite onsave={() => save(true)} />
-  <AiDialog bind:open={aiOpen} onpaste={loadPasted} onopen={open} />
+  <AiDialog bind:open={aiOpen} docKey={`${tabs.active}:${roomDocs}`} onpaste={loadPasted} onopen={open} />
   <PdfPreviewDialog
     bind:pdf={pdfDoc}
     {pages}

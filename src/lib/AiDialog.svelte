@@ -4,21 +4,32 @@
   import { app } from './store.svelte.js';
 
   /** onpaste(text, revise) → true bila jawaban berhasil dibuka. */
-  let { open = $bindable(false), onpaste, onopen } = $props();
+  let { open = $bindable(false), docKey, onpaste, onopen } = $props();
 
   let dialog;
-  // 'new' = susun SOP baru dari deskripsi; 'import' = salin SOP lama yang dilampirkan di chat AI;
+  // mode: 'new' = susun SOP baru dari deskripsi; 'import' = salin SOP lama yang dilampirkan di chat AI;
   // 'revise' = ubah dokumen yang sedang dibuka sesuai instruksi.
-  let mode = $state('new');
-  let description = $state('');
-  let note = $state('');
-  let instruction = $state('');
-  let update = $state(true);
-  let answer = $state('');
+  const blank = { mode: 'new', description: '', note: '', instruction: '', update: true, answer: '' };
+  function newDraft() {
+    const d = $state({ ...blank });
+    return d;
+  }
+  // Isian disimpan per dokumen: dokumen baru mulai kosong, kembali ke tab lama memulihkan drafnya.
+  const drafts = new Map();
+  const draft = $derived.by(() => {
+    if (!drafts.has(docKey)) drafts.set(docKey, newDraft());
+    return drafts.get(docKey);
+  });
   let copied = $state(false);
   // Prompt revisi memuat seluruh dokumen; hanya dihitung saat dibutuhkan.
   const prompt = $derived(
-    mode === 'import' ? aiImportPrompt(note, update) : mode === 'revise' ? (open ? aiRevisePrompt(app.doc, instruction) : '') : aiPrompt(description)
+    draft.mode === 'import'
+      ? aiImportPrompt(draft.note, draft.update)
+      : draft.mode === 'revise'
+        ? open
+          ? aiRevisePrompt(app.doc, draft.instruction)
+          : ''
+        : aiPrompt(draft.description)
   );
 
   $effect(() => {
@@ -44,13 +55,14 @@
       alert('Browser tidak mengizinkan membaca clipboard. Klik kolom jawaban lalu tekan Ctrl+V.');
       return;
     }
-    if (text.trim()) answer = text;
+    if (text.trim()) draft.answer = text;
     else alert('Clipboard kosong. Salin dulu jawaban dari asisten AI.');
   }
 
   function load() {
-    if (onpaste(answer, mode === 'revise')) {
-      answer = '';
+    const d = draft; // onpaste bisa memindahkan dialog ke dokumen lain
+    if (onpaste(d.answer, d.mode === 'revise')) {
+      Object.assign(d, blank, { mode: d.mode });
       open = false;
     }
   }
@@ -64,13 +76,13 @@
 <dialog bind:this={dialog} class="dialog" onclose={() => (open = false)}>
   <h2>SOP dengan bantuan AI</h2>
   <div class="seg" role="tablist" aria-label="Jenis">
-    <button role="tab" aria-selected={mode === 'new'} class:on={mode === 'new'} onclick={() => (mode = 'new')}>Susun SOP baru</button>
-    <button role="tab" aria-selected={mode === 'import'} class:on={mode === 'import'} onclick={() => (mode = 'import')}>Impor SOP lama</button>
-    <button role="tab" aria-selected={mode === 'revise'} class:on={mode === 'revise'} onclick={() => (mode = 'revise')}>Revisi SOP ini</button>
+    <button role="tab" aria-selected={draft.mode === 'new'} class:on={draft.mode === 'new'} onclick={() => (draft.mode = 'new')}>Susun SOP baru</button>
+    <button role="tab" aria-selected={draft.mode === 'import'} class:on={draft.mode === 'import'} onclick={() => (draft.mode = 'import')}>Impor SOP lama</button>
+    <button role="tab" aria-selected={draft.mode === 'revise'} class:on={draft.mode === 'revise'} onclick={() => (draft.mode = 'revise')}>Revisi SOP ini</button>
   </div>
-  {#if mode === 'new'}
+  {#if draft.mode === 'new'}
     <p>Minta asisten AI menyusun SOP dari deskripsi proses, lalu buka hasilnya di sini untuk dirapikan dan diekspor.</p>
-  {:else if mode === 'revise'}
+  {:else if draft.mode === 'revise'}
     <p>
       Minta asisten AI mengubah dokumen yang sedang dibuka{app.doc.header.namaSop ? ` (${app.doc.header.namaSop})` : ''}, misalnya
       memecah langkah, merapikan keterangan, atau menambah pelaksana. Hasilnya menggantikan dokumen ini dan bisa di-Undo.
@@ -83,16 +95,16 @@
   {/if}
 
   <section>
-    <h3><span class="num">1</span>{mode === 'import' ? 'Lampirkan SOP lama dan salin prompt ke AI' : 'Salin prompt ke AI'}</h3>
-    {#if mode === 'revise'}
+    <h3><span class="num">1</span>{draft.mode === 'import' ? 'Lampirkan SOP lama dan salin prompt ke AI' : 'Salin prompt ke AI'}</h3>
+    {#if draft.mode === 'revise'}
       <label class="field">
         <span class="label">Instruksi revisi</span>
-        <textarea rows="4" bind:value={instruction} placeholder="Contoh: pecah langkah 3 menjadi verifikasi berkas dan verifikasi pembayaran; tulis ulang kolom keterangan agar lebih ringkas; ganti “Kasubbag” dengan “Kepala Subbagian Akademik”."></textarea>
+        <textarea rows="4" bind:value={draft.instruction} placeholder="Contoh: pecah langkah 3 menjadi verifikasi berkas dan verifikasi pembayaran; tulis ulang kolom keterangan agar lebih ringkas; ganti “Kasubbag” dengan “Kepala Subbagian Akademik”."></textarea>
       </label>
-    {:else if mode === 'new'}
+    {:else if draft.mode === 'new'}
       <label class="field">
         <span class="label">Deskripsi proses (opsional, bisa juga ditulis langsung di chat AI)</span>
-        <textarea rows="4" bind:value={description} placeholder="Contoh: SOP pengajuan cuti akademik di Fakultas Ilmu Komputer. Mahasiswa mengisi formulir, operator memverifikasi berkas, Kaprodi menyetujui, lalu dekan menerbitkan surat."></textarea>
+        <textarea rows="4" bind:value={draft.description} placeholder="Contoh: SOP pengajuan cuti akademik di Fakultas Ilmu Komputer. Mahasiswa mengisi formulir, operator memverifikasi berkas, Kaprodi menyetujui, lalu dekan menerbitkan surat."></textarea>
       </label>
     {:else}
       <ol class="steps">
@@ -100,12 +112,12 @@
         <li>Salin prompt di bawah, tempel ke chat yang sama, lalu kirim.</li>
       </ol>
       <label class="check">
-        <input type="checkbox" bind:checked={update} />
+        <input type="checkbox" bind:checked={draft.update} />
         <span>Perbarui kop instansi dan pengesah ke bawaan saat ini ({DEFAULT_PENGESAH.disahkanNama})</span>
       </label>
       <label class="field">
         <span class="label">Catatan untuk AI (opsional)</span>
-        <textarea rows="2" bind:value={note} placeholder="Contoh: tanggal pembuatan diganti hari ini; pelaksana “Kasubbag” diganti “Kepala Subbagian Akademik”."></textarea>
+        <textarea rows="2" bind:value={draft.note} placeholder="Contoh: tanggal pembuatan diganti hari ini; pelaksana “Kasubbag” diganti “Kepala Subbagian Akademik”."></textarea>
       </label>
     {/if}
     <div class="row">
@@ -121,26 +133,26 @@
     <h3><span class="num">2</span>Tempel jawaban AI</h3>
     <label class="field">
       <span class="label">Jawaban AI (JSON, boleh beserta teks atau pembungkus ```json)</span>
-      <textarea rows="5" class="mono" bind:value={answer} placeholder={'{ "format": "sop-editor", … }'}></textarea>
+      <textarea rows="5" class="mono" bind:value={draft.answer} placeholder={'{ "format": "sop-editor", … }'}></textarea>
     </label>
     {#if navigator.clipboard?.readText}
       <button type="button" class="btn paste" onclick={pasteAnswer}>Tempel dari clipboard</button>
     {/if}
     <small class="hint">
-      {#if mode === 'revise'}
+      {#if draft.mode === 'revise'}
         Bila AI memberikan berkas .json, buka berkasnya di editor teks lalu tempel isinya di sini.
       {:else}
         Bila AI memberikan berkas .json, unduh lalu
         <button type="button" class="link" onclick={openFile}>buka berkasnya</button> atau seret ke jendela aplikasi.
       {/if}
-      {#if mode === 'import'}Bandingkan hasilnya dengan dokumen asli, terutama arah panah dan cabang keputusan.{/if}
-      {#if mode === 'revise'}Tanda tangan dan jalur garis yang diatur manual tetap dipertahankan.{/if}
+      {#if draft.mode === 'import'}Bandingkan hasilnya dengan dokumen asli, terutama arah panah dan cabang keputusan.{/if}
+      {#if draft.mode === 'revise'}Tanda tangan dan jalur garis yang diatur manual tetap dipertahankan.{/if}
     </small>
   </section>
 
   <div class="actions">
     <button type="button" class="btn" onclick={() => (open = false)}>Tutup</button>
-    <button type="button" class="btn primary" disabled={!answer.trim()} onclick={load}>{mode === 'revise' ? 'Terapkan revisi' : 'Buka di editor'}</button>
+    <button type="button" class="btn primary" disabled={!draft.answer.trim()} onclick={load}>{draft.mode === 'revise' ? 'Terapkan revisi' : 'Buka di editor'}</button>
   </div>
 </dialog>
 
