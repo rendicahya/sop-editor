@@ -737,7 +737,7 @@
           </div>
         {/if}
       </div>
-      <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP baru, impor SOP lama (PDF/Word), atau revisi SOP ini dengan bantuan asisten AI">Asisten AI</button>
+      <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP baru, impor SOP lama (PDF/Word), atau revisi SOP ini dengan bantuan asisten AI">🪄 Asisten AI</button>
       <span class="sep"></span>
       <button class="icon" onclick={undo} disabled={!undoable} title="Urungkan (Ctrl+Z)">↶</button>
       <button class="icon" onclick={redo} disabled={!redoable} title="Ulangi (Ctrl+Y)">↷</button>
