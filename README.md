@@ -122,11 +122,12 @@ Tombol **Contoh** memuat contoh SOP Skripsi untuk melihat semua fitur.
 
 ### Asisten AI
 
-1. Klik **Asisten AI**, tulis deskripsi singkat prosesnya (opsional), lalu ***Copy***.
-2. *Paste* prompt ke asisten AI. Prompt berisi aturan format, contoh, serta nama dan NIP dekan bawaan sebagai pengesah, sehingga AI menjawab
-   dengan JSON dokumen SOP.
-3. *Copy* jawabannya ke kolom ***Paste* jawaban AI** lalu **Buka di editor**, atau unduh berkas `.json` dari AI lalu buka
-   seperti biasa. Periksa kembali isinya (terutama dasar hukum) sebelum diekspor.
+1. Klik **Asisten AI**, lalu tulis deskripsi singkat prosesnya (opsional).
+2. Klik ***Copy*** untuk meng-*copy* prompt.
+3. Masukkan prompt ke asisten AI. Prompt berisi aturan format, contoh, serta nama dan NIP dekan bawaan sebagai pengesah,
+   sehingga AI menjawab dengan JSON dokumen SOP.
+4. *Copy* jawabannya ke kolom ***Paste* jawaban dari AI**, atau unduh berkas `.json` dari AI lalu buka seperti biasa.
+5. Klik **Buka di editor**. Periksa kembali isinya (terutama dasar hukum) sebelum diekspor.
 
 **Impor SOP lama:** pilih tab **Impor SOP lama**, lampirkan berkas SOP lama di chat AI, lalu *paste* promptnya. Prompt
 meminta AI menyalin teks apa adanya, membaca pelaksana dari kolom letak simbol, mengikuti panah dan cabang keputusan,

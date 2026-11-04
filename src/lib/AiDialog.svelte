@@ -99,7 +99,7 @@
   {/if}
 
   <section>
-    <h3><span class="num">1</span><span>{#if draft.mode === 'import'}Lampirkan SOP lama dan <i>copy</i> prompt ke AI{:else}<i>Copy</i> prompt ke AI{/if}</span></h3>
+    <h3><span class="num">1</span><span>{#if draft.mode === 'import'}Lampirkan SOP lama ke AI{:else if draft.mode === 'revise'}Tulis instruksi revisi{:else}Tulis nama dan deskripsi AI{/if}</span></h3>
     {#if draft.mode === 'revise'}
       <label class="field">
         <span class="label">Instruksi revisi</span>
@@ -111,10 +111,7 @@
         <textarea rows="4" bind:value={draft.description} placeholder="Contoh: SOP pengajuan cuti akademik di Fakultas Ilmu Komputer. Mahasiswa mengisi formulir, operator memverifikasi berkas, Kaprodi menyetujui, lalu dekan menerbitkan surat."></textarea>
       </label>
     {:else}
-      <ol class="steps">
-        <li>Buka chat baru di asisten AI, lalu lampirkan berkas SOP lama (unggah PDF/DOCX atau foto setiap halaman).</li>
-        <li><i>Copy</i> prompt di bawah, <i>paste</i> ke chat yang sama, lalu kirim.</li>
-      </ol>
+      <p>Buka chat baru di asisten AI, lalu lampirkan berkas SOP lama (unggah PDF/DOCX atau foto setiap halaman).</p>
       <label class="check">
         <input type="checkbox" bind:checked={draft.update} />
         <span>Perbarui kop instansi dan pengesah ke bawaan saat ini ({DEFAULT_PENGESAH.disahkanNama})</span>
@@ -124,6 +121,10 @@
         <textarea rows="2" bind:value={draft.note} placeholder="Contoh: tanggal pembuatan diganti hari ini; pelaksana “Kasubbag” diganti “Kepala Subbagian Akademik”."></textarea>
       </label>
     {/if}
+  </section>
+
+  <section>
+    <h3><span class="num">2</span><span><i>Copy</i> prompt</span></h3>
     <div class="row">
       <button type="button" class="btn primary" onclick={copy}><span><i>Copy</i>{copied ? ' berhasil ✓' : ''}</span></button>
       <details>
@@ -134,7 +135,14 @@
   </section>
 
   <section>
-    <h3><span class="num">2</span><span><i>Paste</i> jawaban AI</span></h3>
+    <h3><span class="num">3</span><span>Masukkan prompt yang sudah di-<i>copy</i> ke AI</span></h3>
+    {#if draft.mode === 'import'}
+      <small class="hint">Kirim di chat yang sama dengan lampiran SOP lama.</small>
+    {/if}
+  </section>
+
+  <section>
+    <h3><span class="num">4</span><span><i>Paste</i> jawaban dari AI</span></h3>
     <label class="field">
       <span class="label">Jawaban AI (JSON, boleh beserta teks atau pembungkus ```json)</span>
       <textarea rows="5" class="mono" bind:value={draft.answer} placeholder={'{ "format": "sop-editor", … }'}></textarea>
@@ -155,6 +163,7 @@
   </section>
 
   <div class="actions">
+    <h3><span class="num">5</span><span>{draft.mode === 'revise' ? 'Terapkan revisi' : 'Buka di editor'}</span></h3>
     <button type="button" class="btn primary" disabled={!draft.answer.trim()} onclick={load}>{draft.mode === 'revise' ? 'Terapkan revisi' : 'Buka di editor'}</button>
   </div>
 </dialog>
@@ -239,12 +248,6 @@
     background: var(--accent);
     color: #fff;
   }
-  .steps {
-    margin: 0 0 0.6rem;
-    padding-left: 1.2rem;
-    font-size: 0.88rem;
-    line-height: 1.45;
-  }
   .check {
     display: flex;
     gap: 0.45rem;
@@ -283,8 +286,12 @@
   }
   .actions {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
     gap: 0.5rem;
+  }
+  .actions h3 {
+    margin: 0;
   }
   .link {
     border: 0;
