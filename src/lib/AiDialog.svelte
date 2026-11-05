@@ -44,7 +44,7 @@
       copied = true;
       setTimeout(() => (copied = false), 2000);
     } catch {
-      alert('Copy otomatis gagal. Buka "Lihat prompt" lalu copy secara manual.');
+      alert('Gagal menyalin otomatis. Buka "Lihat prompt" lalu salin secara manual.');
     }
   }
 
@@ -57,7 +57,7 @@
       return;
     }
     if (text.trim()) draft.answer = text;
-    else alert('Clipboard kosong. Copy dulu jawaban dari asisten AI.');
+    else alert('Clipboard kosong. Salin dulu jawaban dari asisten AI.');
   }
 
   function load() {
@@ -116,9 +116,9 @@
   </section>
 
   <section>
-    <h3><span class="num">2</span><span><i>Copy</i> prompt</span></h3>
+    <h3><span class="num">2</span><span>Salin prompt</span></h3>
     <div class="row">
-      <button type="button" class="btn primary" onclick={copy}><span><i>Copy</i>{copied ? ' berhasil ✓' : ''}</span></button>
+      <button type="button" class="btn primary" onclick={copy}>{copied ? 'Berhasil disalin ✓' : 'Salin'}</button>
       <details>
         <summary>Lihat prompt</summary>
         <textarea class="prompt" readonly rows="10" value={prompt} onfocus={(e) => e.currentTarget.select()}></textarea>
@@ -127,23 +127,23 @@
   </section>
 
   <section>
-    <h3><span class="num">3</span><span>Masukkan prompt yang sudah di-<i>copy</i> ke AI</span></h3>
+    <h3><span class="num">3</span><span>Masukkan prompt yang sudah disalin ke AI</span></h3>
     {#if draft.mode === 'import'}
       <small class="hint">Kirim di chat yang sama dengan lampiran SOP lama.</small>
     {/if}
   </section>
 
   <section>
-    <h3><span class="num">4</span><span><i>Paste</i> jawaban dari AI</span></h3>
+    <h3><span class="num">4</span><span>Tempel jawaban dari AI</span></h3>
     <label class="field">
       <textarea rows="5" class="mono" aria-label="Jawaban AI" bind:value={draft.answer} placeholder={'{ "format": "sop-editor", … }'}></textarea>
     </label>
     {#if navigator.clipboard?.readText}
-      <button type="button" class="btn paste" onclick={pasteAnswer}><i>Paste</i></button>
+      <button type="button" class="btn paste" onclick={pasteAnswer}>Tempel</button>
     {/if}
     {#if draft.mode === 'revise'}
       <small class="hint">
-        Bila AI memberikan berkas .json, buka berkasnya di editor teks lalu <i>paste</i> isinya di sini.
+        Bila AI memberikan berkas .json, buka berkasnya di editor teks lalu tempel isinya di sini.
         Jalur garis yang diatur manual tetap dipertahankan.
       </small>
     {:else if draft.mode === 'import'}

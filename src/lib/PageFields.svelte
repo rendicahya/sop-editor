@@ -462,8 +462,8 @@
     }
     const out = [
       { label: 'Potong', hint: 'Ctrl+X', disabled: !hasSel, run: exec('cut') },
-      { label: 'Copy', italic: true, hint: 'Ctrl+C', disabled: !hasSel, run: exec('copy') },
-      { label: 'Paste', italic: true, hint: 'Ctrl+V', disabled: !navigator.clipboard?.readText, run: paste },
+      { label: 'Salin', hint: 'Ctrl+C', disabled: !hasSel, run: exec('copy') },
+      { label: 'Tempel', hint: 'Ctrl+V', disabled: !navigator.clipboard?.readText, run: paste },
       { label: 'Pilih semua', hint: 'Ctrl+A', run: () => (el.focus(), rich ? document.execCommand('selectAll') : el.select()) }
     ];
     if (rich) {

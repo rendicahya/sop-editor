@@ -46,7 +46,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
 - **Menu klik kanan** di halaman, isinya sesuai yang diklik: langkah/simbol (ganti simbol, atur alur, pindah
   pelaksana, tambah di atas/bawah, duplikat, naik/turun, hapus), kepala pelaksana (tambah di kiri/kanan, geser,
   hapus), butir ketentuan (tambah di atas/bawah, naik/turun, hapus, bernomor), garis alur (atur jalur, kembalikan
-  otomatis). Pada isian teks ada juga potong/*copy*/*paste*/pilih semua serta tebal/miring/garis
+  otomatis). Pada isian teks ada juga potong/salin/tempel/pilih semua serta tebal/miring/garis
   bawah. Bisa dinavigasi dengan ↑/↓, Enter, dan Esc; Shift+klik kanan membuka menu bawaan browser.
 - Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" (labelnya berlatar putih agar tidak tertimpa garis tabel) pada keputusan dan konektor antarhalaman (A, B, …). Jalur garis dicari otomatis agar tidak menembus simbol dan tidak saling menumpuk.
@@ -85,7 +85,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   peringatan di atas pratinjau.
 - Antarmuka memakai font [Inter](https://rsms.me/inter/).
 - Simpan/buka berkas `.sop` (berkas `.json` lama tetap bisa dibuka), seret-lepas berkas ke jendela, Undo/Redo.
-- **Asisten AI**: *copy* prompt siap pakai ke asisten AI, lalu *paste* jawabannya untuk langsung
+- **Asisten AI**: salin prompt siap pakai ke asisten AI, lalu tempel jawabannya untuk langsung
   diedit dan diekspor. Bisa menyusun SOP baru dari deskripsi, **mengimpor SOP lama** (PDF, Word, foto/pindaian)
   yang dilampirkan di chat AI, termasuk diagram alir dan formatnya, atau **merevisi SOP yang sedang dibuka** sesuai
   instruksi ("pecah langkah 3", "rapikan keterangan").
@@ -123,21 +123,21 @@ Di browser lain, berkas diunduh.
 ### Asisten AI
 
 1. Klik **Asisten AI**, lalu tulis deskripsi singkat prosesnya (opsional).
-2. Klik ***Copy*** untuk meng-*copy* prompt.
+2. Klik **Salin** untuk menyalin prompt.
 3. Masukkan prompt ke asisten AI. Prompt berisi aturan format, contoh, serta nama dan NIP dekan bawaan sebagai pengesah,
    sehingga AI menjawab dengan JSON dokumen SOP.
-4. *Copy* jawabannya ke kolom ***Paste* jawaban dari AI**, atau unduh berkas `.json` dari AI lalu buka seperti biasa.
+4. Salin jawabannya ke kolom **Tempel jawaban dari AI**, atau unduh berkas `.json` dari AI lalu buka seperti biasa.
 5. Klik **Buka di editor**. Periksa kembali isinya (terutama dasar hukum) sebelum diekspor.
 
-**Impor SOP lama:** pilih tab **Impor SOP lama**, lampirkan berkas SOP lama di chat AI, lalu *paste* promptnya. Prompt
+**Impor SOP lama:** pilih tab **Impor SOP lama**, lampirkan berkas SOP lama di chat AI, lalu tempel promptnya. Prompt
 meminta AI menyalin teks apa adanya, membaca pelaksana dari kolom letak simbol, mengikuti panah dan cabang keputusan,
 serta mempertahankan teks tebal/miring/garis bawah. Secara bawaan kop instansi dan pengesah diperbarui ke bawaan saat
 ini (bisa dimatikan). Catatan tambahan untuk AI bisa ditulis di dialog. Bandingkan hasilnya dengan dokumen asli,
 terutama arah panah.
 
-**Revisi SOP ini:** pilih tab **Revisi SOP ini**, tulis instruksi perubahan, lalu *copy* prompt. Prompt berisi seluruh
+**Revisi SOP ini:** pilih tab **Revisi SOP ini**, tulis instruksi perubahan, lalu salin prompt. Prompt berisi seluruh
 dokumen yang sedang dibuka dan meminta AI mengubah hanya bagian yang diminta serta
-mempertahankan id langkah. Jawaban yang di-*paste* menggantikan dokumen aktif sebagai satu langkah Undo;
+mempertahankan id langkah. Jawaban yang ditempel menggantikan dokumen aktif sebagai satu langkah Undo;
 jalur garis manual dipertahankan.
 
 Pembuka JSON sengaja toleran terhadap jawaban AI: teks pengantar dan pembungkus ```` ```json ```` diabaikan,
@@ -262,7 +262,7 @@ tetap apa adanya. Kolom lain selalu teks polos.
 - Ekspor SVG per halaman; impor langkah dari Excel/CSV.
 
 **AI**
-- Integrasi langsung dengan API penyedia AI (kunci API milik pengguna) agar SOP dibuat tanpa *copy-paste*.
+- Integrasi langsung dengan API penyedia AI (kunci API milik pengguna) agar SOP dibuat tanpa salin-tempel.
 - Buat SOP dari notulen atau peraturan (impor SOP lama sudah tersedia).
 
 **Editor**
