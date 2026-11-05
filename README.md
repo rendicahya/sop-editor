@@ -60,9 +60,8 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   menyimpan, menutup tanpa menyimpan, atau tidak jadi menutup.
 - **Pustaka Lokal**: SOP yang disimpan ke Pustaka Lokal berada di browser (IndexedDB) dan bisa dibuka lagi kapan saja.
   Isinya hanya berubah saat disimpan. Pustaka bisa dicari (nama, nomor, pelaksana, kegiatan, butir ketentuan),
-  dokumennya bisa diduplikasi atau dijadikan **templat**, dan templat dipakai untuk memulai SOP
-  baru dengan tanggal hari ini.
-  **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen dan templat: satu entri boleh berlabel lebih dari satu,
+  dan dokumennya bisa diduplikasi.
+  **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen: satu entri boleh berlabel lebih dari satu,
   daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
 - **Pustaka Daring**: SOP bersama secara daring untuk akun @ub.ac.id yang didaftarkan admin. Lihat [Pustaka Daring](#pustaka-daring).
   Label hanya ada di pustaka (tidak masuk berkas .sop).
@@ -199,7 +198,7 @@ Struktur utama:
 | `src/lib/validate.js` | Pemeriksa dokumen: alur diagram dan isian penting |
 | `src/lib/duration.js` | Estimasi total waktu: membaca kolom Waktu dan menjumlahkannya di jalur utama |
 | `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan per tab (id tab = id entri), daftar, hapus |
-| `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, label, duplikat, templat |
+| `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, label, duplikat |
 | `src/lib/faculty.svelte.js` | Pustaka Daring: login, baca/tulis Firestore, riwayat, keterangan sedang diedit; Firebase dimuat saat pertama dipakai |
 | `src/lib/FacultyDialog.svelte` | Dialog Pustaka Daring: daftar, Recycle bin, tab Admin |
 | `src/lib/FacultyConflict.svelte` | Pilihan saat penyimpanan bertabrakan |

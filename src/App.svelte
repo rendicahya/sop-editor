@@ -2,7 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
-  import { emptyDocument, parseDocumentText, todayIso } from './lib/model.js';
+  import { emptyDocument, parseDocumentText } from './lib/model.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf, sopFromPdf } from './lib/pdf.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
@@ -484,12 +484,6 @@
     }
   }
 
-  /** Dokumen baru dari templat: tanggal diatur ulang ke hari ini. */
-  function useTemplate(doc) {
-    Object.assign(doc.header, { tglPembuatan: todayIso(), tglRevisi: '', tglEfektif: todayIso() });
-    openInTab(doc);
-  }
-
   function newDoc() {
     openInTab(emptyDocument());
   }
@@ -877,7 +871,7 @@
     {#if libraryMenu === where}
       <div class="export-menu left" role="menu">
         <button role="menuitem" onclick={() => ((libraryMenu = null), (libraryOpen = true))}>
-          <strong>Lokal</strong><small>SOP dan templat yang disimpan di browser ini</small>
+          <strong>Lokal</strong><small>SOP yang disimpan di browser ini</small>
         </button>
         <button role="menuitem" onclick={() => ((libraryMenu = null), (facultyOpen = true))}>
           <strong>Daring</strong><small>SOP bersama secara daring, untuk anggota fakultas</small>
@@ -1155,7 +1149,6 @@
     {openIds}
     active={tabs.active}
     onopen={openEntry}
-    ontemplate={useTemplate}
     onsave={saveToLibrary}
     cansave={!empty}
     onnotify={notify}

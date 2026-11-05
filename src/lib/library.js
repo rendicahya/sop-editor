@@ -1,5 +1,5 @@
 // Pustaka dokumen di IndexedDB browser ini. Isi entri hanya berubah saat pengguna menyimpan.
-// Entri: { id, kind: 'doc' | 'template', title, nomor, fileName, created, updated, json, tags }.
+// Entri: { id, title, nomor, fileName, created, updated, json, tags }. Entri lama bisa masih punya kolom kind (tidak dipakai lagi).
 // `tags` (label pengelompokan) hanya ada di pustaka, tidak ikut tersimpan di berkas .sop.
 // Dokumen tab memakai id tab sebagai id entri, jadi menyimpan tab memperbarui entrinya sendiri.
 
@@ -86,7 +86,6 @@ export async function saveDoc(id, json, fileName = null) {
       const now = Date.now();
       s.put({
         id,
-        kind: 'doc',
         title: doc.header.namaSop,
         nomor: doc.header.nomor,
         fileName,

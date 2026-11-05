@@ -1,14 +1,12 @@
 <script>
   import { newTabId } from './store.svelte.js';
-  import { parseDocumentText } from './model.js';
   import { listEntries, putEntry, patchEntry, deleteEntry, cleanTags, haystack } from './library.js';
 
   /** openIds: id tab yang sedang terbuka (= id entri pustaka). */
-  let { open = $bindable(false), openIds = [], active, onopen, ontemplate, onsave, cansave = true, onnotify } = $props();
+  let { open = $bindable(false), openIds = [], active, onopen, onsave, cansave = true, onnotify } = $props();
 
   let dialog;
   let entries = $state([]);
-  let kind = $state('doc');
   let query = $state('');
   let tag = $state(null); // saringan label: null = semua, '' = tanpa label
   let tagEdit = $state(null); // id entri yang labelnya sedang diatur
@@ -37,7 +35,7 @@
   const shown = $derived.by(() => {
     const q = query.trim().toLowerCase();
     const byTag = (e) => tag === null || (tag === '' ? !e.tags.length : e.tags.includes(tag));
-    return entries.filter((e) => e.kind === kind && byTag(e) && (!q || q.split(/\s+/).every((w) => e.text.includes(w))));
+    return entries.filter((e) => byTag(e) && (!q || q.split(/\s+/).every((w) => e.text.includes(w))));
   });
   // Pilihan untuk hapus sekaligus: hanya entri yang tampil dan tidak sedang terbuka di tab.
   const deletable = $derived(shown.filter((e) => !openIds.includes(e.id)));
@@ -52,29 +50,20 @@
   }
   async function removePicked() {
     const n = chosen.length;
-    if (!n || !confirm(`Hapus ${n} ${kind === 'doc' ? 'dokumen' : 'templat'} terpilih dari pustaka? Tindakan ini tidak bisa dibatalkan.`)) return;
+    if (!n || !confirm(`Hapus ${n} dokumen terpilih dari pustaka? Tindakan ini tidak bisa dibatalkan.`)) return;
     for (const e of chosen) await deleteEntry(e.id);
     picked = [];
     await refresh();
-    onnotify(`${n} ${kind === 'doc' ? 'dokumen' : 'templat'} dihapus`);
+    onnotify(`${n} dokumen dihapus`);
   }
-  // Label pada jenis yang sedang ditampilkan beserta jumlahnya; daftar semua label untuk pengaturan label entri.
+  // Label beserta jumlah entrinya; allTags untuk pengaturan label entri.
   const tagList = $derived.by(() => {
     const n = new Map();
-    for (const e of entries) if (e.kind === kind) for (const t of e.tags) n.set(t, (n.get(t) ?? 0) + 1);
+    for (const e of entries) for (const t of e.tags) n.set(t, (n.get(t) ?? 0) + 1);
     return [...n].sort((a, b) => a[0].localeCompare(b[0], 'id'));
   });
-  const untagged = $derived(entries.filter((e) => e.kind === kind && !e.tags.length).length);
+  const untagged = $derived(entries.filter((e) => !e.tags.length).length);
   const allTags = $derived(cleanTags(entries.flatMap((e) => e.tags)));
-  function setKind(k) {
-    kind = k;
-    tag = null;
-    tagEdit = null;
-  }
-  const counts = $derived({
-    doc: entries.filter((e) => e.kind === 'doc').length,
-    template: entries.filter((e) => e.kind === 'template').length
-  });
 
   const rtf = new Intl.RelativeTimeFormat('id', { numeric: 'auto' });
   function ago(ms) {
@@ -87,28 +76,19 @@
     return new Date(ms).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
-  const titleOf = (e) => e.title || (e.kind === 'template' ? 'Templat tanpa nama' : 'SOP tanpa judul');
+  const titleOf = (e) => e.title || 'SOP tanpa judul';
 
   function pick(e) {
     open = false;
     onopen(e);
   }
 
-  function useTpl(e) {
-    open = false;
-    ontemplate(parseDocumentText(e.json));
-  }
-
-  async function add(entry) {
-    const now = Date.now();
-    await putEntry({ fileName: null, created: now, updated: now, tags: [], ...entry, id: newTabId() });
-    await refresh();
-  }
-
   async function duplicate(e) {
     const d = JSON.parse(e.json);
     d.header.namaSop = (d.header.namaSop || 'SOP tanpa judul') + ' (salinan)';
-    await add({ kind: 'doc', title: d.header.namaSop, nomor: d.header.nomor, json: JSON.stringify(d), tags: [...e.tags] });
+    const now = Date.now();
+    await putEntry({ id: newTabId(), title: d.header.namaSop, nomor: d.header.nomor, fileName: null, created: now, updated: now, json: JSON.stringify(d), tags: [...e.tags] });
+    await refresh();
     onnotify('Salinan dibuat');
   }
 
@@ -144,27 +124,11 @@
     tag = null;
   }
 
-  async function makeTemplate(json, suggested) {
-    const name = prompt('Nama templat:', suggested || 'Templat SOP');
-    if (!name?.trim()) return;
-    const d = JSON.parse(json);
-    await add({ kind: 'template', title: name.trim(), nomor: d.header.nomor, json });
-    kind = 'template';
-    onnotify(`Templat "${name.trim()}" disimpan`);
-  }
-
   async function saveCurrent() {
     await onsave();
-    setKind('doc');
+    tag = null;
+    tagEdit = null;
     query = '';
-    await refresh();
-  }
-
-  async function rename(e) {
-    const name = prompt('Nama templat:', e.title);
-    if (!name?.trim() || name.trim() === e.title) return;
-    const { text, ...rest } = e;
-    await putEntry({ ...$state.snapshot(rest), title: name.trim(), updated: Date.now() });
     await refresh();
   }
 
@@ -186,14 +150,6 @@
   </p>
 
   <div class="bar">
-    <div class="seg" role="tablist">
-      <button role="tab" aria-selected={kind === 'doc'} class:on={kind === 'doc'} onclick={() => setKind('doc')}>
-        Dokumen <span>{counts.doc}</span>
-      </button>
-      <button role="tab" aria-selected={kind === 'template'} class:on={kind === 'template'} onclick={() => setKind('template')}>
-        Templat <span>{counts.template}</span>
-      </button>
-    </div>
     <!-- svelte-ignore a11y_autofocus -->
     <input type="search" bind:value={query} placeholder="Cari nama, nomor, label, pelaksana, atau kegiatan…" autofocus />
   </div>
@@ -248,13 +204,13 @@
           aria-label={`Pilih ${titleOf(e)}`}
           title={isOpen ? 'Tutup tabnya dulu untuk menghapus' : 'Pilih untuk dihapus sekaligus'}
         />
-        <button class="main" onclick={() => (e.kind === 'doc' ? pick(e) : useTpl(e))}>
+        <button class="main" onclick={() => pick(e)}>
           <strong>
             {titleOf(e)}
             {#if e.id === active}<em>sedang dibuka</em>{:else if isOpen}<em>terbuka di tab</em>{/if}
           </strong>
           <small>
-            {[e.kind === 'doc' && e.nomor, e.fileName, 'diubah ' + ago(e.updated)].filter(Boolean).join(' · ')}
+            {[e.nomor, e.fileName, 'diubah ' + ago(e.updated)].filter(Boolean).join(' · ')}
           </small>
           {#if e.tags.length}
             <span class="tags">{#each e.tags as t (t)}<i>{t}</i>{/each}</span>
@@ -268,13 +224,7 @@
             onclick={() => ((tagEdit = tagEdit === e.id ? null : e.id), (newTag = ''))}
             title="Atur label untuk mengelompokkan">Label</button
           >
-          {#if e.kind === 'doc'}
-            <button class="btn small" onclick={() => duplicate(e)} title="Buat salinan di pustaka">Duplikat</button>
-            <button class="btn small" onclick={() => makeTemplate(e.json, e.title)} title="Simpan sebagai titik awal SOP baru">Jadikan templat</button>
-          {:else}
-            <button class="btn small primary" onclick={() => useTpl(e)}>Gunakan</button>
-            <button class="btn small" onclick={() => rename(e)}>Ubah nama</button>
-          {/if}
+          <button class="btn small" onclick={() => duplicate(e)} title="Buat salinan di pustaka">Duplikat</button>
           <button
             class="btn small danger"
             onclick={() => remove(e)}
@@ -305,7 +255,7 @@
       </li>
     {:else}
       <li class="empty">
-        {query.trim() ? 'Tidak ada yang cocok.' : kind === 'doc' ? 'Belum ada dokumen. SOP yang disimpan ke Pustaka Lokal akan muncul di sini.' : 'Belum ada templat. Buat dari dokumen di pustaka dengan tombol “Jadikan templat”.'}
+        {query.trim() ? 'Tidak ada yang cocok.' : 'Belum ada dokumen. SOP yang disimpan ke Pustaka Lokal akan muncul di sini.'}
       </li>
     {/each}
   </ul>
@@ -357,29 +307,6 @@
     display: flex;
     gap: 0.6rem;
     margin-bottom: 0.6rem;
-  }
-  .seg {
-    display: flex;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    overflow: hidden;
-    flex: none;
-  }
-  .seg button {
-    border: 0;
-    background: none;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    font-weight: 500;
-    color: var(--muted);
-  }
-  .seg button.on {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-  .seg span {
-    font-size: 0.75rem;
-    opacity: 0.8;
   }
   .list {
     list-style: none;
