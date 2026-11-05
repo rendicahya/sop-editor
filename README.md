@@ -13,7 +13,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   "UNIVERSITAS BRAWIJAYA" (kementerian, Fakultas Ilmu Komputer, UB), awalan nomor SOP `UN10/F15/`, pengesah Dekan FILKOM beserta nama dan NIP-nya,
   serta tanggal pembuatan dan tanggal efektif hari ini. Semuanya tetap bisa diubah.
 - **Halaman 1 diedit langsung di pratinjau (WYSIWYG)**: klik teks di halaman untuk mengetik nama instansi, nomor,
-  tanggal pembuatan/revisi/efektif (date picker), pengesahan, gambar tanda tangan/stempel, dan setiap butir ketentuan.
+  tanggal pembuatan/revisi/efektif (date picker), pengesahan, dan setiap butir ketentuan. Tanda tangan dibubuhkan pejabat pada hasil cetak, di ruang kosong bagian pengesahan.
 - Bagian Dasar Hukum, Kualifikasi Pelaksana, Keterkaitan, Peralatan/Perlengkapan, Peringatan, serta
   Pencatatan dan Pendataan, masing-masing bisa bernomor atau tidak (tombol muncul saat judul bagian disorot).
 - Daftar pelaksana (kolom diagram) dan langkah kegiatan dengan simbol Mulai/Selesai, Proses, dan Keputusan,
@@ -46,7 +46,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
 - **Menu klik kanan** di halaman, isinya sesuai yang diklik: langkah/simbol (ganti simbol, atur alur, pindah
   pelaksana, tambah di atas/bawah, duplikat, naik/turun, hapus), kepala pelaksana (tambah di kiri/kanan, geser,
   hapus), butir ketentuan (tambah di atas/bawah, naik/turun, hapus, bernomor), garis alur (atur jalur, kembalikan
-  otomatis), dan tanda tangan. Pada isian teks ada juga potong/*copy*/*paste*/pilih semua serta tebal/miring/garis
+  otomatis). Pada isian teks ada juga potong/*copy*/*paste*/pilih semua serta tebal/miring/garis
   bawah. Bisa dinavigasi dengan ↑/↓, Enter, dan Esc; Shift+klik kanan membuka menu bawaan browser.
 - Zoom pratinjau dengan tombol −/+ atau slider di bar tab.
 - Konektor diagram dibuat otomatis, termasuk cabang "ya"/"tidak" (labelnya berlatar putih agar tidak tertimpa garis tabel) pada keputusan dan konektor antarhalaman (A, B, …). Jalur garis dicari otomatis agar tidak menembus simbol dan tidak saling menumpuk.
@@ -55,13 +55,13 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   jadi tetap berlaku saat tata letak berubah. "Kembalikan jalur otomatis" menghapus pengaturan manualnya.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
 - **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Asisten AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab kembali seperti semula setelah halaman dimuat ulang (riwayat Undo tidak ikut), sedangkan aplikasi yang baru dibuka selalu kosong; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
-- **Pustaka dokumen**: SOP yang disimpan ke Pustaka berada di browser (IndexedDB) dan perubahannya tersimpan otomatis,
+- **Pustaka Lokal**: SOP yang disimpan ke Pustaka Lokal berada di browser (IndexedDB) dan perubahannya tersimpan otomatis,
   jadi tab bisa ditutup dan dibuka lagi kapan saja. Pustaka bisa dicari (nama, nomor, pelaksana, kegiatan, butir ketentuan),
   dokumennya bisa diduplikasi atau dijadikan **templat**, dan templat (termasuk templat bawaan) dipakai untuk memulai SOP
   baru dengan tanggal hari ini. Dokumen dari ruang kolaborasi orang lain disimpan sebagai entri tersendiri.
   **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen dan templat: satu entri boleh berlabel lebih dari satu,
   daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
-- **Pustaka Fakultas**: SOP bersama secara online untuk akun @ub.ac.id yang didaftarkan admin. Lihat [Pustaka Fakultas](#pustaka-fakultas).
+- **Pustaka Daring**: SOP bersama secara daring untuk akun @ub.ac.id yang didaftarkan admin. Lihat [Pustaka Daring](#pustaka-daring).
   Label hanya ada di pustaka (tidak masuk berkas .sop).
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
@@ -70,7 +70,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   bisa diedit**, diposisikan di halaman seperti PDF. Tinggi baris diagram dikunci agar tetap sejajar dengan shape, jadi
   perubahan besar (teks bertambah banyak, langkah baru) sebaiknya dilakukan di aplikasi lalu diekspor ulang.
 - **Ekspor XLSX** (Excel) mengikuti template SOP (`src/assets/template-sop.xlsx`): sheet **Cover** berisi identitas
-  (logo, nomor, tanggal, pengesahan beserta tanda tangan, dan keenam bagian ketentuan) dan sheet **Flowchart** berisi
+  (logo, nomor, tanggal, pengesahan, dan keenam bagian ketentuan) dan sheet **Flowchart** berisi
   tabel langkah. Simbol, garis alur berpanah, label ya/tidak, dan konektor antarhalaman digambar sebagai **shape Excel
   yang bisa diedit**, dengan posisi sama seperti PDF. Pemisah halaman cetak mengikuti PDF dan kepala tabel diulang di
   tiap halaman.
@@ -137,8 +137,8 @@ ini (bisa dimatikan). Catatan tambahan untuk AI bisa ditulis di dialog. Bandingk
 terutama arah panah.
 
 **Revisi SOP ini:** pilih tab **Revisi SOP ini**, tulis instruksi perubahan, lalu *copy* prompt. Prompt berisi seluruh
-dokumen yang sedang dibuka (tanpa gambar tanda tangan) dan meminta AI mengubah hanya bagian yang diminta serta
-mempertahankan id langkah. Jawaban yang di-*paste* menggantikan dokumen aktif sebagai satu langkah Undo; tanda tangan dan
+dokumen yang sedang dibuka dan meminta AI mengubah hanya bagian yang diminta serta
+mempertahankan id langkah. Jawaban yang di-*paste* menggantikan dokumen aktif sebagai satu langkah Undo;
 jalur garis manual dipertahankan.
 
 Pembuka JSON sengaja toleran terhadap jawaban AI: teks pengantar dan pembungkus ```` ```json ```` diabaikan,
@@ -156,7 +156,7 @@ atau ganda dibuat ulang, `next`/`alt` boleh berisi nomor urut atau nama kegiatan
 Cara kerjanya:
 
 - Dokumen disimpan sebagai CRDT [Yjs](https://yjs.dev), sehingga suntingan bersamaan digabung otomatis
-  (teks per karakter; pilihan, tanggal, dan gambar diganti utuh).
+  (teks per karakter; pilihan dan tanggal diganti utuh).
 - Browser saling menemukan lewat relay [Nostr](https://nostr.com) publik ([Trystero](https://github.com/dmotz/trystero)),
   lalu data dikirim langsung antar-peserta melalui WebRTC. Tidak ada server yang menyimpan dokumen.
 - Tautan berisi id ruang dan kunci acak; kunci mengenkripsi proses pencarian peer, jadi hanya pemegang tautan yang bisa
@@ -167,9 +167,9 @@ Cara kerjanya:
   (sebagian jaringan kantor/kampus). Peserta yang bergabung baru melihat dokumen setelah tersambung dengan minimal satu
   peserta lain yang memegang isi ruang.
 
-### Pustaka Fakultas
+### Pustaka Daring
 
-SOP disimpan di Firestore; hanya JSON-nya, dan gambar tanda tangan/stempel selalu dibuang saat diunggah.
+SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat gambar.
 
 | Tindakan | SOP public | SOP private |
 | --- | --- | --- |
@@ -221,10 +221,10 @@ Struktur utama:
 | `src/lib/duration.js` | Estimasi total waktu: membaca kolom Waktu dan menjumlahkannya di jalur utama |
 | `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan otomatis per tab (id tab = id entri), daftar, hapus |
 | `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, label, duplikat, templat |
-| `src/lib/faculty.svelte.js` | Pustaka Fakultas: login, baca/tulis Firestore, riwayat, keterangan sedang diedit; Firebase dimuat saat pertama dipakai |
-| `src/lib/FacultyDialog.svelte` | Dialog Pustaka Fakultas: daftar, Recycle bin, tab Admin |
+| `src/lib/faculty.svelte.js` | Pustaka Daring: login, baca/tulis Firestore, riwayat, keterangan sedang diedit; Firebase dimuat saat pertama dipakai |
+| `src/lib/FacultyDialog.svelte` | Dialog Pustaka Daring: daftar, Recycle bin, tab Admin |
 | `src/lib/FacultyConflict.svelte` | Pilihan saat penyimpanan bertabrakan |
-| `firebase/firestore.rules` | Aturan akses Pustaka Fakultas, diuji oleh `firebase/rules.test.js` di emulator |
+| `firebase/firestore.rules` | Aturan akses Pustaka Daring, diuji oleh `firebase/rules.test.js` di emulator |
 | `src/lib/xlsx.js` | Ekspor XLSX: mengisi template SOP (gaya, tema, logo), diagram sebagai shape DrawingML |
 | `src/lib/fonts.js` | Font dokumen: Calibri dari perangkat (disimpan di IndexedDB) atau Carlito sebagai pengganti |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
@@ -250,7 +250,7 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
   "header": {
     "namaSop": "...", "nomor": "...",
     "tglPembuatan": "2023-08-07", "tglRevisi": "", "tglEfektif": "2023-10-20", // ISO, dicetak "07 Agustus 2023"
-    "signature": { "src": "data:image/png;base64,...", "width": 0, "height": 0 }, ... // logo tidak disimpan (baku)
+    ... // logo tidak disimpan (baku)
   },
   "sections": { "dasarHukum": { "numbered": true, "items": ["..."] }, ... },
   "actors": [{ "id": "a1", "name": "Mahasiswa" }],

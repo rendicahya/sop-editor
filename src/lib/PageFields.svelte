@@ -10,7 +10,6 @@
   import { tick } from 'svelte';
   import { asStep } from './history.js';
   import { app } from './store.svelte.js';
-  import { readImage } from './files.js';
   import { PT } from './layout.js';
   import { newStep, removeStep, uid, SHAPES, SECTION_DEFS } from './model.js';
   import { collab } from './collab.svelte.js';
@@ -418,20 +417,6 @@
     app.doc.sections.kualifikasi.items = app.doc.actors.map((a) => a.name);
   }
 
-  let fileInput = $state();
-  let imageError = $state('');
-  async function pickImage(e) {
-    const file = e.currentTarget.files?.[0];
-    e.currentTarget.value = '';
-    if (!file) return;
-    imageError = '';
-    try {
-      h.signature = await readImage(file);
-    } catch (err) {
-      imageError = err.message;
-    }
-  }
-
   // ---------------------------------------------------------------------------
   // Menu klik kanan: isinya sesuai isian yang diklik (Shift+klik kanan = menu bawaan browser).
   // ---------------------------------------------------------------------------
@@ -581,12 +566,6 @@
     else if (f.kind === 'item') out.push(...itemItems(f));
     else if (f.kind === 'section' || f.kind === 'empty') out.push(...sectionItems(f.key));
     else if (f.kind === 'add-step') out.push({ label: 'Tambah kegiatan', run: () => addStep(-1) });
-    else if (f.kind === 'image') {
-      out.push(
-        { label: h.signature ? 'Ganti tanda tangan…' : 'Pilih tanda tangan / stempel…', run: () => fileInput.click() },
-        { label: 'Hapus tanda tangan', danger: true, disabled: !h.signature, run: () => asStep(() => (h.signature = null)) }
-      );
-    }
     // Rapikan pemisah di awal, di akhir, dan yang berurutan.
     return out.filter((it, i, a) => !it.sep || (i > 0 && i < a.length - 1 && !a[i - 1].sep));
   }
@@ -682,20 +661,6 @@
           onclick={(e) => e.currentTarget.showPicker?.()}
         />
       </span>
-    {:else if f.kind === 'image'}
-      <div class="f-image" class:has={!!h.signature} style={box(f)} data-fid={f.id}>
-        {#if h.signature}
-          <span class="tools">
-            <button onclick={() => fileInput.click()}>Ganti tanda tangan</button>
-            <button onclick={() => (h.signature = null)}>Hapus</button>
-          </span>
-        {:else}
-          <button class="f-hint" onclick={() => fileInput.click()} title="PNG berlatar transparan akan tampak paling baik">
-            + Tanda tangan / stempel (opsional)
-          </button>
-        {/if}
-        {#if imageError}<span class="err">{imageError}</span>{/if}
-      </div>
     {:else if f.kind === 'section'}
       <div class="f-head" style={box(f)} data-fid={f.id}>
         <span class="tools">
@@ -902,7 +867,6 @@
     {/if}
   {/each}
 </div>
-<input bind:this={fileInput} type="file" accept="image/*" hidden onchange={pickImage} />
 {#if ctx}
   {#key ctx}<ContextMenu x={ctx.x} y={ctx.y} items={ctx.items} onclose={() => (ctx = null)} />{/key}
 {/if}
@@ -970,8 +934,7 @@
     opacity: 1;
   }
   .f-text:hover,
-  .f-date:hover,
-  .f-image:hover {
+  .f-date:hover {
     background: rgb(var(--edit) / 0.06);
     box-shadow: inset 0 0 0 1px rgb(var(--edit) / 0.35);
   }
@@ -1059,22 +1022,11 @@
     box-shadow: inset 0 0 0 1.5px rgb(var(--edit));
   }
 
-  .f-image,
   .f-head {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: flex-end;
     padding: 0 0.25rem;
-  }
-  .f-image.has {
-    align-items: flex-end;
-  }
-  .f-image:not(.has) {
-    justify-content: center;
-    align-items: center;
-  }
-  .f-head {
-    align-items: center;
   }
   .tools {
     display: flex;
@@ -1083,8 +1035,6 @@
     opacity: 0;
     transition: opacity 0.12s;
   }
-  .f-image:hover .tools,
-  .f-image:focus-within .tools,
   .f-head:hover .tools,
   .f-head:focus-within .tools {
     opacity: 1;
@@ -1422,9 +1372,5 @@
   .edge-menu .reset:disabled {
     opacity: 0.45;
     cursor: default;
-  }
-  .err {
-    font: 11px var(--ui-font);
-    color: #c0392b;
   }
 </style>

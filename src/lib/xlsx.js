@@ -216,7 +216,7 @@ const SECTION_PAIRS = [
   ['peringatan', 'PERINGATAN', 'pencatatan', 'PENCATATAN DAN PENDATAAN']
 ];
 
-function buildCover(doc, sh, rels) {
+function buildCover(doc, sh) {
   const hd = doc.header;
   const [, wB, , wD, wE] = COVER_COLS;
   const label = { b: true };
@@ -270,22 +270,11 @@ function buildCover(doc, sh, rels) {
   const last = r - 1;
   heights.forEach((h, i) => h && sh.height(i, h));
 
-  // Gambar: logo template dan tanda tangan/stempel.
+  // Gambar: logo template.
   const grid = new Grid(COVER_COLS, heights.slice(1).map(ptRound));
   const dr = new Drawing(grid);
   const leftW = (COVER_COLS[0] + COVER_COLS[1]) * EMU_PX;
   dr.pic('rId1', (leftW - LOGO.w) / 2, 10 * EMU_PT, LOGO.w, LOGO.h, 'Logo');
-  if (hd.signature) {
-    const x0 = grid.cx[4];
-    const y0 = grid.ry[5];
-    const W = COVER_COLS[4] * EMU_PX - 20 * EMU_PX;
-    const H = grid.ry[10] - y0 - 4 * EMU_PT;
-    const s = Math.min(W / hd.signature.width, H / hd.signature.height);
-    const w = hd.signature.width * s;
-    const h = hd.signature.height * s;
-    const rid = rels.image(hd.signature.src);
-    dr.pic(rid, x0 + (COVER_COLS[4] * EMU_PX - w) / 2, y0 + (grid.ry[10] - y0 - h) / 2, w, h, 'Tanda tangan');
-  }
   return {
     xml: sh.toXml({ cols: COVER_COLS, setup: { fitH: 1 }, pr: '<tabColor rgb="FF0000FF"/>', view: 'tabSelected="1" view="pageBreakPreview" zoomScale="70" zoomScaleSheetLayoutView="70" ', last: ref(last, 4) }),
     drawing: dr.toXml(),
@@ -451,13 +440,6 @@ function textBox(it, mapX, mapY, bg = null) {
 // Paket XLSX
 // ---------------------------------------------------------------------------
 
-function dataUrlBytes(src) {
-  const [head, data] = src.split(',');
-  const bin = atob(data);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return { bytes, ext: head.includes('jpeg') || head.includes('jpg') ? 'jpeg' : 'png' };
-}
 
 let template = null;
 async function loadTemplate() {
@@ -475,18 +457,8 @@ export async function exportXlsx(doc) {
   const styles = new Styles(strFromU8(tpl['xl/styles.xml']));
   const strings = new Strings();
 
-  const media = {};
   const coverRels = [`<Relationship Id="rId1" Type="${REL}/image" Target="../media/image1.png"/>`];
-  const rels = {
-    image(src) {
-      const { bytes, ext } = dataUrlBytes(src);
-      const n = coverRels.length + 1;
-      media[`xl/media/image${n}.${ext}`] = bytes;
-      coverRels.push(`<Relationship Id="rId${n}" Type="${REL}/image" Target="../media/image${n}.${ext}"/>`);
-      return 'rId' + n;
-    }
-  };
-  const cover = buildCover(doc, new Sheet(strings, styles), rels);
+  const cover = buildCover(doc, new Sheet(strings, styles));
   const flow = buildFlow(doc, pages, new Sheet(strings, styles));
 
   const relsXml = (list) => `${XML}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${list.join('')}</Relationships>`;
@@ -536,8 +508,7 @@ export async function exportXlsx(doc) {
     'xl/drawings/drawing1.xml': strToU8(cover.drawing),
     'xl/drawings/drawing2.xml': strToU8(flow.drawing),
     'xl/drawings/_rels/drawing1.xml.rels': strToU8(relsXml(coverRels)),
-    'xl/media/image1.png': tpl['xl/media/image1.png'],
-    ...media
+    'xl/media/image1.png': tpl['xl/media/image1.png']
   };
   return new Blob([zipSync(files, { level: 6 })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }

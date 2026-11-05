@@ -1,4 +1,4 @@
-// Pustaka Fakultas: SOP bersama di Firestore. Firebase baru dimuat saat fitur ini dipakai.
+// Pustaka Daring: SOP bersama di Firestore. Firebase baru dimuat saat fitur ini dipakai.
 // Batasan akses ditegakkan oleh firebase/firestore.rules; yang di sini hanya mengikuti aturan itu.
 
 const EMULATOR = import.meta.env.VITE_FIREBASE_EMULATOR;
@@ -62,7 +62,7 @@ if (EMULATOR) {
   };
 }
 
-const offlineMessage = 'Pustaka Fakultas tidak bisa dihubungi. Periksa koneksi internet, lalu coba lagi.';
+const offlineMessage = 'Pustaka Daring tidak bisa dihubungi. Periksa koneksi internet, lalu coba lagi.';
 
 function readable(e) {
   if (e?.code === 'permission-denied') return 'Akses ditolak server. Bila ini baru disiapkan, pastikan aturan keamanan sudah dipasang.';
@@ -134,17 +134,14 @@ function row(d) {
 
 const utf8Size = (s) => new TextEncoder().encode(s).length;
 
-/**
- * Bentuk dokumen untuk Pustaka Fakultas: tanda tangan/stempel tidak pernah ikut, karena gambarnya akan
- * terlihat oleh penerima lain. `title` menimpa Nama SOP bila diberikan.
- */
+/** Bentuk dokumen untuk Pustaka Daring. `title` menimpa Nama SOP bila diberikan. */
 function cloudJson(doc, title) {
   const copy = JSON.parse(JSON.stringify(doc));
-  copy.header.signature = null;
+  delete copy.header.signature; // masih ada pada SOP yang diunggah sebelum fitur tanda tangan dihapus
   if (title !== undefined) copy.header.namaSop = title;
   const json = JSON.stringify(copy);
   const size = utf8Size(json);
-  if (size > MAX_SOP_BYTES) throw new FacultyError('too-big', `SOP ini terlalu besar untuk Pustaka Fakultas (${Math.ceil(size / 1024)} KB, maksimal ${MAX_SOP_BYTES / 1024} KB).`);
+  if (size > MAX_SOP_BYTES) throw new FacultyError('too-big', `SOP ini terlalu besar untuk Pustaka Daring (${Math.ceil(size / 1024)} KB, maksimal ${MAX_SOP_BYTES / 1024} KB).`);
   return { json, size, title: copy.header.namaSop.trim().slice(0, 300), nomor: String(copy.header.nomor ?? '').slice(0, 120) };
 }
 
@@ -162,7 +159,7 @@ async function isFull() {
 async function failed(e) {
   if (e instanceof FacultyError) throw e;
   if (e?.code === 'permission-denied') {
-    if (await isFull()) throw new FacultyError('full', 'Penyimpanan Pustaka Fakultas penuh. Hubungi admin.');
+    if (await isFull()) throw new FacultyError('full', 'Penyimpanan Pustaka Daring penuh. Hubungi admin.');
     throw new FacultyError('denied', 'Server menolak penyimpanan ini. Mungkin hak akses berubah atau ruang pustaka tidak cukup; hubungi admin bila berulang.');
   }
   throw new Error(readable(e));

@@ -144,7 +144,7 @@
     {#if draft.mode === 'revise'}
       <small class="hint">
         Bila AI memberikan berkas .json, buka berkasnya di editor teks lalu <i>paste</i> isinya di sini.
-        Tanda tangan dan jalur garis yang diatur manual tetap dipertahankan.
+        Jalur garis yang diatur manual tetap dipertahankan.
       </small>
     {:else if draft.mode === 'import'}
       <small class="hint">Bandingkan hasilnya dengan dokumen asli, terutama arah panah dan cabang keputusan.</small>

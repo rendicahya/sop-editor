@@ -340,7 +340,7 @@
   function rekey(id = newTabId()) {
     flush(tabs.active);
     if (activeTab.remote) Faculty.setEditing(activeTab.remote.id, false);
-    activeTab.remote = null; // isi tab berganti: tidak lagi tertaut ke SOP di Pustaka Fakultas
+    activeTab.remote = null; // isi tab berganti: tidak lagi tertaut ke SOP di Pustaka Daring
     activeTab.id = id;
     tabs.active = id;
   }
@@ -416,18 +416,18 @@
     }
     const json = id === tabs.active ? current : stash.get(id).json;
     if (tab.remote) {
-      // Salinan SOP dari Pustaka Fakultas: tempat simpannya di sana, bukan di pustaka browser ini.
+      // Salinan SOP dari Pustaka Daring: tempat simpannya di sana, bukan di pustaka browser ini.
       const dirty = json !== (id === tabs.active ? clean : stash.get(id).clean);
-      if (dirty && confirm(`Simpan perubahan "${tabTitle(tab)}" ke Pustaka Fakultas sebelum ditutup?\n\nOK = simpan, Batal = tutup tanpa menyimpan.`)) {
+      if (dirty && confirm(`Simpan perubahan "${tabTitle(tab)}" ke Pustaka Daring sebelum ditutup?\n\nOK = simpan, Batal = tutup tanpa menyimpan.`)) {
         if (id !== tabs.active) switchTab(id);
         if (id !== tabs.active || !(await saveToFaculty())) return;
       }
       Faculty.setEditing(tab.remote.id, false);
     } else if (!isBlank(JSON.parse(json))) {
       const inLib = await getEntry(id).catch(() => null);
-      if (inLib || confirm(`Simpan "${tabTitle(tab)}" ke Pustaka sebelum ditutup?\n\nOK = simpan, Batal = tutup tanpa menyimpan.`)) {
+      if (inLib || confirm(`Simpan "${tabTitle(tab)}" ke Pustaka Lokal sebelum ditutup?\n\nOK = simpan, Batal = tutup tanpa menyimpan.`)) {
         await saveDoc(id, json, tab.fileName, true).catch(() => {});
-        notify(`"${tabTitle(tab)}" ditutup — buka lagi dari Pustaka`);
+        notify(`"${tabTitle(tab)}" ditutup — buka lagi dari Pustaka Lokal`);
       }
     }
     if (!tabs.list.includes(tab)) return;
@@ -513,7 +513,7 @@
         .catch(() => null)
         .then((e) => {
           const ask = !e && !isBlank(JSON.parse(json));
-          const ok = ask && confirm('Simpan dokumen sebelumnya ke Pustaka sebelum diganti dokumen ruang kolaborasi?');
+          const ok = ask && confirm('Simpan dokumen sebelumnya ke Pustaka Lokal sebelum diganti dokumen ruang kolaborasi?');
           if (e || ok) saveDoc(old, json, name, true).catch(() => {});
         });
       rekey(tabs.list.some((t) => t.id === id) ? newTabId() : id);
@@ -580,14 +580,13 @@
   // Jawaban AI yang ditempel: dokumen baru tanpa berkas.
   let aiOpen = $state(false);
   let roomDocs = $state(0);
-  // `revise`: jawaban menggantikan dokumen aktif (bisa di-Undo); tanda tangan dan jalur manual dipulihkan.
+  // `revise`: jawaban menggantikan dokumen aktif (bisa di-Undo); jalur manual dipulihkan.
   function loadPasted(text, revise = false) {
     if (shared && !confirm(`Ganti dokumen${shared} dengan jawaban AI ini?`)) return false;
     try {
       const doc = parseDocumentText(text);
       if (revise) {
         const old = $state.snapshot(app.doc);
-        doc.header.signature ??= old.header.signature;
         const routes = new Map(old.steps.filter((s) => s.route).map((s) => [s.id, s.route]));
         for (const s of doc.steps) if (routes.has(s.id)) s.route = routes.get(s.id);
         replaceDocument(doc, app.fileName, app.fileHandle);
@@ -655,13 +654,13 @@
       await saveDoc(id, JSON.stringify(app.doc), app.fileName, true);
       if (!had && !(await getEntry(id))) return notify('Dokumen masih kosong, belum ada yang disimpan');
       saved();
-      notify(had ? 'Pustaka sudah diperbarui' : 'Tersimpan di Pustaka — perubahan berikutnya tersimpan otomatis');
+      notify(had ? 'Pustaka Lokal sudah diperbarui' : 'Tersimpan di Pustaka Lokal — perubahan berikutnya tersimpan otomatis');
     } catch (e) {
-      alert('Gagal menyimpan ke Pustaka: ' + e.message);
+      alert('Gagal menyimpan ke Pustaka Lokal: ' + e.message);
     }
   }
 
-  // Pustaka Fakultas. Tab yang tertaut menyimpan tab.remote: { id, rev, title, visibility, canRename }.
+  // Pustaka Daring. Tab yang tertaut menyimpan tab.remote: { id, rev, title, visibility, canRename }.
   let facultyOpen = $state(false);
   let conflict = $state(null);
   let conflictChosen;
@@ -690,7 +689,7 @@
   function openFacultySop(sop) {
     const opened = tabs.list.find((t) => t.remote?.id === sop.id);
     if (opened) return switchTab(opened.id);
-    if (collab.status !== 'off') return alert('Keluar dari ruang kolaborasi dulu untuk membuka SOP dari Pustaka Fakultas.');
+    if (collab.status !== 'off') return alert('Keluar dari ruang kolaborasi dulu untuk membuka SOP dari Pustaka Daring.');
     try {
       openInTab(parseDocumentText(sop.json));
     } catch {
@@ -732,12 +731,11 @@
     checkpoint();
     const tab = activeTab;
     const doc = $state.snapshot(app.doc);
-    const note = doc.header.signature ? ' Gambar tanda tangan/stempel tidak ikut diunggah.' : '';
     try {
       if (!tab.remote) {
         if (isBlank(doc)) return notify('Dokumen masih kosong, belum ada yang diunggah'), false;
         linkTab(tab, doc, await Faculty.uploadSop(doc));
-        notify('Diunggah ke Pustaka Fakultas sebagai private.' + note);
+        notify('Diunggah ke Pustaka Daring sebagai private.');
         return true;
       }
       const { id, rev } = tab.remote;
@@ -758,12 +756,12 @@
           const copy = await Faculty.uploadSop(doc, title);
           Faculty.setEditing(id, false);
           linkTab(tab, doc, copy);
-          notify('Disimpan sebagai salinan private.' + note);
+          notify('Disimpan sebagai salinan private.');
           return true;
         }
       }
       linkTab(tab, doc, { ...$state.snapshot(tab.remote), rev: r.rev, title: r.title });
-      notify((r.unchanged ? 'Tidak ada perubahan untuk disimpan.' : 'Tersimpan di Pustaka Fakultas.') + note);
+      notify(r.unchanged ? 'Tidak ada perubahan untuk disimpan.' : 'Tersimpan di Pustaka Daring.');
       return true;
     } catch (e) {
       alert(e.message);
@@ -933,22 +931,25 @@
     <nav class="toolbar">
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)">Buka</button>
-      <button class="btn ghost" onclick={() => (libraryOpen = true)} title="SOP dan templat yang disimpan di browser ini">Pustaka</button>
-      <button class="btn ghost" onclick={() => (facultyOpen = true)} title="SOP bersama secara online, untuk anggota fakultas">Pustaka Fakultas</button>
+      <div class="btn-group" role="group" aria-label="Pustaka">
+        <span>Pustaka</span>
+        <button class="btn ghost" onclick={() => (libraryOpen = true)} title="SOP dan templat yang disimpan di browser ini">Lokal</button>
+        <button class="btn ghost" onclick={() => (facultyOpen = true)} title="SOP bersama secara daring, untuk anggota fakultas">Daring</button>
+      </div>
       <div class="export">
-        <button class="btn ghost" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka atau sebagai berkas .sop">
+        <button class="btn ghost" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka Lokal, Pustaka Daring, atau sebagai berkas .sop">
           Simpan
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
         </button>
         {#if saveOpen}
           <div class="export-menu left" role="menu">
             <button role="menuitem" onclick={() => ((saveOpen = false), saveToLibrary())}>
-              <strong>Ke Pustaka{inLibrary ? ' ✓' : ''}</strong>
-              <small>{inLibrary ? 'Sudah di Pustaka, perubahan tersimpan otomatis' : 'Disimpan di browser ini, buka lagi dari Pustaka'}</small>
+              <strong>Ke Pustaka Lokal{inLibrary ? ' ✓' : ''}</strong>
+              <small>{inLibrary ? 'Sudah di Pustaka Lokal, perubahan tersimpan otomatis' : 'Disimpan di browser ini, buka lagi dari Pustaka Lokal'}</small>
             </button>
             <button role="menuitem" onclick={() => ((saveOpen = false), saveToFaculty())}>
-              <strong>Ke Pustaka Fakultas{activeTab?.remote ? ' ✓' : ''}</strong>
-              <small>{activeTab?.remote ? 'Simpan perubahan ke SOP online ini' : 'Unggah sebagai SOP online baru (private)'}</small>
+              <strong>Ke Pustaka Daring{activeTab?.remote ? ' ✓' : ''}</strong>
+              <small>{activeTab?.remote ? 'Simpan perubahan ke SOP daring ini' : 'Unggah sebagai SOP daring baru (private)'}</small>
             </button>
             <button role="menuitem" onclick={() => ((saveOpen = false), save(false))}>
               <strong>Sebagai berkas .sop</strong><small>{app.fileHandle ? `Timpa ${app.fileName}` : 'Pilih lokasi di perangkat'} · Ctrl+S</small>
@@ -1153,12 +1154,15 @@
       {#if empty}
         <div class="no-doc">
           <strong>Tidak ada SOP yang terbuka</strong>
-          <span>Buat SOP baru, buka berkas, atau pilih dari Pustaka.</span>
+          <span>Buat SOP baru, buka berkas, atau pilih dari Pustaka Lokal atau Daring.</span>
           <span class="actions">
             <button class="btn primary" onclick={newDoc}>Baru</button>
             <button class="btn" onclick={open}>Buka</button>
-            <button class="btn" onclick={() => (libraryOpen = true)}>Pustaka</button>
-            <button class="btn" onclick={() => (facultyOpen = true)}>Pustaka Fakultas</button>
+            <div class="btn-group" role="group" aria-label="Pustaka">
+              <span>Pustaka</span>
+              <button class="btn ghost" onclick={() => (libraryOpen = true)}>Lokal</button>
+              <button class="btn ghost" onclick={() => (facultyOpen = true)}>Daring</button>
+            </div>
           </span>
         </div>
       {:else}

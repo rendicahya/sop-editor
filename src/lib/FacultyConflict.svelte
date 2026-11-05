@@ -1,5 +1,5 @@
 <script>
-  // Pilihan saat penyimpanan ke Pustaka Fakultas bertabrakan. info: { canOverwrite, by, at, message } atau null.
+  // Pilihan saat penyimpanan ke Pustaka Daring bertabrakan. info: { canOverwrite, by, at, message } atau null.
   let { info, onchoice } = $props();
   let dialog;
 

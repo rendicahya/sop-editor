@@ -37,7 +37,7 @@
       entries = (await listEntries()).map((e) => ({ ...e, tags: e.tags ?? [], text: haystack(e) }));
     } catch {
       entries = [];
-      alert('Pustaka tidak bisa dibaca di browser ini (mode privat atau penyimpanan diblokir).');
+      alert('Pustaka Lokal tidak bisa dibaca di browser ini (mode privat atau penyimpanan diblokir).');
     }
   }
 
@@ -187,11 +187,11 @@
 
 <dialog bind:this={dialog} class="dialog" onclose={() => (open = false)}>
   <header>
-    <h2>Pustaka</h2>
+    <h2>Pustaka Lokal</h2>
     <button class="x" onclick={() => (open = false)} aria-label="Tutup">×</button>
   </header>
   <p class="hint">
-    SOP yang disimpan ke Pustaka berada di browser ini, dan perubahannya tersimpan otomatis. Data hilang bila data situs
+    SOP yang disimpan ke Pustaka Lokal berada di browser ini, dan perubahannya tersimpan otomatis. Data hilang bila data situs
     browser dihapus, jadi simpan juga SOP penting sebagai berkas .sop.
   </p>
 
@@ -325,7 +325,7 @@
     {:else}
       {#if !builtins.length}
         <li class="empty">
-          {query.trim() ? 'Tidak ada yang cocok.' : kind === 'doc' ? 'Belum ada dokumen. SOP yang disimpan ke Pustaka akan muncul di sini.' : 'Belum ada templat buatan sendiri.'}
+          {query.trim() ? 'Tidak ada yang cocok.' : kind === 'doc' ? 'Belum ada dokumen. SOP yang disimpan ke Pustaka Lokal akan muncul di sini.' : 'Belum ada templat buatan sendiri.'}
         </li>
       {/if}
     {/each}

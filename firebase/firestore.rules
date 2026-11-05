@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Pustaka Fakultas. Satu-satunya penjaga data: aplikasi berjalan di browser, jadi semua batasan harus ada di sini.
+// Pustaka Daring. Satu-satunya penjaga data: aplikasi berjalan di browser, jadi semua batasan harus ada di sini.
 //
 //   members/{email}            { role: 'member' | 'admin', addedBy, addedAt }
 //   sops/{id}                  isi terkini beserta metadata
@@ -68,6 +68,7 @@ service cloud.firestore {
       return d.json is string
         && jsonBytes(d) <= 524288
         && d.size == jsonBytes(d)
+        && !d.json.matches('(?s).*data:image/.*') // isi pustaka hanya teks, tanpa gambar
         && d.title is string && d.title.size() <= 300
         && d.nomor is string && d.nomor.size() <= 120
         && d.updatedAt == request.time

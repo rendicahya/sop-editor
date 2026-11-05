@@ -22,7 +22,6 @@ export function checkDocument(doc) {
   if (!hd.disahkanJabatan?.trim()) add('warn', 'Jabatan pengesah masih kosong.', 'h:disahkanJabatan');
   if (!hd.disahkanNama?.trim()) add('warn', 'Nama pengesah masih kosong.', 'h:disahkanNama');
   if (!hd.disahkanNip?.trim()) add('info', 'NIP pengesah masih kosong.', 'h:disahkanNip');
-  if (!hd.signature) add('info', 'Belum ada gambar tanda tangan/stempel.', 'sig');
 
   for (const def of SECTION_DEFS) {
     const sec = doc.sections[def.key];

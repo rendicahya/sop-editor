@@ -84,10 +84,9 @@ CONTOH STRUKTUR (isi dengan proses di atas, jangan disalin isinya, kecuali nomor
 ${JSON.stringify(example, null, 2)}`;
 }
 
-/** Dokumen untuk dikirim ke AI: tanpa gambar tanda tangan dan jalur garis manual (dipulihkan saat jawaban dibuka). */
+/** Dokumen untuk dikirim ke AI: tanpa jalur garis manual (dipulihkan saat jawaban dibuka). */
 export function docForAi(doc) {
-  const { signature: _, ...header } = doc.header;
-  return { ...doc, header, steps: doc.steps.map(({ route: _, ...s }) => s) };
+  return { ...doc, steps: doc.steps.map(({ route: _, ...s }) => s) };
 }
 
 /** Prompt untuk merevisi dokumen yang sedang dibuka sesuai instruksi pengguna. */

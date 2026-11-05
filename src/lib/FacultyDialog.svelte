@@ -160,7 +160,7 @@
 
 <dialog bind:this={dialog} class="dialog" onclose={() => (open = false)}>
   <header>
-    <h2>Pustaka Fakultas</h2>
+    <h2>Pustaka Daring</h2>
     <span class="grow"></span>
     {#if faculty.user}
       <small class="who" title={faculty.user.email}>{faculty.user.name}{admin ? ' · Admin' : ''}</small>
@@ -226,8 +226,8 @@
         {/each}
       </ul>
       <footer>
-        <button class="btn" disabled={!cansave} onclick={() => onupload()}>Unggah dokumen ini ke Pustaka Fakultas</button>
-        <small>SOP baru selalu private. Gambar tanda tangan/stempel tidak ikut diunggah.</small>
+        <button class="btn" disabled={!cansave} onclick={() => onupload()}>Unggah dokumen ini ke Pustaka Daring</button>
+        <small>SOP baru selalu private.</small>
       </footer>
     {:else if view === 'bin'}
       <ul class="list">
@@ -294,13 +294,13 @@
   {:else}
     <div class="gate">
       {#if faculty.status === 'out'}
-        <p>Pustaka Fakultas menyimpan SOP bersama secara online. Masuk dengan akun Google <strong>@ub.ac.id</strong> yang sudah didaftarkan admin.</p>
+        <p>Pustaka Daring menyimpan SOP bersama secara daring. Masuk dengan akun Google <strong>@ub.ac.id</strong> yang sudah didaftarkan admin.</p>
         <button class="btn primary" onclick={() => F.signIn().catch((e) => alert(e.message))}>Masuk dengan Google</button>
       {:else if faculty.status === 'domain'}
-        <p><strong>{faculty.user.email}</strong> tidak bisa dipakai. Pustaka Fakultas hanya untuk akun @ub.ac.id.</p>
+        <p><strong>{faculty.user.email}</strong> tidak bisa dipakai. Pustaka Daring hanya untuk akun @ub.ac.id.</p>
         <button class="btn" onclick={() => F.signOut().then(() => F.signIn()).catch((e) => alert(e.message))}>Ganti akun</button>
       {:else if faculty.status === 'notMember'}
-        <p><strong>{faculty.user.email}</strong> belum terdaftar sebagai anggota. Minta admin Pustaka Fakultas mendaftarkan akun ini.</p>
+        <p><strong>{faculty.user.email}</strong> belum terdaftar sebagai anggota. Minta admin Pustaka Daring mendaftarkan akun ini.</p>
         <button class="btn" onclick={() => F.recheck()}>Periksa lagi</button>
       {:else if faculty.status === 'error'}
         <p class="error">{faculty.error}</p>

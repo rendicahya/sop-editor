@@ -100,7 +100,6 @@ export function emptyDocument() {
       tglRevisi: '',
       tglEfektif: todayIso(),
       ...DEFAULT_PENGESAH,
-      signature: null,
       namaSop: ''
     },
     sections,
@@ -162,7 +161,6 @@ export function sampleDocument() {
       disahkanJabatan: 'DEKAN FAKULTAS ILMU KOMPUTER',
       disahkanNama: 'Prof. Ir. Wayan Firdaus Mahmudy, S.Si., M.T., Ph.D.',
       disahkanNip: 'NIP. 197209191997021001',
-      signature: null,
       namaSop: 'Skripsi'
     },
     sections: {
@@ -229,10 +227,8 @@ export function normalizeDocument(raw) {
   const rich = (v) => normalizeMarkup(str(v));
   const plain = (v) => plainText(rich(v));
   const header = { ...base.header };
-  for (const k of Object.keys(header)) {
-    if (k === 'signature') header[k] = isImage(raw.header?.[k]) ? raw.header[k] : null;
-    else header[k] = plain(raw.header?.[k]);
-  }
+  // Hanya kolom teks yang dikenal yang dibaca, jadi tanda tangan dari berkas lama tidak ikut terbawa.
+  for (const k of Object.keys(header)) header[k] = plain(raw.header?.[k]);
   header.tglPembuatan = toIsoDate(header.tglPembuatan);
   header.tglEfektif = toIsoDate(header.tglEfektif);
   // Tanggal revisi dulu teks bebas: dikonversi bila bisa, selain itu teksnya dipertahankan.
@@ -334,8 +330,4 @@ function normalizeRoute(raw, actors, ids) {
     if (Object.keys(o).length) out[b] = o;
   }
   return Object.keys(out).length ? out : null;
-}
-
-function isImage(v) {
-  return v && typeof v.src === 'string' && v.src.startsWith('data:image/') && v.width > 0 && v.height > 0;
 }

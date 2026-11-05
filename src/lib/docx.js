@@ -218,13 +218,8 @@ function identityTable(doc, meta, media, numbering) {
     para(logo, { size: S, align: 'center', after: tw(3), line: 0 }) +
     para(run(hd.institution, { bold: true, size: 11 }), { size: 11, align: 'center' });
 
-  // Tanda tangan/stempel; bila kosong, sisakan ruang kosong setinggi area tanda tangan.
-  let sig = para('', { size: S, line: tw(24) });
-  if (hd.signature) {
-    const s = Math.min(meta.sigW / hd.signature.width, 24 / hd.signature.height);
-    const img = inlineImage(media.addDataUrl(hd.signature.src), hd.signature.width * s, hd.signature.height * s);
-    sig = para(img, { size: S, align: 'center', before: 40, after: 40, line: 0 });
-  }
+  // Ruang kosong untuk tanda tangan pejabat pada hasil cetak.
+  const sig = para('', { size: S, line: tw(24) });
   const value = (t, bold) => para(run(t, { bold }), { size: S });
   const right = [
     ['NOMOR SOP', value(hd.nomor)],

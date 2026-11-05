@@ -140,13 +140,8 @@ function layoutIdentity(doc, pages) {
       page.items.push(text(xLab + pad, yy + pad, wrap('DISAHKAN OLEH', S, true, labelW - 2 * pad), S, { bold: true }));
       const cx = xVal + valW / 2;
       page.items.push(text(cx, yy + pad, jab, S, { align: 'center' }));
+      // Di antara jabatan dan nama ada ruang kosong untuk tanda tangan pejabat pada hasil cetak.
       const bottomText = textH(nama, S) + textH(nip, S);
-      const sigTop = yy + pad + textH(jab, S) + 1;
-      const sigBottom = yy + h - pad - bottomText - 1;
-      if (hd.signature) {
-        const f = fit(hd.signature, valW - 10, sigBottom - sigTop);
-        page.items.push({ t: 'image', src: hd.signature.src, x: cx - f.w / 2, y: sigTop + (sigBottom - sigTop - f.h) / 2, w: f.w, h: f.h });
-      }
       page.items.push(text(cx, yy + h - pad - bottomText, nama, S, { align: 'center' }));
       page.items.push(text(cx, yy + h - pad - textH(nip, S), nip, S, { align: 'center' }));
 
@@ -155,12 +150,10 @@ function layoutIdentity(doc, pages) {
       const nipY = yy + h - pad - Math.max(1, nip.length) * line;
       const namaY = nipY - Math.max(1, nama.length) * line;
       const jabY = yy + pad;
-      const jabB = jabY + Math.max(1, jab.length) * line;
       const c = { align: 'center', pad: 0 };
       field('disahkanJabatan', xVal + 2, jabY, valW - 4, jab, S, { ...c, label: 'Jabatan pengesah', placeholder: 'Jabatan pengesah' });
       field('disahkanNama', xVal + 2, namaY, valW - 4, nama, S, { ...c, label: 'Nama pengesah', placeholder: 'Nama pengesah' });
       field('disahkanNip', xVal + 2, nipY, valW - 4, nip, S, { ...c, label: 'NIP pengesah', placeholder: 'NIP. …' });
-      page.fields.push({ id: 'sig', kind: 'image', key: 'signature', x: xVal + 5, y: jabB + 0.5, w: valW - 10, h: Math.max(4, namaY - jabB - 1), label: 'Tanda tangan / stempel' });
     }
   };
 

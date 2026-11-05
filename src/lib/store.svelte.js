@@ -56,7 +56,7 @@ export const app = $state({
   /** Handle File System Access API untuk "Simpan" berikutnya tanpa dialog. */
   fileHandle: null,
   fileName: active.fileName,
-  /** Nama SOP tidak bisa diubah: dokumen dari Pustaka Fakultas milik orang lain. */
+  /** Nama SOP tidak bisa diubah: dokumen dari Pustaka Daring milik orang lain. */
   nameLocked: false
 });
 

@@ -219,6 +219,13 @@ describe('mengedit isi', () => {
     await assertFails(create(as('ali'), 'ali', 'x', '"' + 'a'.repeat(524288) + '"'));
     await assertSucceeds(create(as('ali'), 'ali', 'y', '"' + 'a'.repeat(524286) + '"'));
   });
+  it('isi yang memuat gambar ditolak, walau sengaja dikirim tanpa lewat aplikasi', async () => {
+    const withImage = '{"header":{"signature":{"src":"data:image/png;base64,AAAA"}}}';
+    await assertFails(create(as('ali'), 'ali', 'x', withImage));
+    const cur = await given('ali', 's', 'public');
+    await assertFails(save(as('bud'), 'bud', 's', cur, withImage));
+    await assertSucceeds(save(as('bud'), 'bud', 's', cur, '{"teks":"data gambar\\nbaris kedua"}'));
+  });
   it('ukuran dihitung per byte UTF-8, bukan per karakter', async () => {
     await assertSucceeds(create(as('ali'), 'ali', 'x', '{"s":"Ñ 🪄 ✓ 日本"}'));
     assert.equal(await usedBytes(), bytes('{"s":"Ñ 🪄 ✓ 日本"}'));
