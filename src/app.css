@@ -298,19 +298,6 @@ textarea {
   cursor: not-allowed;
 }
 
-.btn-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.1rem;
-  padding: 0 0.15rem 0 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-.btn-group > span {
-  font-size: 0.78rem;
-  color: var(--muted);
-  margin-right: 0.15rem;
-}
 .sep {
   width: 1px;
   height: 1.4rem;
@@ -491,6 +478,9 @@ textarea:focus {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+.no-doc .export-menu strong {
+  font-size: inherit;
 }
 .export-menu {
   position: absolute;

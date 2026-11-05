@@ -534,11 +534,19 @@
     }
   }
 
+  // Menu Pustaka ada di toolbar dan di layar kosong, yang tampil bersamaan: dicatat menu mana yang terbuka.
+  let libraryMenu = $state(null); // null | 'toolbar' | 'empty'
+  function toggleLibraryMenu(where) {
+    exportOpen = saveOpen = false;
+    libraryMenu = libraryMenu === where ? null : where;
+  }
+
   // Menu Simpan: ke Pustaka (browser ini) atau ke berkas .sop.
   let saveOpen = $state(false);
   let inLibrary = $state(false);
   async function toggleSaveMenu() {
     exportOpen = false;
+    libraryMenu = null;
     if (saveOpen) return (saveOpen = false);
     inLibrary = !!(await getEntry(tabs.active).catch(() => null));
     saveOpen = true;
@@ -790,15 +798,38 @@
   onbeforeunload={onBeforeUnload}
   onpagehide={onPageHide}
   onkeydown={(e) => {
-    if (e.key === 'Escape') exportOpen = saveOpen = false;
+    if (e.key === 'Escape') {
+      exportOpen = saveOpen = false;
+      libraryMenu = null;
+    }
     onKey(e);
   }}
   onpointerdown={(e) => {
     if (e.target.closest?.('.export')) return;
     exportOpen = false;
     saveOpen = false;
+    libraryMenu = null;
   }}
 />
+
+{#snippet libraryButton(where, cls)}
+  <div class="export">
+    <button class={cls} onclick={() => toggleLibraryMenu(where)} aria-haspopup="menu" aria-expanded={libraryMenu === where} title="Buka SOP dari Pustaka Lokal atau Pustaka Daring">
+      Pustaka
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+    </button>
+    {#if libraryMenu === where}
+      <div class="export-menu left" role="menu">
+        <button role="menuitem" onclick={() => ((libraryMenu = null), (libraryOpen = true))}>
+          <strong>Lokal</strong><small>SOP dan templat yang disimpan di browser ini</small>
+        </button>
+        <button role="menuitem" onclick={() => ((libraryMenu = null), (facultyOpen = true))}>
+          <strong>Daring</strong><small>SOP bersama secara daring, untuk anggota fakultas</small>
+        </button>
+      </div>
+    {/if}
+  </div>
+{/snippet}
 
 <div
   class="app"
@@ -826,11 +857,7 @@
     <nav class="toolbar">
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)">Buka</button>
-      <div class="btn-group" role="group" aria-label="Pustaka">
-        <span>Pustaka</span>
-        <button class="btn ghost" onclick={() => (libraryOpen = true)} title="SOP dan templat yang disimpan di browser ini">Lokal</button>
-        <button class="btn ghost" onclick={() => (facultyOpen = true)} title="SOP bersama secara daring, untuk anggota fakultas">Daring</button>
-      </div>
+      {@render libraryButton('toolbar', 'btn ghost')}
       <div class="export">
         <button class="btn ghost" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka Lokal, Pustaka Daring, atau sebagai berkas .sop">
           Simpan
@@ -888,7 +915,7 @@
         {/if}
       </button>
       <div class="export">
-        <button class="btn primary" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
+        <button class="btn primary" onclick={() => ((saveOpen = false), (libraryMenu = null), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
           {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
         </button>
@@ -1028,11 +1055,7 @@
           <span class="actions">
             <button class="btn primary" onclick={newDoc}>Baru</button>
             <button class="btn" onclick={open}>Buka</button>
-            <div class="btn-group" role="group" aria-label="Pustaka">
-              <span>Pustaka</span>
-              <button class="btn ghost" onclick={() => (libraryOpen = true)}>Lokal</button>
-              <button class="btn ghost" onclick={() => (facultyOpen = true)}>Daring</button>
-            </div>
+            {@render libraryButton('empty', 'btn')}
           </span>
         </div>
       {:else}

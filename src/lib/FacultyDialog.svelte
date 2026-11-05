@@ -102,10 +102,6 @@
     }, next === 'public' ? 'SOP sekarang public' : 'SOP sekarang private');
   }
 
-  function toBin(s) {
-    if (confirm(`Pindahkan "${titleOf(s)}" ke Recycle bin?`)) act(() => F.moveToBin(s.id), 'Dipindahkan ke Recycle bin');
-  }
-
   function purge(s) {
     const msg = `Hapus "${titleOf(s)}" secara permanen?\n\nSeluruh riwayat versinya, termasuk suntingan orang lain, ikut terhapus. Tindakan ini tidak bisa dibatalkan.`;
     if (confirm(msg)) act(() => F.purgeSop(s), 'Dihapus permanen');
@@ -199,13 +195,13 @@
               </small>
               {#if editors}<small class="editing">✎ Sedang diedit oleh {editors}</small>{/if}
             </button>
-            <span class="acts">
+            <span class="acts" role="group" aria-label="Tindakan SOP">
               <button class="btn small" onclick={() => act(() => F.duplicateSop(s), 'Salinan private dibuat')} title="Buat salinan private milik Anda">Duplikat</button>
               <button class="btn small" class:on={history?.id === s.id} onclick={() => toggleHistory(s)} aria-expanded={history?.id === s.id}>Riwayat</button>
               {#if manage}
                 <button class="btn small" onclick={() => toggleVisibility(s)}>{s.visibility === 'public' ? 'Jadikan private' : 'Jadikan public'}</button>
                 <button class="btn small" disabled={isOpen(s)} title={isOpen(s) ? 'Tutup tabnya dulu untuk mengubah nama' : ''} onclick={() => rename(s)}>Ubah nama</button>
-                <button class="btn small danger" disabled={isOpen(s)} title={isOpen(s) ? 'Tutup tabnya dulu untuk menghapus' : 'Pindahkan ke Recycle bin'} onclick={() => toBin(s)}>Hapus</button>
+                <button class="btn small danger" disabled={isOpen(s)} title={isOpen(s) ? 'Tutup tabnya dulu untuk menghapus' : 'Pindahkan ke Recycle bin'} onclick={() => act(() => F.moveToBin(s.id), 'Dipindahkan ke Recycle bin')}>Hapus</button>
               {/if}
             </span>
             {#if history?.id === s.id}
@@ -227,7 +223,6 @@
       </ul>
       <footer>
         <button class="btn" disabled={!cansave} onclick={() => onupload()}>Unggah dokumen ini ke Pustaka Daring</button>
-        <small>SOP baru selalu private.</small>
       </footer>
     {:else if view === 'bin'}
       <ul class="list">
@@ -237,7 +232,7 @@
               <strong>{titleOf(s)}</strong>
               <small>{[s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `dihapus ${when(s.deletedAt)}`, size(s.totalBytes)].filter(Boolean).join(' · ')}</small>
             </div>
-            <span class="acts">
+            <span class="acts" role="group" aria-label="Tindakan SOP">
               <button class="btn small" onclick={() => act(() => F.restoreFromBin(s.id), 'SOP dipulihkan')}>Pulihkan</button>
               <button class="btn small danger" onclick={() => purge(s)}>Hapus permanen</button>
             </span>
@@ -461,10 +456,23 @@
     border-color: transparent;
   }
   .acts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
+    display: inline-flex;
     flex: none;
+  }
+  .acts .btn {
+    position: relative;
+    margin-left: -1px;
+    border-radius: 0;
+  }
+  .acts .btn:hover:not(:disabled) {
+    z-index: 1;
+  }
+  .acts .btn:first-child {
+    margin-left: 0;
+    border-radius: 7px 0 0 7px;
+  }
+  .acts .btn:last-child {
+    border-radius: 0 7px 7px 0;
   }
   .acts .on {
     background: var(--accent-soft);
@@ -500,15 +508,7 @@
     font-size: 0.9rem;
   }
   footer {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.6rem;
     margin-top: 0.8rem;
-  }
-  footer small {
-    color: var(--muted);
-    font-size: 0.78rem;
   }
   .gate {
     padding: 1.5rem 0.5rem;
