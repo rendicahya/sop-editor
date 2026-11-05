@@ -5,9 +5,10 @@
 
   /**
    * openIds: id SOP yang sedang terbuka di tab. onopen(sop), onupload(): di App.
-   * onvisibility(id, visibility): tab yang terbuka mengikuti perubahan status.
+   * onvisibility(id, visibility), onrenamed(id, hasil renameSop): tab yang terbuka mengikuti perubahan.
+   * onbinned(id): tab SOP yang dihapus ditutup; hasilnya true bila tab dipertahankan karena ada perubahan belum tersimpan.
    */
-  let { open = $bindable(false), openIds = [], cansave = true, onopen, onupload, onvisibility, onnotify } = $props();
+  let { open = $bindable(false), openIds = [], cansave = true, onopen, onupload, onvisibility, onrenamed, onbinned, onnotify } = $props();
 
   let dialog;
   let view = $state('sops'); // sops | bin | admin
@@ -86,7 +87,15 @@
   function rename(s) {
     const name = prompt('Nama SOP:', s.title)?.trim();
     if (!name || name === s.title) return;
-    act(() => F.renameSop(s.id, name), 'Nama SOP diubah');
+    act(async () => onrenamed(s.id, await F.renameSop(s.id, name)), 'Nama SOP diubah');
+  }
+
+  function moveToBin(s) {
+    act(async () => {
+      await F.moveToBin(s.id);
+      const kept = onbinned(s.id);
+      onnotify(kept ? 'Dipindahkan ke Recycle bin. Perubahan yang belum tersimpan masih ada di tabnya.' : 'Dipindahkan ke Recycle bin');
+    });
   }
 
   function toggleVisibility(s) {
@@ -200,8 +209,8 @@
               <button class="btn small" class:on={history?.id === s.id} onclick={() => toggleHistory(s)} aria-expanded={history?.id === s.id}>Riwayat</button>
               {#if manage}
                 <button class="btn small" onclick={() => toggleVisibility(s)}>{s.visibility === 'public' ? 'Jadikan private' : 'Jadikan public'}</button>
-                <button class="btn small" disabled={isOpen(s)} title={isOpen(s) ? 'Tutup tabnya dulu untuk mengubah nama' : ''} onclick={() => rename(s)}>Ubah nama</button>
-                <button class="btn small danger" disabled={isOpen(s)} title={isOpen(s) ? 'Tutup tabnya dulu untuk menghapus' : 'Pindahkan ke Recycle bin'} onclick={() => act(() => F.moveToBin(s.id), 'Dipindahkan ke Recycle bin')}>Hapus</button>
+                <button class="btn small" onclick={() => rename(s)}>Ubah nama</button>
+                <button class="btn small danger" title="Pindahkan ke Recycle bin" onclick={() => moveToBin(s)}>Hapus</button>
               {/if}
             </span>
             {#if history?.id === s.id}

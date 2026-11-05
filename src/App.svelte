@@ -653,6 +653,49 @@
     syncEditing();
   }
 
+  /** SOP diganti namanya dari dialog: tab yang membukanya ikut, perubahan lain di tab itu tetap belum tersimpan. */
+  function onFacultyRenamed(id, { from, rev, title }) {
+    const t = tabs.list.find((x) => x.remote?.id === id);
+    if (!t) return;
+    t.remote.title = title;
+    // Tab yang tertinggal dari revisi `from` tetap harus melihat konflik saat menyimpan.
+    if (t.remote.rev === from) t.remote.rev = rev;
+    const renamed = (json) => {
+      if (json == null) return json;
+      const d = JSON.parse(json);
+      d.header.namaSop = title;
+      return JSON.stringify(d);
+    };
+    if (t.id === tabs.active) {
+      checkpoint();
+      app.doc.header.namaSop = title;
+      checkpoint();
+      clean = renamed(clean);
+    } else {
+      const s = stash.get(t.id);
+      s.past.push(s.json);
+      s.future = [];
+      s.json = renamed(s.json);
+      s.clean = renamed(s.clean);
+      t.title = title;
+    }
+  }
+
+  /** SOP dipindahkan ke Recycle bin dari dialog. Hasil: true bila tabnya dipertahankan karena belum tersimpan. */
+  function onFacultyBinned(id) {
+    const t = tabs.list.find((x) => x.remote?.id === id);
+    if (!t) return false;
+    if (t.id === tabs.active) checkpoint();
+    const dirty = t.id === tabs.active ? current !== clean : stash.get(t.id).json !== stash.get(t.id).clean;
+    if (!dirty) {
+      closeTab(t.id);
+      return false;
+    }
+    Faculty.setEditing(id, false);
+    t.remote = null;
+    return true;
+  }
+
   /** Tab tertaut ke `remote`, dan isi yang baru tersimpan tidak lagi dianggap perubahan. */
   function linkTab(tab, doc, remote) {
     const json = JSON.stringify(doc);
@@ -1162,6 +1205,8 @@
       if (await saveToFaculty()) facultyOpen = false;
     }}
     onvisibility={onFacultyVisibility}
+    onrenamed={onFacultyRenamed}
+    onbinned={onFacultyBinned}
     onnotify={notify}
   />
   <FacultyConflict info={conflict} onchoice={chooseConflict} />

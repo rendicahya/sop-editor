@@ -264,13 +264,18 @@ export async function saveSop(id, doc, baseRev, { overwrite = false } = {}) {
   }).catch(failed);
 }
 
-/** Mengubah nama: nama di pustaka dan Nama SOP di dalam dokumen ikut sama, tercatat sebagai versi baru. */
+/**
+ * Mengubah nama: nama di pustaka dan Nama SOP di dalam dokumen ikut sama, tercatat sebagai versi baru.
+ * Hasil: { from, rev, title }, `from` adalah revisi tepat sebelum penggantian nama.
+ */
 export async function renameSop(id, title) {
   const { F, db } = await load();
   const ref = F.doc(db, 'sops', id);
-  await F.runTransaction(db, async (tx) => {
+  return F.runTransaction(db, async (tx) => {
     const cur = await readForWrite(tx, ref);
-    writeContent(F, db, tx, ref, cur, cloudJson(JSON.parse(cur.json), title));
+    const c = cloudJson(JSON.parse(cur.json), title);
+    writeContent(F, db, tx, ref, cur, c);
+    return { from: cur.rev, rev: cur.rev + 1, title: c.title };
   }).catch(failed);
 }
 
