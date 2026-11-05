@@ -1,0 +1,228 @@
+rules_version = '2';
+
+// Pustaka Fakultas. Satu-satunya penjaga data: aplikasi berjalan di browser, jadi semua batasan harus ada di sini.
+//
+//   members/{email}            { role: 'member' | 'admin', addedBy, addedAt }
+//   sops/{id}                  isi terkini beserta metadata
+//   sops/{id}/versions/{rev}   isi yang tertimpa, tidak bisa diubah
+//   editing/{sopId_uid}        keterangan "sedang diedit" (hanya info, bukan kunci)
+//   stats/usage                { bytes, limit, lastSop }: hanya admin yang bisa membaca
+//   stats/capacity             tanpa isi: boleh dibaca selama pustaka belum penuh
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Identitas ----
+    function email() {
+      return request.auth.token.email.lower();
+    }
+    function uid() {
+      return request.auth.uid;
+    }
+    function inDomain() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && email().matches('.*@ub[.]ac[.]id$');
+    }
+    function memberPath() {
+      return /databases/$(database)/documents/members/$(email());
+    }
+    function isMember() {
+      return inDomain() && exists(memberPath());
+    }
+    function isAdmin() {
+      return isMember() && get(memberPath()).data.role == 'admin';
+    }
+
+    // ---- Penghitung ruang ----
+    function usagePath() {
+      return /databases/$(database)/documents/stats/usage;
+    }
+    function usageChangedBy(n) {
+      return getAfter(usagePath()).data.bytes == get(usagePath()).data.bytes + n;
+    }
+    function withinLimit() {
+      return getAfter(usagePath()).data.bytes <= get(usagePath()).data.limit;
+    }
+
+    // ---- SOP ----
+    function sopPath(id) {
+      return /databases/$(database)/documents/sops/$(id);
+    }
+    function isOwnerOrAdmin(sop) {
+      return sop.createdBy == uid() || isAdmin();
+    }
+    function canRead(sop) {
+      return isMember() && (
+        isAdmin()
+        || (sop.deletedBy == null && (sop.visibility == 'public' || sop.createdBy == uid()))
+        || sop.deletedBy == uid()
+      );
+    }
+    function canEdit(sop) {
+      return isMember() && sop.deletedBy == null && (sop.visibility == 'public' || isOwnerOrAdmin(sop));
+    }
+    function jsonBytes(d) {
+      return d.json.toUtf8().size();
+    }
+    function validContent(d) {
+      return d.json is string
+        && jsonBytes(d) <= 524288
+        && d.size == jsonBytes(d)
+        && d.title is string && d.title.size() <= 300
+        && d.nomor is string && d.nomor.size() <= 120
+        && d.updatedAt == request.time
+        && d.updatedBy == uid()
+        && d.updatedByName is string && d.updatedByName.size() <= 120;
+    }
+    function changed() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function isValidCreate(d) {
+      return isMember()
+        && d.keys().hasOnly(['title', 'nomor', 'json', 'size', 'totalBytes', 'rev', 'visibility', 'createdBy', 'createdByName', 'createdByEmail', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName', 'deletedAt', 'deletedBy'])
+        && validContent(d)
+        && d.visibility == 'private'
+        && d.rev == 1
+        && d.totalBytes == d.size
+        && d.createdBy == uid()
+        && d.createdByName is string && d.createdByName.size() <= 120
+        && d.createdByEmail == email()
+        && d.createdAt == request.time
+        && d.deletedAt == null
+        && d.deletedBy == null
+        && usageChangedBy(d.size)
+        && withinLimit();
+    }
+
+    // Simpan isi: isi lama wajib berpindah ke riwayat dalam penulisan yang sama, dan `rev` yang
+    // harus tepat +1 membuat simpanan dari salinan yang sudah usang ditolak server.
+    function isContentSave(id, d, r) {
+      return changed().hasOnly(['title', 'nomor', 'json', 'size', 'totalBytes', 'rev', 'updatedAt', 'updatedBy', 'updatedByName'])
+        && canEdit(r)
+        && validContent(d)
+        && d.rev == r.rev + 1
+        && d.totalBytes == r.totalBytes + d.size
+        && (d.title == r.title || isOwnerOrAdmin(r))
+        && existsAfter(/databases/$(database)/documents/sops/$(id)/versions/$(string(r.rev)))
+        && usageChangedBy(d.size)
+        && withinLimit();
+    }
+    function isVisibilityChange(d, r) {
+      return changed().hasOnly(['visibility'])
+        && d.visibility in ['private', 'public']
+        && r.deletedBy == null
+        && isMember()
+        && isOwnerOrAdmin(r);
+    }
+    function isMoveToBin(d, r) {
+      return changed().hasOnly(['deletedAt', 'deletedBy'])
+        && r.deletedBy == null
+        && d.deletedBy == uid()
+        && d.deletedAt == request.time
+        && isMember()
+        && isOwnerOrAdmin(r);
+    }
+    function isRestore(d, r) {
+      return changed().hasOnly(['deletedAt', 'deletedBy'])
+        && r.deletedBy != null
+        && d.deletedBy == null
+        && d.deletedAt == null
+        && isMember()
+        && (r.deletedBy == uid() || isAdmin());
+    }
+
+    match /sops/{id} {
+      allow read: if canRead(resource.data);
+      allow create: if isValidCreate(request.resource.data);
+      allow update: if isContentSave(id, request.resource.data, resource.data)
+        || isVisibilityChange(request.resource.data, resource.data)
+        || isMoveToBin(request.resource.data, resource.data)
+        || isRestore(request.resource.data, resource.data);
+      allow delete: if isMember()
+        && resource.data.deletedBy != null
+        && (resource.data.deletedBy == uid() || isAdmin())
+        && usageChangedBy(-resource.data.totalBytes);
+
+      match /versions/{rev} {
+        function parent() {
+          return get(sopPath(id)).data;
+        }
+        allow read: if canRead(parent());
+        // Riwayat hanya bisa berisi salinan persis dari isi yang sedang ditimpa.
+        allow create: if canEdit(parent())
+          && rev == string(parent().rev)
+          && getAfter(sopPath(id)).data.rev == parent().rev + 1
+          && request.resource.data.keys().hasOnly(['rev', 'title', 'nomor', 'json', 'size', 'savedAt', 'savedBy', 'savedByName'])
+          && request.resource.data.rev == parent().rev
+          && request.resource.data.title == parent().title
+          && request.resource.data.nomor == parent().nomor
+          && request.resource.data.json == parent().json
+          && request.resource.data.size == parent().size
+          && request.resource.data.savedAt == parent().updatedAt
+          && request.resource.data.savedBy == parent().updatedBy
+          && request.resource.data.savedByName == parent().updatedByName;
+        // Riwayat hanya terhapus bersama SOP-nya.
+        allow delete: if isMember()
+          && parent().deletedBy != null
+          && (parent().deletedBy == uid() || isAdmin())
+          && !existsAfter(sopPath(id));
+      }
+    }
+
+    // ---- "Sedang diedit" ----
+    match /editing/{key} {
+      allow read: if isMember();
+      allow create, update: if isMember()
+        && request.resource.data.keys().hasOnly(['sopId', 'uid', 'name', 'at'])
+        && request.resource.data.uid == uid()
+        && key == request.resource.data.sopId + '_' + uid()
+        && request.resource.data.at == request.time
+        && request.resource.data.name is string && request.resource.data.name.size() <= 120
+        && get(sopPath(request.resource.data.sopId)).data.visibility == 'public'
+        && get(sopPath(request.resource.data.sopId)).data.deletedBy == null;
+      // Keterangan yang sudah kedaluwarsa boleh dibersihkan siapa saja (browser pemiliknya mungkin sudah tertutup).
+      allow delete: if isMember() && (resource.data.uid == uid() || isAdmin() || resource.data.at < request.time - duration.value(5, 'm'));
+    }
+
+    // ---- Ruang penyimpanan ----
+    match /stats/usage {
+      allow get: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['bytes', 'limit', 'lastSop'])
+        && request.resource.data.bytes is int
+        && request.resource.data.limit is int;
+      // Anggota memperbarui penghitung tanpa bisa membacanya, dan hanya bersama penulisan SOP
+      // yang aturannya memeriksa selisih ukurannya. Berdiri sendiri, penulisan ini ditolak.
+      allow update: if isMember()
+        && changed().hasOnly(['bytes', 'lastSop'])
+        && (
+          existsAfter(sopPath(request.resource.data.lastSop))
+            ? getAfter(sopPath(request.resource.data.lastSop)).data.updatedAt == request.time
+            : exists(sopPath(request.resource.data.lastSop))
+        );
+    }
+    match /stats/capacity {
+      allow get: if isMember() && get(usagePath()).data.bytes < get(usagePath()).data.limit;
+    }
+
+    // ---- Anggota ----
+    match /members/{member} {
+      allow get: if inDomain() && (member == email() || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAdmin() && validMember(member);
+      allow update: if isAdmin() && member != email() && validMember(member);
+      // Admin tidak bisa mencabut aksesnya sendiri, agar pustaka tidak kehilangan admin terakhir.
+      allow delete: if isAdmin() && member != email();
+
+      function validMember(member) {
+        return member.matches('^[^@/]+@ub[.]ac[.]id$')
+          && member == member.lower()
+          && request.resource.data.keys().hasOnly(['role', 'addedBy', 'addedAt'])
+          && request.resource.data.role in ['member', 'admin']
+          && request.resource.data.addedBy == email()
+          && request.resource.data.addedAt == request.time;
+      }
+    }
+  }
+}

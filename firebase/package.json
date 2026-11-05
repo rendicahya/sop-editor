@@ -1,0 +1,15 @@
+{
+  "name": "sop-editor-firebase",
+  "private": true,
+  "type": "module",
+  "description": "Security Rules Pustaka Fakultas dan pengujiannya. Terpisah agar alat ini tidak ikut terpasang saat aplikasi di-build.",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-sop-editor \"node --test rules.test.js\"",
+    "deploy:rules": "firebase deploy --only firestore:rules"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase": "^13.2.0",
+    "firebase-tools": "^15.35.0"
+  }
+}
