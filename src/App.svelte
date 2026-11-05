@@ -20,6 +20,7 @@
   import { queueSave, flush, flushAll, saveDoc, isBlank, getEntry } from './lib/library.js';
   import FacultyDialog from './lib/FacultyDialog.svelte';
   import FacultyConflict from './lib/FacultyConflict.svelte';
+  import CloseConfirm from './lib/CloseConfirm.svelte';
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
 
@@ -365,6 +366,19 @@
     activate(id);
   }
 
+  // Pertanyaan saat menutup tab yang belum tersimpan.
+  let closeAsk = $state(null);
+  let closeChosen;
+  const askClose = (title, online) =>
+    new Promise((resolve) => {
+      closeChosen = resolve;
+      closeAsk = { title, online };
+    });
+  function chooseClose(choice) {
+    closeAsk = null;
+    closeChosen?.(choice);
+  }
+
   async function closeTab(id) {
     // Dokumen yang belum ada di pustaka hanya disimpan bila pengguna setuju.
     const tab = tabs.list.find((t) => t.id === id);
@@ -376,15 +390,26 @@
     if (tab.remote) {
       // Salinan SOP dari Pustaka Daring: tempat simpannya di sana, bukan di pustaka browser ini.
       const dirty = json !== (id === tabs.active ? clean : stash.get(id).clean);
-      if (dirty && confirm(`Simpan perubahan "${tabTitle(tab)}" ke Pustaka Daring sebelum ditutup?\n\nOK = simpan, Batal = tutup tanpa menyimpan.`)) {
-        switchTab(id);
-        if (!(await saveToFaculty())) return;
+      if (dirty) {
+        const choice = await askClose(tabTitle(tab), true);
+        if (choice === 'cancel') return;
+        if (choice === 'save') {
+          switchTab(id);
+          if (!(await saveToFaculty())) return;
+        }
       }
       Faculty.setEditing(tab.remote.id, false);
     } else if (!isBlank(JSON.parse(json))) {
       const inLib = await getEntry(id).catch(() => null);
-      if (inLib || confirm(`Simpan "${tabTitle(tab)}" ke Pustaka Lokal sebelum ditutup?\n\nOK = simpan, Batal = tutup tanpa menyimpan.`)) {
-        await saveDoc(id, json, tab.fileName, true).catch(() => {});
+      const choice = inLib ? 'save' : await askClose(tabTitle(tab), false);
+      if (choice === 'cancel') return;
+      if (choice === 'save') {
+        try {
+          await saveDoc(id, json, tab.fileName, true);
+        } catch (e) {
+          // Tab tetap terbuka agar isinya tidak hilang.
+          return alert('Gagal menyimpan ke Pustaka Lokal: ' + e.message);
+        }
         notify(`"${tabTitle(tab)}" ditutup — buka lagi dari Pustaka Lokal`);
       }
     }
@@ -1115,6 +1140,7 @@
     onnotify={notify}
   />
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
+  <CloseConfirm info={closeAsk} onchoice={chooseClose} />
 
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
   {#if dragging}<div class="dropzone">Lepaskan berkas .sop untuk membuka</div>{/if}
