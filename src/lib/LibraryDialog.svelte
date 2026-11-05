@@ -1,7 +1,7 @@
 <script>
   import { newTabId } from './store.svelte.js';
   import { emptyDocument, sampleDocument, parseDocumentText } from './model.js';
-  import { listEntries, putEntry, patchEntry, deleteEntry, flushAll, cleanTags, haystack } from './library.js';
+  import { listEntries, putEntry, patchEntry, deleteEntry, cleanTags, haystack } from './library.js';
 
   /** openIds: id tab yang sedang terbuka (= id entri pustaka). */
   let { open = $bindable(false), openIds = [], active, onopen, ontemplate, onsave, cansave = true, onnotify } = $props();
@@ -33,7 +33,6 @@
 
   async function refresh() {
     try {
-      await flushAll();
       entries = (await listEntries()).map((e) => ({ ...e, tags: e.tags ?? [], text: haystack(e) }));
     } catch {
       entries = [];
@@ -191,8 +190,8 @@
     <button class="x" onclick={() => (open = false)} aria-label="Tutup">×</button>
   </header>
   <p class="hint">
-    SOP yang disimpan ke Pustaka Lokal berada di browser ini, dan perubahannya tersimpan otomatis. Data hilang bila data situs
-    browser dihapus, jadi simpan juga SOP penting sebagai berkas .sop.
+    SOP yang disimpan ke Pustaka Lokal berada di browser ini. Tekan Ctrl+S untuk menyimpan perubahannya. Data hilang bila data
+    situs browser dihapus, jadi simpan juga SOP penting sebagai berkas .sop.
   </p>
 
   <div class="bar">

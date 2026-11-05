@@ -55,8 +55,11 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   jadi tetap berlaku saat tata letak berubah. "Kembalikan jalur otomatis" menghapus pengaturan manualnya.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
 - **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Asisten AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab kembali seperti semula setelah halaman dimuat ulang (riwayat Undo tidak ikut), sedangkan aplikasi yang baru dibuka selalu kosong; riwayat Undo terpisah per tab.
-- **Pustaka Lokal**: SOP yang disimpan ke Pustaka Lokal berada di browser (IndexedDB) dan perubahannya tersimpan otomatis,
-  jadi tab bisa ditutup dan dibuka lagi kapan saja. Pustaka bisa dicari (nama, nomor, pelaksana, kegiatan, butir ketentuan),
+- **Tanda belum disimpan**: titik pada tab berarti SOP itu punya perubahan yang belum disimpan. Ctrl+S menyimpan ke tempat
+  asalnya (Pustaka Daring, Pustaka Lokal, atau berkas) lalu titiknya hilang. Menutup tab bertanda ini menampilkan pilihan
+  menyimpan, menutup tanpa menyimpan, atau tidak jadi menutup.
+- **Pustaka Lokal**: SOP yang disimpan ke Pustaka Lokal berada di browser (IndexedDB) dan bisa dibuka lagi kapan saja.
+  Isinya hanya berubah saat disimpan. Pustaka bisa dicari (nama, nomor, pelaksana, kegiatan, butir ketentuan),
   dokumennya bisa diduplikasi atau dijadikan **templat**, dan templat (termasuk templat bawaan) dipakai untuk memulai SOP
   baru dengan tanggal hari ini.
   **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen dan templat: satu entri boleh berlabel lebih dari satu,
@@ -82,7 +85,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   dipakai [Carlito](https://github.com/googlefonts/carlito) (metrik identik, jadi tata letak tidak berubah) dan muncul
   peringatan di atas pratinjau.
 - Antarmuka memakai font [Inter](https://rsms.me/inter/).
-- Simpan/buka berkas `.sop` (berkas `.json` lama tetap bisa dibuka), seret-lepas berkas ke jendela, simpan otomatis ke browser, Undo/Redo.
+- Simpan/buka berkas `.sop` (berkas `.json` lama tetap bisa dibuka), seret-lepas berkas ke jendela, Undo/Redo.
 - **Asisten AI**: *copy* prompt siap pakai ke asisten AI, lalu *paste* jawabannya untuk langsung
   diedit dan diekspor. Bisa menyusun SOP baru dari deskripsi, **mengimpor SOP lama** (PDF, Word, foto/pindaian)
   yang dilampirkan di chat AI, termasuk diagram alir dan formatnya, atau **merevisi SOP yang sedang dibuka** sesuai
@@ -96,7 +99,8 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
 
 | Pintasan | Aksi |
 | --- | --- |
-| Ctrl+S / Ctrl+Shift+S | Simpan / Simpan sebagai |
+| Ctrl+S | Simpan ke tempat asal SOP: Pustaka Daring, Pustaka Lokal, atau berkas .sop |
+| Ctrl+Shift+S | Simpan sebagai berkas .sop baru |
 | Ctrl+O | Buka berkas |
 | Alt+W | Tutup tab dokumen (Ctrl+W juga bisa di aplikasi terpasang) |
 | Ctrl+Shift+P | Pratinjau & ekspor PDF |
@@ -196,7 +200,7 @@ Struktur utama:
 | `src/lib/png.js` | Ekspor PNG: tiap halaman digambar ke canvas lalu dikemas ZIP |
 | `src/lib/validate.js` | Pemeriksa dokumen: alur diagram dan isian penting |
 | `src/lib/duration.js` | Estimasi total waktu: membaca kolom Waktu dan menjumlahkannya di jalur utama |
-| `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan otomatis per tab (id tab = id entri), daftar, hapus |
+| `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan per tab (id tab = id entri), daftar, hapus |
 | `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, label, duplikat, templat |
 | `src/lib/faculty.svelte.js` | Pustaka Daring: login, baca/tulis Firestore, riwayat, keterangan sedang diedit; Firebase dimuat saat pertama dipakai |
 | `src/lib/FacultyDialog.svelte` | Dialog Pustaka Daring: daftar, Recycle bin, tab Admin |

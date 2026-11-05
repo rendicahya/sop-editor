@@ -1,5 +1,6 @@
 <script>
-  // Pilihan saat menutup tab yang belum tersimpan. info: { title, online } atau null.
+  // Pilihan saat menutup tab yang belum tersimpan. info: { title, where, isNew } atau null.
+  // where: nama pustaka tujuan; isNew: SOP belum ada di pustaka itu.
   // onchoice menerima 'save', 'discard', atau 'cancel'.
   let { info, onchoice } = $props();
   let dialog;
@@ -13,10 +14,10 @@
 <dialog bind:this={dialog} class="dialog" oncancel={() => onchoice('cancel')}>
   {#if info}
     <h2>Simpan "{info.title}" sebelum ditutup?</h2>
-    {#if info.online}
-      <p>Perubahan pada SOP ini belum disimpan ke Pustaka Daring. Kalau ditutup tanpa menyimpan, perubahan itu hilang.</p>
+    {#if info.isNew}
+      <p>SOP ini belum tersimpan di {info.where}. Kalau ditutup tanpa menyimpan, SOP ini tidak bisa dibuka lagi dari sana.</p>
     {:else}
-      <p>SOP ini belum tersimpan di Pustaka Lokal. Kalau ditutup tanpa menyimpan, SOP ini tidak bisa dibuka lagi dari sana.</p>
+      <p>Perubahan pada SOP ini belum disimpan ke {info.where}. Kalau ditutup tanpa menyimpan, perubahan itu hilang.</p>
     {/if}
     <footer>
       <button class="btn" onclick={() => onchoice('cancel')}>Tidak jadi menutup</button>

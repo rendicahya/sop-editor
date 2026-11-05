@@ -17,7 +17,7 @@
   import { checkDocument } from './lib/validate.js';
   import { connectHistory } from './lib/history.js';
   import LibraryDialog from './lib/LibraryDialog.svelte';
-  import { queueSave, flush, flushAll, saveDoc, isBlank, getEntry } from './lib/library.js';
+  import { saveDoc, isBlank, getEntry } from './lib/library.js';
   import FacultyDialog from './lib/FacultyDialog.svelte';
   import FacultyConflict from './lib/FacultyConflict.svelte';
   import CloseConfirm from './lib/CloseConfirm.svelte';
@@ -159,14 +159,8 @@
     future = [];
     current = json;
     persist(json);
-    remember();
     syncFlags();
     syncEditing();
-  }
-
-  /** Dokumen tab aktif ikut tersimpan di pustaka. */
-  function remember() {
-    queueSave(tabs.active, current, app.fileName);
   }
 
   /** Simpan perubahan yang belum masuk riwayat sebagai langkah tersendiri. */
@@ -176,16 +170,39 @@
   }
   connectHistory({ checkpoint, undo: () => undo(), redo: () => redo() });
 
-  // Isi tab aktif saat terakhir disimpan atau diekspor (null: belum pernah, mis. hasil AI). Tab lain menyimpannya di stash.
-  let clean = current;
+  // Isi tab aktif saat terakhir disimpan (null: belum pernah, mis. hasil AI). Tab lain menyimpannya di stash,
+  // dan tanda belum tersimpannya ada di t.dirty karena stash tidak reaktif.
+  let clean = $state(current);
+  const activeDirty = $derived(!empty && JSON.stringify(app.doc) !== clean);
+  const isDirty = (t) => (t.id === tabs.active ? activeDirty : t.dirty);
+
+  /** Tab `id` tersimpan dengan isi `json`. */
+  function markClean(id, json) {
+    if (id === tabs.active) clean = json;
+    else if (stash.has(id)) {
+      const s = stash.get(id);
+      s.clean = json;
+      const tab = tabs.list.find((t) => t.id === id);
+      if (tab) tab.dirty = s.json !== json;
+    }
+  }
 
   /** Dipanggil sebelum menyimpan; fungsi hasilnya menandai isi saat ini tersimpan setelah penyimpanan berhasil. */
   function saveMark() {
     const id = tabs.active;
     const json = JSON.stringify(app.doc);
-    return () => {
-      if (id === tabs.active) clean = json;
-      else if (stash.has(id)) stash.get(id).clean = json;
+    return () => markClean(id, json);
+  }
+
+  /**
+   * Seperti saveMark, untuk berkas dan ekspor: tab dari pustaka tetap belum tersimpan,
+   * karena isi di pustakanya belum berubah.
+   */
+  function fileMark() {
+    const { id, remote } = activeTab;
+    const mark = saveMark();
+    return async () => {
+      if (!remote && !(await getEntry(id).catch(() => null))) mark();
     };
   }
 
@@ -225,7 +242,7 @@
     for (const t of s.tabs) {
       if (t.id !== s.active) stash.set(t.id, { json: t.json, handle: null, past: [], future: [], clean: t.dirty ? null : t.json });
     }
-    tabs.list.splice(0, tabs.list.length, ...s.tabs.map((t) => ({ id: t.id, title: t.doc.header.namaSop, fileName: t.fileName, remote: t.remote ?? null })));
+    tabs.list.splice(0, tabs.list.length, ...s.tabs.map((t) => ({ id: t.id, title: t.doc.header.namaSop, fileName: t.fileName, remote: t.remote ?? null, dirty: t.dirty })));
     tabs.active = s.active;
     const a = s.tabs.find((t) => t.id === s.active);
     app.fileName = a.fileName;
@@ -247,7 +264,6 @@
     current = json;
     app.doc = JSON.parse(json);
     persist(json);
-    remember();
     syncFlags();
   }
 
@@ -304,13 +320,11 @@
       current = json;
     }
     stash.set(tabs.active, { json, handle: app.fileHandle, past, future, clean });
-    Object.assign(activeTab, { title: app.doc.header.namaSop, fileName: app.fileName });
-    queueSave(tabs.active, json, app.fileName);
+    Object.assign(activeTab, { title: app.doc.header.namaSop, fileName: app.fileName, dirty: json !== clean });
   }
 
   /** Tab aktif mendapat id (= entri pustaka) baru, mis. saat isinya diganti dokumen lain. */
   function rekey(id = newTabId()) {
-    flush(tabs.active);
     if (activeTab.remote) Faculty.setEditing(activeTab.remote.id, false);
     activeTab.remote = null; // isi tab berganti: tidak lagi tertaut ke SOP di Pustaka Daring
     activeTab.id = id;
@@ -369,10 +383,10 @@
   // Pertanyaan saat menutup tab yang belum tersimpan.
   let closeAsk = $state(null);
   let closeChosen;
-  const askClose = (title, online) =>
+  const askClose = (title, where, isNew = false) =>
     new Promise((resolve) => {
       closeChosen = resolve;
-      closeAsk = { title, online };
+      closeAsk = { title, where, isNew };
     });
   function chooseClose(choice) {
     closeAsk = null;
@@ -380,18 +394,14 @@
   }
 
   async function closeTab(id) {
-    // Dokumen yang belum ada di pustaka hanya disimpan bila pengguna setuju.
     const tab = tabs.list.find((t) => t.id === id);
-    if (id === tabs.active) {
-      checkpoint();
-      flush(id);
-    }
+    if (id === tabs.active) checkpoint();
     const json = id === tabs.active ? current : stash.get(id).json;
+    const dirty = json !== (id === tabs.active ? clean : stash.get(id).clean);
     if (tab.remote) {
       // Salinan SOP dari Pustaka Daring: tempat simpannya di sana, bukan di pustaka browser ini.
-      const dirty = json !== (id === tabs.active ? clean : stash.get(id).clean);
       if (dirty) {
-        const choice = await askClose(tabTitle(tab), true);
+        const choice = await askClose(tabTitle(tab), 'Pustaka Daring');
         if (choice === 'cancel') return;
         if (choice === 'save') {
           switchTab(id);
@@ -399,13 +409,15 @@
         }
       }
       Faculty.setEditing(tab.remote.id, false);
-    } else if (!isBlank(JSON.parse(json))) {
+    } else {
+      // Sudah di Pustaka Lokal: ditanya bila ada perubahan. Belum: ditawari masuk pustaka bila ada isinya.
       const inLib = await getEntry(id).catch(() => null);
-      const choice = inLib ? 'save' : await askClose(tabTitle(tab), false);
+      const ask = inLib ? dirty : !isBlank(JSON.parse(json));
+      const choice = ask ? await askClose(tabTitle(tab), 'Pustaka Lokal', !inLib) : inLib ? 'save' : 'discard';
       if (choice === 'cancel') return;
       if (choice === 'save') {
         try {
-          await saveDoc(id, json, tab.fileName, true);
+          await saveDoc(id, json, tab.fileName);
         } catch (e) {
           // Tab tetap terbuka agar isinya tidak hilang.
           return alert('Gagal menyimpan ke Pustaka Lokal: ' + e.message);
@@ -542,18 +554,17 @@
 
   async function save(saveAs = false) {
     const name = sopName(app.fileName || `SOP-${slug(app.doc.header.namaSop)}`);
-    const saved = saveMark();
+    const saved = fileMark();
     try {
       const handle = await saveJson(JSON.stringify(app.doc, null, 2), name, app.fileHandle, saveAs);
       if (handle === undefined) return;
-      saved();
+      await saved();
       if (handle) {
         app.fileHandle = handle;
         app.fileName = handle.name;
         persist(current);
-        remember();
       }
-      notify('Tersimpan sebagai ' + (handle?.name ?? name));
+      notify('Tersimpan sebagai berkas ' + (handle?.name ?? name));
     } catch (e) {
       alert('Gagal menyimpan: ' + e.message);
     }
@@ -579,16 +590,29 @@
 
   async function saveToLibrary() {
     checkpoint();
-    const id = tabs.active;
+    const { id, remote } = activeTab;
     const saved = saveMark();
     try {
-      const had = !!(await getEntry(id));
-      await saveDoc(id, JSON.stringify(app.doc), app.fileName, true);
-      if (!had && !(await getEntry(id))) return notify('Dokumen masih kosong, belum ada yang disimpan');
-      saved();
-      notify(had ? 'Pustaka Lokal sudah diperbarui' : 'Tersimpan di Pustaka Lokal — perubahan berikutnya tersimpan otomatis');
+      await saveDoc(id, JSON.stringify(app.doc), app.fileName);
+      if (!(await getEntry(id))) return notify('Dokumen masih kosong, belum ada yang disimpan');
+      if (!remote) saved(); // SOP daring: perubahannya tetap belum masuk ke Pustaka Daring
+      notify('Tersimpan di Pustaka Lokal');
     } catch (e) {
       alert('Gagal menyimpan ke Pustaka Lokal: ' + e.message);
+    }
+  }
+
+  // Ctrl+S menyimpan ke tempat asal SOP: Pustaka Daring, Pustaka Lokal, atau berkas.
+  let quickSaving = false;
+  async function quickSave() {
+    if (quickSaving || document.querySelector('dialog:modal')) return;
+    quickSaving = true;
+    try {
+      if (activeTab.remote) await saveToFaculty();
+      else if (await getEntry(tabs.active).catch(() => null)) await saveToLibrary();
+      else await save(false);
+    } finally {
+      quickSaving = false;
     }
   }
 
@@ -648,7 +672,7 @@
         commit(JSON.stringify(app.doc));
         clean = current;
       }
-    } else if (stash.has(tab.id)) stash.get(tab.id).clean = json;
+    } else markClean(tab.id, json);
     syncEditing();
   }
 
@@ -710,7 +734,7 @@
   let pdfSaved;
   function pdf() {
     try {
-      pdfSaved = saveMark();
+      pdfSaved = fileMark();
       pdfDoc = exportPdf(app.doc);
     } catch (e) {
       alert('Gagal membuat PDF: ' + e.message);
@@ -721,7 +745,7 @@
   let exportBusy = $state('');
   async function exportFile(kind) {
     exportBusy = kind.toUpperCase();
-    const saved = saveMark();
+    const saved = fileMark();
     try {
       const blob =
         kind === 'docx' ? await (await import('./lib/docx.js')).exportDocx(app.doc)
@@ -750,7 +774,8 @@
     if (empty && (k === 's' || k === 'p' || k === 'f' || k === 'h')) return e.preventDefault();
     if (k === 's') {
       e.preventDefault();
-      save(e.shiftKey);
+      if (e.shiftKey) save(true);
+      else if (!e.repeat) quickSave();
     } else if (k === 'o') {
       e.preventDefault();
       open();
@@ -775,6 +800,15 @@
     for (const file of e.dataTransfer?.files ?? []) await loadFile(file, null);
   }
 
+  /** Perubahan yang belum disimpan pada entri pustaka menjadi entri tersendiri, agar versi tersimpannya tidak tertimpa. */
+  async function keepOldTab(id, json, name) {
+    const old = await getEntry(id);
+    if (!old || JSON.stringify(parseDocumentText(old.json)) === json) return saveDoc(id, json, name);
+    const doc = JSON.parse(json);
+    doc.header.namaSop = `${doc.header.namaSop || 'SOP tanpa judul'} (perubahan belum disimpan)`;
+    await saveDoc(newTabId(), JSON.stringify(doc), name);
+  }
+
   onMount(() => {
     const session = loadSession();
     if (session) {
@@ -784,7 +818,7 @@
       // Aplikasi dibuka kosong: tab dari sesi sebelumnya disimpan ke Pustaka (bisa dibuka lagi dari sana).
       for (const t of tabs.list) {
         const [json, name] = t.id === tabs.active ? [current, app.fileName] : [stash.get(t.id)?.json, t.fileName];
-        if (json) saveDoc(t.id, json, name, true).catch(() => {});
+        if (json) keepOldTab(t.id, json, name).catch(() => {});
       }
       const blank = JSON.stringify(emptyDocument());
       const id = newTabId();
@@ -799,8 +833,6 @@
       clean = blank;
       setEmpty(true);
     }
-    const onHide = () => document.visibilityState === 'hidden' && flushAll();
-    document.addEventListener('visibilitychange', onHide);
     const onFs = () => (fullscreen = !!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onFs);
     window.addEventListener('wheel', onCtrlWheel, { passive: false });
@@ -812,7 +844,6 @@
       });
     }
     return () => {
-      document.removeEventListener('visibilitychange', onHide);
       document.removeEventListener('fullscreenchange', onFs);
       window.removeEventListener('wheel', onCtrlWheel);
     };
@@ -892,14 +923,14 @@
           <div class="export-menu left" role="menu">
             <button role="menuitem" onclick={() => ((saveOpen = false), saveToLibrary())}>
               <strong>Ke Pustaka Lokal{inLibrary ? ' ✓' : ''}</strong>
-              <small>{inLibrary ? 'Sudah di Pustaka Lokal, perubahan tersimpan otomatis' : 'Disimpan di browser ini, buka lagi dari Pustaka Lokal'}</small>
+              <small>{inLibrary ? `Simpan perubahan ke SOP ini${activeTab?.remote ? '' : ' · Ctrl+S'}` : 'Disimpan di browser ini, buka lagi dari Pustaka Lokal'}</small>
             </button>
             <button role="menuitem" onclick={() => ((saveOpen = false), saveToFaculty())}>
               <strong>Ke Pustaka Daring{activeTab?.remote ? ' ✓' : ''}</strong>
-              <small>{activeTab?.remote ? 'Simpan perubahan ke SOP daring ini' : 'Unggah sebagai SOP daring baru (private)'}</small>
+              <small>{activeTab?.remote ? 'Simpan perubahan ke SOP daring ini · Ctrl+S' : 'Unggah sebagai SOP daring baru (private)'}</small>
             </button>
             <button role="menuitem" onclick={() => ((saveOpen = false), save(false))}>
-              <strong>Sebagai berkas .sop</strong><small>{app.fileHandle ? `Timpa ${app.fileName}` : 'Pilih lokasi di perangkat'} · Ctrl+S</small>
+              <strong>Sebagai berkas .sop</strong><small>{app.fileHandle ? `Timpa ${app.fileName}` : 'Pilih lokasi di perangkat'}{activeTab?.remote || inLibrary ? '' : ' · Ctrl+S'}</small>
             </button>
             <button role="menuitem" onclick={() => ((saveOpen = false), save(true))}>
               <strong>Simpan berkas sebagai…</strong><small>Berkas .sop baru · Ctrl+Shift+S</small>
@@ -1009,6 +1040,7 @@
           }}
         >
           <button role="tab" aria-selected={t.id === tabs.active} onclick={() => switchTab(t.id)}>
+            {#if isDirty(t)}<span class="unsaved" role="img" aria-label="Belum disimpan" title="Ada perubahan yang belum disimpan. Tekan Ctrl+S untuk menyimpan."></span>{/if}
             {tabTitle(t)}
           </button>
           <button class="close" onclick={() => closeTab(t.id)} title="Tutup tab (Alt+W)" aria-label="Tutup {tabTitle(t)}">×</button>

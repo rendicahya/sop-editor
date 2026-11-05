@@ -1,8 +1,7 @@
-// Pustaka dokumen di IndexedDB browser ini. Dokumen masuk pustaka bila pengguna setuju saat menutup tab;
-// setelah itu perubahannya tersimpan otomatis.
+// Pustaka dokumen di IndexedDB browser ini. Isi entri hanya berubah saat pengguna menyimpan.
 // Entri: { id, kind: 'doc' | 'template', title, nomor, fileName, created, updated, json, tags }.
 // `tags` (label pengelompokan) hanya ada di pustaka, tidak ikut tersimpan di berkas .sop.
-// Dokumen tab memakai id tab sebagai id entri, jadi setiap perubahan tab memperbarui entrinya sendiri.
+// Dokumen tab memakai id tab sebagai id entri, jadi menyimpan tab memperbarui entrinya sendiri.
 
 import { plainText } from './richtext.js';
 
@@ -45,7 +44,7 @@ export const getEntry = (id) => run('readonly', (s) => s.get(id));
 export const deleteEntry = (id) => run('readwrite', (s) => s.delete(id));
 export const putEntry = (entry) => run('readwrite', (s) => s.put(entry));
 
-/** Mengubah sebagian kolom entri dalam satu transaksi (tidak bertabrakan dengan simpan otomatis). */
+/** Mengubah sebagian kolom entri dalam satu transaksi (tidak bertabrakan dengan penyimpanan dokumen). */
 export const patchEntry = (id, patch) =>
   run('readwrite', (s) => {
     const req = s.get(id);
@@ -74,12 +73,8 @@ export function isBlank(doc) {
   return !doc.header.namaSop && doc.steps.length <= 2 && Object.values(doc.sections).every((s) => !s.items.length);
 }
 
-/**
- * Menyimpan dokumen tab `id`; dilewati bila isinya sama dengan yang tersimpan.
- * Entri baru hanya dibuat bila `create` (pengguna setuju menyimpan ke pustaka);
- * dokumen yang sudah ada di pustaka diperbarui otomatis.
- */
-export async function saveDoc(id, json, fileName = null, create = false) {
+/** Menyimpan dokumen tab `id`; dilewati bila isinya sama dengan yang tersimpan atau dokumen baru masih kosong. */
+export async function saveDoc(id, json, fileName = null) {
   const doc = JSON.parse(json);
   // Baca dan tulis dalam satu transaksi agar label yang baru diubah di dialog Pustaka tidak tertimpa.
   await run('readwrite', (s) => {
@@ -87,7 +82,7 @@ export async function saveDoc(id, json, fileName = null, create = false) {
     req.onsuccess = () => {
       const old = req.result;
       if (old && old.json === json && old.fileName === fileName) return;
-      if (!old && (!create || isBlank(doc))) return;
+      if (!old && isBlank(doc)) return;
       const now = Date.now();
       s.put({
         id,
@@ -103,23 +98,4 @@ export async function saveDoc(id, json, fileName = null, create = false) {
     };
     return req;
   });
-}
-
-// Penyimpanan otomatis ditunda sebentar agar tidak menulis di setiap ketikan.
-const pending = new Map();
-export function queueSave(id, json, fileName) {
-  clearTimeout(pending.get(id)?.timer);
-  pending.set(id, { json, fileName, timer: setTimeout(() => flush(id), 600) });
-}
-
-export function flush(id) {
-  const p = pending.get(id);
-  if (!p) return Promise.resolve();
-  clearTimeout(p.timer);
-  pending.delete(id);
-  return saveDoc(id, p.json, p.fileName).catch(() => {}); // storage tidak tersedia: tab tetap ada di localStorage
-}
-
-export function flushAll() {
-  return Promise.all([...pending.keys()].map(flush));
 }
