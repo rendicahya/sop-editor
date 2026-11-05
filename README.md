@@ -54,13 +54,13 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   simbol, lalu seret kotak kecil pada ruas garis untuk menggesernya. Posisi disimpan relatif terhadap lajur dan baris,
   jadi tetap berlaku saat tata letak berubah. "Kembalikan jalur otomatis" menghapus pengaturan manualnya.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
-- **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Asisten AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab kembali seperti semula setelah halaman dimuat ulang (riwayat Undo tidak ikut), sedangkan aplikasi yang baru dibuka selalu kosong; riwayat Undo terpisah per tab.
+- **Beberapa SOP sekaligus** dalam tab: Baru, Buka, dan Asisten AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab kembali seperti semula setelah halaman dimuat ulang (riwayat Undo tidak ikut), sedangkan aplikasi yang baru dibuka selalu kosong; riwayat Undo terpisah per tab.
 - **Tanda belum disimpan**: titik pada tab berarti SOP itu punya perubahan yang belum disimpan. Ctrl+S menyimpan ke tempat
   asalnya (Pustaka Daring, Pustaka Lokal, atau berkas) lalu titiknya hilang. Menutup tab bertanda ini menampilkan pilihan
   menyimpan, menutup tanpa menyimpan, atau tidak jadi menutup.
 - **Pustaka Lokal**: SOP yang disimpan ke Pustaka Lokal berada di browser (IndexedDB) dan bisa dibuka lagi kapan saja.
   Isinya hanya berubah saat disimpan. Pustaka bisa dicari (nama, nomor, pelaksana, kegiatan, butir ketentuan),
-  dokumennya bisa diduplikasi atau dijadikan **templat**, dan templat (termasuk templat bawaan) dipakai untuk memulai SOP
+  dokumennya bisa diduplikasi atau dijadikan **templat**, dan templat dipakai untuk memulai SOP
   baru dengan tanggal hari ini.
   **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen dan templat: satu entri boleh berlabel lebih dari satu,
   daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
@@ -120,8 +120,6 @@ bergulir sendiri saat kursor mendekati tepi. Esc membatalkan, Ctrl+Z mengurungka
 
 Di Chrome/Edge, "Simpan" berikutnya langsung menimpa berkas yang sama (File System Access API).
 Di browser lain, berkas diunduh.
-
-Tombol **Contoh** memuat contoh SOP Skripsi untuk melihat semua fitur.
 
 ### Asisten AI
 
@@ -190,7 +188,7 @@ Struktur utama:
 
 | Berkas | Isi |
 | --- | --- |
-| `src/lib/model.js` | Struktur dokumen, contoh, validasi/normalisasi JSON, format tanggal |
+| `src/lib/model.js` | Struktur dokumen, validasi/normalisasi JSON, format tanggal |
 | `src/lib/layout.js` | Mesin tata letak: dokumen → halaman berisi primitif (rect, poly, text, image, …) |
 | `src/lib/PageSvg.svelte` | Renderer pratinjau (SVG) |
 | `src/lib/PageFields.svelte` | Lapisan isian edit-langsung di atas halaman identitas dan diagram alir (posisi dari `page.fields`) |

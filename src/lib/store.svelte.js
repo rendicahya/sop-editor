@@ -1,4 +1,4 @@
-import { sampleDocument, normalizeDocument } from './model.js';
+import { emptyDocument, normalizeDocument } from './model.js';
 
 const KEY = 'sop-editor:doc';
 const TABS_KEY = 'sop-editor:tabs';
@@ -52,7 +52,7 @@ function safeParse(json) {
 }
 
 export const app = $state({
-  doc: valid(read(KEY)) ?? sampleDocument(),
+  doc: valid(read(KEY)) ?? emptyDocument(),
   /** Handle File System Access API untuk "Simpan" berikutnya tanpa dialog. */
   fileHandle: null,
   fileName: active.fileName,

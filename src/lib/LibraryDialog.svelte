@@ -1,6 +1,6 @@
 <script>
   import { newTabId } from './store.svelte.js';
-  import { emptyDocument, sampleDocument, parseDocumentText } from './model.js';
+  import { parseDocumentText } from './model.js';
   import { listEntries, putEntry, patchEntry, deleteEntry, cleanTags, haystack } from './library.js';
 
   /** openIds: id tab yang sedang terbuka (= id entri pustaka). */
@@ -14,12 +14,6 @@
   let tagEdit = $state(null); // id entri yang labelnya sedang diatur
   let newTag = $state('');
   let picked = $state([]); // id entri yang dicentang untuk dihapus sekaligus
-
-  // Templat bawaan, selalu tersedia dan tidak bisa dihapus.
-  const BUILTIN = [
-    { id: 'builtin-empty', title: 'Dokumen kosong', note: 'Kop, pengesah, dan bagian baku FILKOM', make: emptyDocument },
-    { id: 'builtin-sample', title: 'SOP Skripsi', note: 'Contoh lengkap dengan keputusan dan beberapa pelaksana', make: sampleDocument }
-  ];
 
   $effect(() => {
     if (open && !dialog.open) {
@@ -79,11 +73,8 @@
   }
   const counts = $derived({
     doc: entries.filter((e) => e.kind === 'doc').length,
-    template: entries.filter((e) => e.kind === 'template').length + BUILTIN.length
+    template: entries.filter((e) => e.kind === 'template').length
   });
-  const builtins = $derived(
-    kind === 'template' && tag === null ? BUILTIN.filter((b) => !query.trim() || b.title.toLowerCase().includes(query.trim().toLowerCase())) : []
-  );
 
   const rtf = new Intl.RelativeTimeFormat('id', { numeric: 'auto' });
   function ago(ms) {
@@ -103,9 +94,9 @@
     onopen(e);
   }
 
-  function useTpl(make) {
+  function useTpl(e) {
     open = false;
-    ontemplate(make());
+    ontemplate(parseDocumentText(e.json));
   }
 
   async function add(entry) {
@@ -245,15 +236,6 @@
   {/if}
 
   <ul class="list">
-    {#each builtins as b (b.id)}
-      <li>
-        <button class="main" onclick={() => useTpl(b.make)}>
-          <strong>{b.title}</strong>
-          <small>Bawaan · {b.note}</small>
-        </button>
-        <span class="acts"><button class="btn small primary" onclick={() => useTpl(b.make)}>Gunakan</button></span>
-      </li>
-    {/each}
     {#each shown as e (e.id)}
       {@const isOpen = openIds.includes(e.id)}
       <li class:current={e.id === active}>
@@ -266,7 +248,7 @@
           aria-label={`Pilih ${titleOf(e)}`}
           title={isOpen ? 'Tutup tabnya dulu untuk menghapus' : 'Pilih untuk dihapus sekaligus'}
         />
-        <button class="main" onclick={() => (e.kind === 'doc' ? pick(e) : useTpl(() => parseDocumentText(e.json)))}>
+        <button class="main" onclick={() => (e.kind === 'doc' ? pick(e) : useTpl(e))}>
           <strong>
             {titleOf(e)}
             {#if e.id === active}<em>sedang dibuka</em>{:else if isOpen}<em>terbuka di tab</em>{/if}
@@ -290,7 +272,7 @@
             <button class="btn small" onclick={() => duplicate(e)} title="Buat salinan di pustaka">Duplikat</button>
             <button class="btn small" onclick={() => makeTemplate(e.json, e.title)} title="Simpan sebagai titik awal SOP baru">Jadikan templat</button>
           {:else}
-            <button class="btn small primary" onclick={() => useTpl(() => parseDocumentText(e.json))}>Gunakan</button>
+            <button class="btn small primary" onclick={() => useTpl(e)}>Gunakan</button>
             <button class="btn small" onclick={() => rename(e)}>Ubah nama</button>
           {/if}
           <button
@@ -322,11 +304,9 @@
         {/if}
       </li>
     {:else}
-      {#if !builtins.length}
-        <li class="empty">
-          {query.trim() ? 'Tidak ada yang cocok.' : kind === 'doc' ? 'Belum ada dokumen. SOP yang disimpan ke Pustaka Lokal akan muncul di sini.' : 'Belum ada templat buatan sendiri.'}
-        </li>
-      {/if}
+      <li class="empty">
+        {query.trim() ? 'Tidak ada yang cocok.' : kind === 'doc' ? 'Belum ada dokumen. SOP yang disimpan ke Pustaka Lokal akan muncul di sini.' : 'Belum ada templat. Buat dari dokumen di pustaka dengan tombol “Jadikan templat”.'}
+      </li>
     {/each}
   </ul>
 
