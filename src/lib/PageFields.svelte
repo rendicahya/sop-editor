@@ -150,7 +150,7 @@
   }
 
   /**
-   * Dialog bisa digeser dari bagian mana pun selain kontrolnya. Pergeseran disimpan dalam mm agar
+   * Dialog digeser dari pegangan .menu-grip di tengah atasnya. Pergeseran disimpan dalam mm agar
    * tetap sebanding saat pratinjau di-zoom, dan hilang saat dialog ditutup.
    * `anchor` ({x, y} dalam mm, opsional): titik acuan dialog. Bila acuannya berpindah karena tata letak
    * berubah, dialog yang sudah digeser tetap di tempatnya; yang belum digeser ikut berpindah.
@@ -167,7 +167,7 @@
       removeEventListener('pointercancel', stop);
     };
     const down = (e) => {
-      if (e.button !== 0 || e.target.closest('button, input, select, textarea')) return;
+      if (e.button !== 0 || !e.target.closest('.menu-grip')) return;
       const [mx, my] = toMm(e);
       grab = { mx, my, dx, dy, x: e.clientX, y: e.clientY, moved: false };
       // Didengarkan di window: seretan cepat bisa keluar dari dialog sebelum gerakan pertama terbaca.
@@ -178,7 +178,6 @@
     function move(e) {
       if (!e.buttons) return stop();
       if (!grab.moved) {
-        // Penunjuk baru ditangkap setelah benar-benar bergerak, agar klik pada label tetap memfokuskan isiannya.
         if (Math.hypot(e.clientX - grab.x, e.clientY - grab.y) < 3) return;
         grab.moved = true;
         el.setPointerCapture(e.pointerId);
@@ -737,6 +736,7 @@
         {#if open}
           {@const dec = s.shape === 'decision'}
           <div class="shape-menu" class:up={f.y > 115} role="dialog" aria-label="Simbol langkah {f.index + 1}" use:movable={{ x: f.x + f.w / 2, y: f.y > 115 ? f.y : f.y + f.h }}>
+            <div class="menu-grip" title="Seret untuk memindahkan"></div>
             <div class="seg" role="group" aria-label="Simbol">
               {#each SHAPES as sh (sh.value)}
                 <button class:on={s.shape === sh.value} aria-pressed={s.shape === sh.value} onclick={() => (s.shape = sh.value)}>{sh.label}</button>
@@ -835,6 +835,7 @@
           aria-label="Jalur garis"
           use:movable
         >
+          <div class="menu-grip" title="Seret untuk memindahkan"></div>
           <span class="lbl">Keluar dari</span>
           <div class="seg" role="group" aria-label="Sisi keluar">
             {#each SIDE_OUT as [v, label] (v)}
@@ -1184,9 +1185,30 @@
     border: 1px solid rgb(var(--edit) / 0.4);
     border-radius: 8px;
     box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
-    cursor: move;
     user-select: none;
+  }
+  .menu-grip {
+    justify-self: center;
+    width: 44px;
+    height: 12px;
+    margin: -6px 0 -2px;
+    display: grid;
+    place-items: center;
+    cursor: grab;
     touch-action: none;
+  }
+  .menu-grip:active {
+    cursor: grabbing;
+  }
+  .menu-grip::before {
+    content: '';
+    width: 28px;
+    height: 4px;
+    border-radius: 99px;
+    background: #c5cbd6;
+  }
+  .menu-grip:hover::before {
+    background: rgb(var(--edit) / 0.6);
   }
   .shape-menu.up {
     top: auto;
@@ -1315,9 +1337,7 @@
     border: 1px solid rgb(var(--edit) / 0.4);
     border-radius: 8px;
     box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
-    cursor: move;
     user-select: none;
-    touch-action: none;
   }
   .edge-menu.up {
     transform: translateY(calc(-100% - 20px));
