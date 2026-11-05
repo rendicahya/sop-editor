@@ -55,7 +55,9 @@ export const app = $state({
   doc: valid(read(KEY)) ?? sampleDocument(),
   /** Handle File System Access API untuk "Simpan" berikutnya tanpa dialog. */
   fileHandle: null,
-  fileName: active.fileName
+  fileName: active.fileName,
+  /** Nama SOP tidak bisa diubah: dokumen dari Pustaka Fakultas milik orang lain. */
+  nameLocked: false
 });
 
 /** Daftar tab (judul tab aktif dibaca langsung dari app.doc). */

@@ -650,6 +650,8 @@
         aria-label={f.label}
         placeholder={f.placeholder ?? ''}
         spellcheck="false"
+        readonly={f.key === 'namaSop' && app.nameLocked}
+        title={f.key === 'namaSop' && app.nameLocked ? 'Hanya pembuat SOP dan admin yang bisa mengubah nama SOP ini' : undefined}
         value={value(f)}
         oninput={(e) => setValue(f, e.currentTarget.value)}
         onkeydown={(e) => onTextKey(e, f)}

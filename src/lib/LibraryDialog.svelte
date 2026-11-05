@@ -1,8 +1,7 @@
 <script>
   import { newTabId } from './store.svelte.js';
   import { emptyDocument, sampleDocument, parseDocumentText } from './model.js';
-  import { plainText } from './richtext.js';
-  import { listEntries, putEntry, patchEntry, deleteEntry, flushAll, cleanTags } from './library.js';
+  import { listEntries, putEntry, patchEntry, deleteEntry, flushAll, cleanTags, haystack } from './library.js';
 
   /** openIds: id tab yang sedang terbuka (= id entri pustaka). */
   let { open = $bindable(false), openIds = [], active, onopen, ontemplate, onsave, cansave = true, onnotify } = $props();
@@ -40,17 +39,6 @@
       entries = [];
       alert('Pustaka tidak bisa dibaca di browser ini (mode privat atau penyimpanan diblokir).');
     }
-  }
-
-  /** Teks yang dicari: nama, nomor, berkas, label, pelaksana, kegiatan, dan butir ketentuan. */
-  function haystack(e) {
-    const parts = [e.title, e.nomor, e.fileName, ...(e.tags ?? [])];
-    try {
-      const d = JSON.parse(e.json);
-      parts.push(...d.actors.map((a) => a.name), ...d.steps.map((s) => plainText(s.kegiatan)));
-      for (const s of Object.values(d.sections)) parts.push(...s.items.map((i) => plainText(i.text ?? i)));
-    } catch {}
-    return parts.filter((p) => typeof p === 'string').join('\n').toLowerCase();
   }
 
   const shown = $derived.by(() => {

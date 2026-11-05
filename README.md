@@ -61,6 +61,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   baru dengan tanggal hari ini. Dokumen dari ruang kolaborasi orang lain disimpan sebagai entri tersendiri.
   **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen dan templat: satu entri boleh berlabel lebih dari satu,
   daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
+- **Pustaka Fakultas**: SOP bersama secara online untuk akun @ub.ac.id yang didaftarkan admin. Lihat [Pustaka Fakultas](#pustaka-fakultas).
   Label hanya ada di pustaka (tidak masuk berkas .sop).
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
@@ -166,6 +167,34 @@ Cara kerjanya:
   (sebagian jaringan kantor/kampus). Peserta yang bergabung baru melihat dokumen setelah tersambung dengan minimal satu
   peserta lain yang memegang isi ruang.
 
+### Pustaka Fakultas
+
+SOP disimpan di Firestore; hanya JSON-nya, dan gambar tanda tangan/stempel selalu dibuang saat diunggah.
+
+| Tindakan | SOP public | SOP private |
+| --- | --- | --- |
+| Melihat, mengedit isi, menduplikat | Semua anggota | Pembuat dan admin |
+| Mengubah nama, menghapus, mengubah private/public | Pembuat dan admin | Pembuat dan admin |
+
+- SOP baru selalu private, dan pembuatnya tercatat permanen. Hasil duplikat menjadi SOP private milik yang menduplikat.
+- SOP yang dihapus masuk **Recycle bin**. Pengguna hanya melihat, memulihkan, dan menghapus permanen yang dia hapus sendiri; admin menangani semuanya.
+- Setiap penyimpanan membuat versi di **Riwayat**. Bila SOP sudah diubah orang lain, penyimpan memilih: timpa, simpan sebagai salinan private, atau batal.
+- **Sedang diedit** hanya pemberitahuan, bukan kunci. Keterangan dari browser yang tertutup hilang sendiri setelah sekitar 5 menit.
+- Pemakaian dan batas penyimpanan hanya tampil untuk admin. Angkanya perkiraan dari ukuran JSON, belum termasuk indeks Firestore.
+
+Menyiapkan proyek Firebase (cukup sekali):
+
+```bash
+cd firebase
+npm install
+npx firebase login
+npx firebase deploy --only firestore:rules
+```
+
+Lalu di Firebase Console, buat dokumen `members/<email-admin>` berisi kolom `role` = `admin`. Anggota lain didaftarkan dari tab **Admin** di aplikasi.
+
+Batasan akses ditegakkan oleh `firebase/firestore.rules`. Setelah mengubahnya, jalankan `npm test` di folder `firebase/` (perlu Java) lalu deploy ulang.
+
 ## Pengembangan
 
 ```bash
@@ -192,6 +221,10 @@ Struktur utama:
 | `src/lib/duration.js` | Estimasi total waktu: membaca kolom Waktu dan menjumlahkannya di jalur utama |
 | `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan otomatis per tab (id tab = id entri), daftar, hapus |
 | `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, label, duplikat, templat |
+| `src/lib/faculty.svelte.js` | Pustaka Fakultas: login, baca/tulis Firestore, riwayat, keterangan sedang diedit; Firebase dimuat saat pertama dipakai |
+| `src/lib/FacultyDialog.svelte` | Dialog Pustaka Fakultas: daftar, Recycle bin, tab Admin |
+| `src/lib/FacultyConflict.svelte` | Pilihan saat penyimpanan bertabrakan |
+| `firebase/firestore.rules` | Aturan akses Pustaka Fakultas, diuji oleh `firebase/rules.test.js` di emulator |
 | `src/lib/xlsx.js` | Ekspor XLSX: mengisi template SOP (gaya, tema, logo), diagram sebagai shape DrawingML |
 | `src/lib/fonts.js` | Font dokumen: Calibri dari perangkat (disimpan di IndexedDB) atau Carlito sebagai pengganti |
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |

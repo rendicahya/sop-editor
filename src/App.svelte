@@ -21,6 +21,10 @@
   import { connectHistory } from './lib/history.js';
   import LibraryDialog from './lib/LibraryDialog.svelte';
   import { queueSave, flush, flushAll, saveDoc, isBlank, getEntry } from './lib/library.js';
+  import FacultyDialog from './lib/FacultyDialog.svelte';
+  import FacultyConflict from './lib/FacultyConflict.svelte';
+  import * as Faculty from './lib/faculty.svelte.js';
+  import { faculty } from './lib/faculty.svelte.js';
 
   let toast = $state('');
   let toastTimer;
@@ -160,6 +164,7 @@
       persist(json);
       remember();
       syncFlags();
+      syncEditing();
       return;
     }
     past.push(current);
@@ -169,6 +174,7 @@
     persist(json);
     remember();
     syncFlags();
+    syncEditing();
   }
 
   /** Dokumen tab aktif ikut tersimpan di pustaka (kecuali selagi menunggu isi ruang kolaborasi). */
@@ -222,9 +228,9 @@
       empty,
       room: collab.room?.id ?? null,
       tabs: tabs.list.map((t) => {
-        if (t.id === tabs.active) return { id: t.id, fileName: app.fileName, json: current, dirty: current !== clean };
+        if (t.id === tabs.active) return { id: t.id, fileName: app.fileName, remote: t.remote, json: current, dirty: current !== clean };
         const s = stash.get(t.id);
-        return { id: t.id, fileName: t.fileName, json: s.json, dirty: s.json !== s.clean };
+        return { id: t.id, fileName: t.fileName, remote: t.remote, json: s.json, dirty: s.json !== s.clean };
       })
     });
   }
@@ -235,7 +241,7 @@
     for (const t of s.tabs) {
       if (t.id !== s.active) stash.set(t.id, { json: t.json, handle: null, past: [], future: [], clean: t.dirty ? null : t.json });
     }
-    tabs.list.splice(0, tabs.list.length, ...s.tabs.map((t) => ({ id: t.id, title: t.doc.header.namaSop, fileName: t.fileName })));
+    tabs.list.splice(0, tabs.list.length, ...s.tabs.map((t) => ({ id: t.id, title: t.doc.header.namaSop, fileName: t.fileName, remote: t.remote ?? null })));
     tabs.active = s.active;
     const a = s.tabs.find((t) => t.id === s.active);
     app.fileName = a.fileName;
@@ -333,6 +339,8 @@
   /** Tab aktif mendapat id (= entri pustaka) baru, mis. saat isinya diganti dokumen lain. */
   function rekey(id = newTabId()) {
     flush(tabs.active);
+    if (activeTab.remote) Faculty.setEditing(activeTab.remote.id, false);
+    activeTab.remote = null; // isi tab berganti: tidak lagi tertaut ke SOP di Pustaka Fakultas
     activeTab.id = id;
     tabs.active = id;
   }
@@ -407,7 +415,15 @@
       flush(id);
     }
     const json = id === tabs.active ? current : stash.get(id).json;
-    if (!isBlank(JSON.parse(json))) {
+    if (tab.remote) {
+      // Salinan SOP dari Pustaka Fakultas: tempat simpannya di sana, bukan di pustaka browser ini.
+      const dirty = json !== (id === tabs.active ? clean : stash.get(id).clean);
+      if (dirty && confirm(`Simpan perubahan "${tabTitle(tab)}" ke Pustaka Fakultas sebelum ditutup?\n\nOK = simpan, Batal = tutup tanpa menyimpan.`)) {
+        if (id !== tabs.active) switchTab(id);
+        if (id !== tabs.active || !(await saveToFaculty())) return;
+      }
+      Faculty.setEditing(tab.remote.id, false);
+    } else if (!isBlank(JSON.parse(json))) {
       const inLib = await getEntry(id).catch(() => null);
       if (inLib || confirm(`Simpan "${tabTitle(tab)}" ke Pustaka sebelum ditutup?\n\nOK = simpan, Batal = tutup tanpa menyimpan.`)) {
         await saveDoc(id, json, tab.fileName, true).catch(() => {});
@@ -645,6 +661,121 @@
     }
   }
 
+  // Pustaka Fakultas. Tab yang tertaut menyimpan tab.remote: { id, rev, title, visibility, canRename }.
+  let facultyOpen = $state(false);
+  let conflict = $state(null);
+  let conflictChosen;
+  const openRemoteIds = $derived(tabs.list.filter((t) => t.remote).map((t) => t.remote.id));
+  const activeEditors = $derived(activeTab?.remote ? (faculty.editing[activeTab.remote.id] ?? []).map((m) => m.name).join(', ') : '');
+
+  $effect(() => {
+    app.nameLocked = !!activeTab?.remote && !activeTab.remote.canRename;
+  });
+  $effect(() => {
+    if (faculty.status === 'in' && (facultyOpen || openRemoteIds.length)) return Faculty.watchEditing();
+  });
+  $effect(() => {
+    if (faculty.status === 'in') untrack(syncEditing);
+  });
+
+  /** Tanda "sedang diedit" mengikuti tab yang punya perubahan belum tersimpan (SOP public saja). */
+  function syncEditing() {
+    for (const t of tabs.list) {
+      if (!t.remote) continue;
+      const dirty = t.id === tabs.active ? current !== clean : stash.get(t.id)?.json !== stash.get(t.id)?.clean;
+      Faculty.setEditing(t.remote.id, t.remote.visibility === 'public' && dirty);
+    }
+  }
+
+  function openFacultySop(sop) {
+    const opened = tabs.list.find((t) => t.remote?.id === sop.id);
+    if (opened) return switchTab(opened.id);
+    if (collab.status !== 'off') return alert('Keluar dari ruang kolaborasi dulu untuk membuka SOP dari Pustaka Fakultas.');
+    try {
+      openInTab(parseDocumentText(sop.json));
+    } catch {
+      return alert('SOP ini rusak dan tidak bisa dibuka.');
+    }
+    activeTab.remote = { id: sop.id, rev: sop.rev, title: sop.title, visibility: sop.visibility, canRename: Faculty.canManage(sop) };
+  }
+
+  function onFacultyVisibility(id, visibility) {
+    const t = tabs.list.find((x) => x.remote?.id === id);
+    if (t) t.remote.visibility = visibility;
+    syncEditing();
+  }
+
+  /** Tab tertaut ke `remote`, dan isi yang baru tersimpan tidak lagi dianggap perubahan. */
+  function linkTab(tab, doc, remote) {
+    const json = JSON.stringify(doc);
+    tab.remote = remote;
+    if (tab.id === tabs.active) {
+      const untouched = JSON.stringify(app.doc) === json;
+      clean = json;
+      // Nama di pustaka yang menang, mis. pembuatnya mengganti nama selagi tab ini terbuka.
+      if (untouched && doc.header.namaSop !== remote.title) {
+        app.doc.header.namaSop = remote.title;
+        commit(JSON.stringify(app.doc));
+        clean = current;
+      }
+    } else if (stash.has(tab.id)) stash.get(tab.id).clean = json;
+    syncEditing();
+  }
+
+  /** Mengunggah tab aktif, atau menyimpan perubahannya bila sudah tertaut. Hasil: berhasil atau tidak. */
+  async function saveToFaculty() {
+    await Faculty.start();
+    if (faculty.status !== 'in') {
+      facultyOpen = true;
+      return false;
+    }
+    checkpoint();
+    const tab = activeTab;
+    const doc = $state.snapshot(app.doc);
+    const note = doc.header.signature ? ' Gambar tanda tangan/stempel tidak ikut diunggah.' : '';
+    try {
+      if (!tab.remote) {
+        if (isBlank(doc)) return notify('Dokumen masih kosong, belum ada yang diunggah'), false;
+        linkTab(tab, doc, await Faculty.uploadSop(doc));
+        notify('Diunggah ke Pustaka Fakultas sebagai private.' + note);
+        return true;
+      }
+      const { id, rev } = tab.remote;
+      let r;
+      try {
+        r = await Faculty.saveSop(id, doc, rev);
+      } catch (e) {
+        if (e.code !== 'conflict' && e.code !== 'gone') throw e;
+        const canOverwrite = e.code === 'conflict';
+        const choice = await new Promise((resolve) => {
+          conflictChosen = resolve;
+          conflict = { canOverwrite, by: e.by, at: e.at, message: e.message };
+        });
+        if (choice === 'cancel') return false;
+        if (choice === 'overwrite') r = await Faculty.saveSop(id, doc, rev, { overwrite: true });
+        else {
+          const title = `Salinan dari ${doc.header.namaSop || 'SOP tanpa judul'}`.slice(0, 300);
+          const copy = await Faculty.uploadSop(doc, title);
+          Faculty.setEditing(id, false);
+          linkTab(tab, doc, copy);
+          notify('Disimpan sebagai salinan private.' + note);
+          return true;
+        }
+      }
+      linkTab(tab, doc, { ...$state.snapshot(tab.remote), rev: r.rev, title: r.title });
+      notify((r.unchanged ? 'Tidak ada perubahan untuk disimpan.' : 'Tersimpan di Pustaka Fakultas.') + note);
+      return true;
+    } catch (e) {
+      alert(e.message);
+      return false;
+    }
+  }
+
+  function chooseConflict(choice) {
+    conflict = null;
+    conflictChosen?.(choice);
+  }
+
   // Ekspor PDF selalu lewat pratinjau dulu; unduhan dilakukan dari dialog.
   let pdfDoc = $state(null);
   let pdfSaved;
@@ -717,8 +848,10 @@
 
   onMount(() => {
     const session = loadSession();
-    if (session) resumeSession(session);
-    else {
+    if (session) {
+      resumeSession(session);
+      if (tabs.list.some((t) => t.remote)) Faculty.start();
+    } else {
       // Aplikasi dibuka kosong: tab dari sesi sebelumnya disimpan ke Pustaka (bisa dibuka lagi dari sana).
       for (const t of tabs.list) {
         const [json, name] = t.id === tabs.active ? [current, app.fileName] : [stash.get(t.id)?.json, t.fileName];
@@ -801,6 +934,7 @@
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)">Buka</button>
       <button class="btn ghost" onclick={() => (libraryOpen = true)} title="SOP dan templat yang disimpan di browser ini">Pustaka</button>
+      <button class="btn ghost" onclick={() => (facultyOpen = true)} title="SOP bersama secara online, untuk anggota fakultas">Pustaka Fakultas</button>
       <div class="export">
         <button class="btn ghost" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka atau sebagai berkas .sop">
           Simpan
@@ -811,6 +945,10 @@
             <button role="menuitem" onclick={() => ((saveOpen = false), saveToLibrary())}>
               <strong>Ke Pustaka{inLibrary ? ' ✓' : ''}</strong>
               <small>{inLibrary ? 'Sudah di Pustaka, perubahan tersimpan otomatis' : 'Disimpan di browser ini, buka lagi dari Pustaka'}</small>
+            </button>
+            <button role="menuitem" onclick={() => ((saveOpen = false), saveToFaculty())}>
+              <strong>Ke Pustaka Fakultas{activeTab?.remote ? ' ✓' : ''}</strong>
+              <small>{activeTab?.remote ? 'Simpan perubahan ke SOP online ini' : 'Unggah sebagai SOP online baru (private)'}</small>
             </button>
             <button role="menuitem" onclick={() => ((saveOpen = false), save(false))}>
               <strong>Sebagai berkas .sop</strong><small>{app.fileHandle ? `Timpa ${app.fileName}` : 'Pilih lokasi di perangkat'} · Ctrl+S</small>
@@ -970,6 +1108,11 @@
 
   <main class="workspace">
     <section class="preview" onfocusin={onFocusIn}>
+      {#if activeEditors && !empty}
+        <div class="waiting" role="status">
+          <span><strong>Sedang diedit juga oleh {activeEditors}.</strong> Yang menyimpan belakangan akan mendapat pilihan untuk menimpa atau membuat salinan.</span>
+        </div>
+      {/if}
       {#if collab.status === 'connecting'}
         <div class="waiting">
           <span>
@@ -1015,6 +1158,7 @@
             <button class="btn primary" onclick={newDoc}>Baru</button>
             <button class="btn" onclick={open}>Buka</button>
             <button class="btn" onclick={() => (libraryOpen = true)}>Pustaka</button>
+            <button class="btn" onclick={() => (facultyOpen = true)}>Pustaka Fakultas</button>
           </span>
         </div>
       {:else}
@@ -1063,6 +1207,18 @@
     cansave={!empty}
     onnotify={notify}
   />
+  <FacultyDialog
+    bind:open={facultyOpen}
+    openIds={openRemoteIds}
+    cansave={!empty && !activeTab?.remote}
+    onopen={openFacultySop}
+    onupload={async () => {
+      if (await saveToFaculty()) facultyOpen = false;
+    }}
+    onvisibility={onFacultyVisibility}
+    onnotify={notify}
+  />
+  <FacultyConflict info={conflict} onchoice={chooseConflict} />
 
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
   {#if dragging}<div class="dropzone">Lepaskan berkas .sop untuk membuka</div>{/if}

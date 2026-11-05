@@ -4,6 +4,19 @@
 // `tags` (label pengelompokan) hanya ada di pustaka, tidak ikut tersimpan di berkas .sop.
 // Dokumen tab memakai id tab sebagai id entri, jadi setiap perubahan tab memperbarui entrinya sendiri.
 
+import { plainText } from './richtext.js';
+
+/** Teks yang dicari: nama, nomor, berkas, label, pelaksana, kegiatan, dan butir ketentuan. */
+export function haystack(e) {
+  const parts = [e.title, e.nomor, e.fileName, ...(e.tags ?? [])];
+  try {
+    const d = JSON.parse(e.json);
+    parts.push(...d.actors.map((a) => a.name), ...d.steps.map((s) => plainText(s.kegiatan)));
+    for (const s of Object.values(d.sections)) parts.push(...s.items.map((i) => plainText(i.text ?? i)));
+  } catch {}
+  return parts.filter((p) => typeof p === 'string').join('\n').toLowerCase();
+}
+
 const DB = 'sop-editor-library';
 const STORE = 'docs';
 
