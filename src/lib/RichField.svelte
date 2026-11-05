@@ -12,7 +12,7 @@
   let el;
   let last = null; // nilai terakhir yang sudah ada di DOM (dari ketikan sendiri atau render terakhir)
 
-  // Perubahan dari luar (undo, kolaborasi, cari & ganti): DOM diganti, kursor dipertahankan.
+  // Perubahan dari luar (undo, cari & ganti): DOM diganti, kursor dipertahankan.
   $effect(() => {
     const v = value ?? '';
     if (v === last) return;

@@ -13,7 +13,5 @@ export function asStep(fn) {
   checkpoint();
   const r = fn();
   checkpoint();
-  // Perubahan dikirim ke ruang kolaborasi setelah efek Svelte berjalan; tutup langkahnya sesudah itu.
-  setTimeout(checkpoint);
   return r;
 }

@@ -604,40 +604,6 @@ button:disabled {
   z-index: 30;
 }
 
-/* ---------- Kolaborasi ---------- */
-.avatar {
-  display: inline-grid;
-  place-items: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 700;
-  border: 2px solid var(--surface);
-  flex: none;
-}
-.avatar.more {
-  background: var(--muted);
-}
-.avatars {
-  display: inline-flex;
-}
-.avatars .avatar + .avatar {
-  margin-left: -0.45rem;
-}
-.collab-btn {
-  padding: 0.2rem 0.5rem;
-}
-.live {
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: #f79009;
-}
-.live.on {
-  background: #12b76a;
-}
 .waiting {
   display: flex;
   flex-wrap: wrap;

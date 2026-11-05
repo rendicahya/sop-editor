@@ -3,7 +3,7 @@
 Aplikasi web (front-end saja, PWA) untuk membuat dan mengedit dokumen SOP berformat standar
 (halaman identitas + diagram alir lintas pelaksana), menyimpannya sebagai berkas `.sop` (isinya JSON), dan mengekspornya ke PDF A4 lanskap, Word, Excel, atau gambar PNG.
 
-Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero untuk kolaborasi real-time.
+Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pustaka Daring.
 
 **Demo:** https://rendicahya.github.io/sop-editor/
 
@@ -54,11 +54,11 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   simbol, lalu seret kotak kecil pada ruas garis untuk menggesernya. Posisi disimpan relatif terhadap lajur dan baris,
   jadi tetap berlaku saat tata letak berubah. "Kembalikan jalur otomatis" menghapus pengaturan manualnya.
 - Pratinjau langsung yang identik dengan hasil PDF, karena keduanya memakai mesin tata letak yang sama.
-- **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Asisten AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab kembali seperti semula setelah halaman dimuat ulang (riwayat Undo tidak ikut), sedangkan aplikasi yang baru dibuka selalu kosong; riwayat Undo terpisah per tab. Saat bergabung di ruang kolaborasi, ruang terikat pada tab yang aktif.
+- **Beberapa SOP sekaligus** dalam tab: Baru, Buka, Contoh, dan Asisten AI membuka dokumen di tab baru (tab kosong dipakai ulang). Tab bisa diseret untuk mengubah urutan dan ditutup dengan klik tengah. Semua tab kembali seperti semula setelah halaman dimuat ulang (riwayat Undo tidak ikut), sedangkan aplikasi yang baru dibuka selalu kosong; riwayat Undo terpisah per tab.
 - **Pustaka Lokal**: SOP yang disimpan ke Pustaka Lokal berada di browser (IndexedDB) dan perubahannya tersimpan otomatis,
   jadi tab bisa ditutup dan dibuka lagi kapan saja. Pustaka bisa dicari (nama, nomor, pelaksana, kegiatan, butir ketentuan),
   dokumennya bisa diduplikasi atau dijadikan **templat**, dan templat (termasuk templat bawaan) dipakai untuk memulai SOP
-  baru dengan tanggal hari ini. Dokumen dari ruang kolaborasi orang lain disimpan sebagai entri tersendiri.
+  baru dengan tanggal hari ini.
   **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen dan templat: satu entri boleh berlabel lebih dari satu,
   daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
 - **Pustaka Daring**: SOP bersama secara daring untuk akun @ub.ac.id yang didaftarkan admin. Lihat [Pustaka Daring](#pustaka-daring).
@@ -83,8 +83,6 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Yjs + Trystero un
   peringatan di atas pratinjau.
 - Antarmuka memakai font [Inter](https://rsms.me/inter/).
 - Simpan/buka berkas `.sop` (berkas `.json` lama tetap bisa dibuka), seret-lepas berkas ke jendela, simpan otomatis ke browser, Undo/Redo.
-- **Kolaborasi real-time** tanpa server: edit satu dokumen bersama lewat tautan undangan, lihat siapa sedang
-  mengedit bagian mana, dan ketik bersamaan di kolom yang sama tanpa saling menimpa.
 - **Asisten AI**: *copy* prompt siap pakai ke asisten AI, lalu *paste* jawabannya untuk langsung
   diedit dan diekspor. Bisa menyusun SOP baru dari deskripsi, **mengimpor SOP lama** (PDF, Word, foto/pindaian)
   yang dilampirkan di chat AI, termasuk diagram alir dan formatnya, atau **merevisi SOP yang sedang dibuka** sesuai
@@ -145,27 +143,6 @@ Pembuka JSON sengaja toleran terhadap jawaban AI: teks pengantar dan pembungkus 
 `format` boleh tidak ada, `<strong>`/`<em>`/`**tebal**` diseragamkan menjadi tag format, `actor` boleh berisi nama pelaksana (pelaksana baru ditambahkan otomatis), id yang hilang
 atau ganda dibuat ulang, `next`/`alt` boleh berisi nomor urut atau nama kegiatan, dan sinonim simbol
 ("start", "keputusan", …) dikenali.
-
-### Kolaborasi
-
-1. Klik **Kolaborasi**, isi nama, lalu **Buat ruang**. Dokumen yang sedang terbuka menjadi isi ruang.
-2. *Copy* tautan undangan dan bagikan. Penerima mengisi nama lalu **Gabung**; dokumennya diganti dengan dokumen ruang.
-3. Semua perubahan langsung tersinkron. Avatar peserta tampil di toolbar, dan kartu langkah yang sedang diedit orang lain diberi bingkai berwarna beserta namanya.
-4. Undo/Redo di dalam ruang hanya membatalkan perubahan Anda sendiri.
-
-Cara kerjanya:
-
-- Dokumen disimpan sebagai CRDT [Yjs](https://yjs.dev), sehingga suntingan bersamaan digabung otomatis
-  (teks per karakter; pilihan dan tanggal diganti utuh).
-- Browser saling menemukan lewat relay [Nostr](https://nostr.com) publik ([Trystero](https://github.com/dmotz/trystero)),
-  lalu data dikirim langsung antar-peserta melalui WebRTC. Tidak ada server yang menyimpan dokumen.
-- Tautan berisi id ruang dan kunci acak; kunci mengenkripsi proses pencarian peer, jadi hanya pemegang tautan yang bisa
-  bergabung. Bagikan tautan hanya kepada orang yang boleh mengedit.
-- Isi ruang tersimpan di IndexedDB setiap peserta. Membuka tautan lagi (atau memuat ulang halaman) langsung masuk
-  kembali ke ruang, dan dokumen tetap bisa dibuka meski peserta lain sedang offline.
-- Keterbatasan: koneksi peer-to-peer tanpa server TURN bisa gagal di jaringan dengan NAT/firewall ketat
-  (sebagian jaringan kantor/kampus). Peserta yang bergabung baru melihat dokumen setelah tersambung dengan minimal satu
-  peserta lain yang memegang isi ruang.
 
 ### Pustaka Daring
 
@@ -230,9 +207,6 @@ Struktur utama:
 | `src/lib/aiPrompt.js` | Prompt untuk menghasilkan dokumen SOP dengan AI |
 | `src/lib/richtext.js` | Format tebal/miring/garis bawah: parse tag, pemenggalan baris berformat, isian contenteditable |
 | `src/lib/findReplace.js` | Daftar kolom teks dokumen, pencarian, dan penggantian |
-| `src/lib/collab.svelte.js` | State ruang kolaborasi (status, peserta, tautan); memuat mesinnya saat pertama kali masuk ruang |
-| `src/lib/collabSession.js` | Mesin kolaborasi (dimuat terpisah): Yjs, koneksi P2P (Trystero), kehadiran, undo per pengguna |
-| `src/lib/ysync.js` | Selisih dua arah antara dokumen JSON dan struktur Yjs |
 
 ## Deploy ke GitHub Pages
 
@@ -285,13 +259,6 @@ tetap apa adanya. Kolom lain selalu teks polos.
 - Keterkaitan antar-SOP yang bisa ditautkan ke dokumen lain di pustaka.
 - Berbagi via tautan (JSON terkompresi di URL) tanpa server.
 - Ekspor SVG per halaman; impor langkah dari Excel/CSV.
-
-**Kolaborasi**
-- Konfigurasi server TURN (mis. dari layanan pihak ketiga) agar tetap tersambung di jaringan yang ketat.
-- Opsi sinkronisasi lewat server (Firebase/Supabase/y-websocket) untuk dokumen terpusat, login akun institusi, dan
-  hak akses baca saja / edit.
-- Kursor dan sorotan teks peserta lain di dalam kolom, serta komentar per langkah.
-- Daftar ruang yang pernah diikuti dan riwayat versi (snapshot Yjs) yang bisa dipulihkan.
 
 **AI**
 - Integrasi langsung dengan API penyedia AI (kunci API milik pengguna) agar SOP dibuat tanpa *copy-paste*.

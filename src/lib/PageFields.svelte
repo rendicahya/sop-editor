@@ -12,7 +12,6 @@
   import { app } from './store.svelte.js';
   import { PT } from './layout.js';
   import { newStep, removeStep, uid, SHAPES, SECTION_DEFS } from './model.js';
-  import { collab } from './collab.svelte.js';
   import { plainText, sliceRich, getSelection, setSelection } from './richtext.js';
   import RichField from './RichField.svelte';
   import ContextMenu from './ContextMenu.svelte';
@@ -102,8 +101,6 @@
     const { route: _, ...copy } = $state.snapshot(steps[i]);
     steps.splice(i + 1, 0, { ...copy, id: uid(), next: 'auto', alt: null });
   }
-  // Peserta kolaborasi yang sedang mengedit langkah ini.
-  const editors = (id) => collab.peers.filter((p) => p.focus?.step === id);
 
   // Menu simbol: id langkah yang menunya sedang terbuka.
   let menu = $state(null);
@@ -705,13 +702,11 @@
         </span>
       </div>
     {:else if f.kind === 'step-tools'}
-      {@const peers = editors(f.step)}
       <div
         class="f-group"
         class:hot={isHot(f)}
-        class:shared={peers.length}
         class:dragged={isDragged('step', f.index)}
-        style="{box(f)}--peer:{peers[0]?.color}"
+        style={box(f)}
         data-hot={f.hot}
         data-fid={f.id}
         data-drop="step"
@@ -725,9 +720,6 @@
           <button tabindex="-1" title="Tambah kegiatan di bawah" aria-label="Tambah kegiatan di bawah" onclick={() => addStep(f.index)}>＋</button>
           <button tabindex="-1" class="danger" title="Hapus kegiatan" aria-label="Hapus kegiatan" onclick={() => removeStep(steps, f.index)}>✕</button>
         </span>
-        {#if peers.length}
-          <span class="peers">{#each peers as p (p.id)}<span style:background={p.color}>{p.name}</span>{/each}</span>
-        {/if}
       </div>
     {:else if f.kind === 'shape'}
       {@const s = steps[f.index]}
@@ -1101,24 +1093,6 @@
   }
   .f-group.hot {
     background: rgb(var(--edit) / 0.035);
-  }
-  .f-group.shared {
-    box-shadow: inset 0 0 0 1.5px var(--peer);
-  }
-  .peers {
-    position: absolute;
-    right: 2px;
-    top: 2px;
-    display: flex;
-    gap: 2px;
-    pointer-events: none;
-  }
-  .peers span {
-    font: 600 10px/1 var(--ui-font);
-    color: #fff;
-    padding: 2px 5px;
-    border-radius: 3px;
-    white-space: nowrap;
   }
   .g-tools {
     position: absolute;

@@ -8,7 +8,6 @@
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
   import { saveJson, openJsonFile, slug, sopName, downloadBlob } from './lib/files.js';
   import Preview from './lib/Preview.svelte';
-  import CollabDialog from './lib/CollabDialog.svelte';
   import AiDialog from './lib/AiDialog.svelte';
   import FormatBar from './lib/FormatBar.svelte';
   import PdfPreviewDialog from './lib/PdfPreviewDialog.svelte';
@@ -16,8 +15,6 @@
   import CheckPanel from './lib/CheckPanel.svelte';
   import { estimateDuration } from './lib/duration.js';
   import { checkDocument } from './lib/validate.js';
-  import * as Collab from './lib/collab.svelte.js';
-  import { collab, inviteFromUrl } from './lib/collab.svelte.js';
   import { connectHistory } from './lib/history.js';
   import LibraryDialog from './lib/LibraryDialog.svelte';
   import { queueSave, flush, flushAll, saveDoc, isBlank, getEntry } from './lib/library.js';
@@ -156,17 +153,6 @@
 
   function commit(json) {
     clearTimeout(timer);
-    // Di ruang kolaborasi, undo/redo ditangani Yjs (hanya perubahan sendiri yang dibatalkan).
-    if (collab.status !== 'off') {
-      past = [];
-      future = [];
-      current = json;
-      persist(json);
-      remember();
-      syncFlags();
-      syncEditing();
-      return;
-    }
     past.push(current);
     if (past.length > 100) past.shift();
     future = [];
@@ -177,14 +163,13 @@
     syncEditing();
   }
 
-  /** Dokumen tab aktif ikut tersimpan di pustaka (kecuali selagi menunggu isi ruang kolaborasi). */
+  /** Dokumen tab aktif ikut tersimpan di pustaka. */
   function remember() {
-    if (collab.status !== 'connecting') queueSave(tabs.active, current, app.fileName);
+    queueSave(tabs.active, current, app.fileName);
   }
 
   /** Simpan perubahan yang belum masuk riwayat sebagai langkah tersendiri. */
   function checkpoint() {
-    if (collab.status !== 'off') return Collab.stopCapturing();
     const json = JSON.stringify(app.doc);
     if (json !== current) commit(json);
   }
@@ -203,9 +188,8 @@
     };
   }
 
-  // Isi ruang kolaborasi tersimpan otomatis dan ikut diubah peserta lain, jadi tidak diperingatkan.
   function hasUnsaved() {
-    if (!empty && collab.status === 'off' && JSON.stringify(app.doc) !== clean) return true;
+    if (!empty && JSON.stringify(app.doc) !== clean) return true;
     return tabs.list.some((t) => {
       const s = t.id !== tabs.active && stash.get(t.id);
       return s && s.json !== s.clean;
@@ -226,7 +210,6 @@
     saveSession({
       active: tabs.active,
       empty,
-      room: collab.room?.id ?? null,
       tabs: tabs.list.map((t) => {
         if (t.id === tabs.active) return { id: t.id, fileName: app.fileName, remote: t.remote, json: current, dirty: current !== clean };
         const s = stash.get(t.id);
@@ -250,15 +233,8 @@
     future = [];
     restore(a.json);
     clean = a.dirty ? null : a.json;
-    keyedRoom = s.room; // ruang yang sama dimasuki lagi: tab ini memang dokumennya, tidak perlu entri baru
     setEmpty(s.empty);
   }
-
-  // Setiap perubahan lokal langsung dikirim ke ruang kolaborasi.
-  $effect(() => {
-    const doc = JSON.parse(JSON.stringify(app.doc));
-    if (collab.status === 'ready') Collab.pushLocal(doc);
-  });
 
   function syncFlags() {
     canUndo = past.length > 0;
@@ -274,11 +250,7 @@
     syncFlags();
   }
 
-  const undoable = $derived(collab.status === 'off' ? canUndo : collab.canUndo);
-  const redoable = $derived(collab.status === 'off' ? canRedo : collab.canRedo);
-
   function undo() {
-    if (collab.status !== 'off') return Collab.undo();
     checkpoint(); // ketikan yang belum tercatat dibatalkan lebih dulu, bukan hilang
     if (!past.length) return;
     future.push(current);
@@ -286,7 +258,6 @@
   }
 
   function redo() {
-    if (collab.status !== 'off') return Collab.redo();
     checkpoint();
     if (!future.length) return;
     past.push(current);
@@ -356,16 +327,8 @@
     restore(s.json);
   }
 
-  // Ruang kolaborasi terikat pada tab yang sedang aktif.
-  function canLeaveTab() {
-    if (collab.status === 'off') return true;
-    if (!confirm('Dokumen ini sedang dibuka di ruang kolaborasi. Keluar dari ruang untuk berpindah tab?')) return false;
-    Collab.leaveRoom();
-    return true;
-  }
-
   function switchTab(id) {
-    if (id === tabs.active || !canLeaveTab()) return;
+    if (id === tabs.active) return;
     stashActive();
     activate(id);
   }
@@ -379,15 +342,11 @@
     Object.values(app.doc.sections).every((s) => !s.items.length);
 
   /**
-   * Membuka dokumen di tab baru (atau, di ruang kolaborasi, mengganti dokumen ruang).
+   * Membuka dokumen di tab baru.
    * `id`: entri pustaka yang dibuka; tanpa id, dokumen menjadi entri baru.
    */
   function openInTab(doc, name = null, handle = null, id = newTabId()) {
     setEmpty(false);
-    if (collab.status !== 'off') {
-      roomDocs++; // tab tetap sama, tetapi dokumennya baru
-      return replaceDocument(doc, name, handle);
-    }
     if (pristine()) {
       rekey(id);
       replaceDocument(doc, name, handle);
@@ -410,7 +369,6 @@
     // Dokumen yang belum ada di pustaka hanya disimpan bila pengguna setuju.
     const tab = tabs.list.find((t) => t.id === id);
     if (id === tabs.active) {
-      if (!canLeaveTab()) return;
       checkpoint();
       flush(id);
     }
@@ -419,8 +377,8 @@
       // Salinan SOP dari Pustaka Daring: tempat simpannya di sana, bukan di pustaka browser ini.
       const dirty = json !== (id === tabs.active ? clean : stash.get(id).clean);
       if (dirty && confirm(`Simpan perubahan "${tabTitle(tab)}" ke Pustaka Daring sebelum ditutup?\n\nOK = simpan, Batal = tutup tanpa menyimpan.`)) {
-        if (id !== tabs.active) switchTab(id);
-        if (id !== tabs.active || !(await saveToFaculty())) return;
+        switchTab(id);
+        if (!(await saveToFaculty())) return;
       }
       Faculty.setEditing(tab.remote.id, false);
     } else if (!isBlank(JSON.parse(json))) {
@@ -476,52 +434,6 @@
     toastTimer = setTimeout(() => (toast = ''), 3000);
   }
 
-  // Kolaborasi: undangan lewat tautan, status fokus untuk peserta lain.
-  let collabOpen = $state(false);
-  let invite = $state(null);
-  let focusStep = $state(null);
-  const shared = $derived(collab.status !== 'off' ? ' untuk semua peserta ruang' : '');
-
-  function checkInvite() {
-    const inv = inviteFromUrl();
-    if (!inv || inv.room === collab.room?.id) return;
-    if (inv.known && collab.me.name) Collab.joinRoom(inv);
-    else {
-      invite = inv;
-      collabOpen = true;
-    }
-  }
-
-  $effect(() => {
-    if (collab.status === 'ready') Collab.setFocus({ step: focusStep });
-  });
-
-  // Bergabung ke ruang orang lain: dokumen tab ini disimpan dulu, lalu dokumen ruang menjadi entri pustaka sendiri.
-  let keyedRoom = null;
-  $effect(() => {
-    const r = collab.room;
-    if (!r?.joined || r.id === keyedRoom) return;
-    keyedRoom = r.id;
-    untrack(() => {
-      const id = 'room-' + r.id;
-      setEmpty(false);
-      if (tabs.active === id) return; // ruang yang sama dibuka lagi (mis. setelah muat ulang)
-      // Dokumen lama diganti dokumen ruang: yang sudah di pustaka diperbarui, yang belum ditanyakan dulu.
-      const json = JSON.stringify(app.doc);
-      const [old, name] = [tabs.active, app.fileName];
-      getEntry(old)
-        .catch(() => null)
-        .then((e) => {
-          const ask = !e && !isBlank(JSON.parse(json));
-          const ok = ask && confirm('Simpan dokumen sebelumnya ke Pustaka Lokal sebelum diganti dokumen ruang kolaborasi?');
-          if (e || ok) saveDoc(old, json, name, true).catch(() => {});
-        });
-      rekey(tabs.list.some((t) => t.id === id) ? newTabId() : id);
-      app.fileName = null;
-      app.fileHandle = null;
-    });
-  });
-
   // Pustaka dokumen.
   let libraryOpen = $state(false);
   const openIds = $derived(tabs.list.map((t) => t.id));
@@ -529,9 +441,7 @@
   function openEntry(entry) {
     if (tabs.list.some((t) => t.id === entry.id)) return switchTab(entry.id);
     try {
-      const doc = parseDocumentText(entry.json);
-      if (shared && !confirm(`Ganti dokumen${shared} dengan "${entry.title || 'SOP tanpa judul'}"? (bisa di-Undo)`)) return;
-      openInTab(doc, entry.fileName, null, entry.id);
+      openInTab(parseDocumentText(entry.json), entry.fileName, null, entry.id);
     } catch {
       alert('Entri pustaka ini rusak dan tidak bisa dibuka.');
     }
@@ -539,18 +449,11 @@
 
   /** Dokumen baru dari templat: tanggal diatur ulang ke hari ini. */
   function useTemplate(doc) {
-    if (shared && !confirm(`Ganti dokumen${shared} dengan dokumen baru dari templat? (bisa di-Undo)`)) return;
     Object.assign(doc.header, { tglPembuatan: todayIso(), tglRevisi: '', tglEfektif: todayIso() });
     openInTab(doc);
   }
 
-  // Langkah yang sedang diedit (isian baris langkah di halaman bertanda data-hot="r:<id>").
-  function onFocusIn(e) {
-    focusStep = e.target.closest?.('[data-hot^="r:"]')?.dataset.hot.slice(2) ?? null;
-  }
-
   function newDoc() {
-    if (shared && !confirm(`Ganti dokumen${shared} dengan dokumen baru? (bisa di-Undo)`)) return;
     openInTab(emptyDocument());
   }
 
@@ -566,9 +469,7 @@
 
   function loadText(text, name, handle) {
     try {
-      const doc = parseDocumentText(text);
-      if (shared && !confirm(`Ganti dokumen${shared} dengan ${name}? (bisa di-Undo)`)) return false;
-      openInTab(doc, name, handle);
+      openInTab(parseDocumentText(text), name, handle);
       notify(`Dibuka: ${name}`);
       return true;
     } catch (e) {
@@ -579,10 +480,8 @@
 
   // Jawaban AI yang ditempel: dokumen baru tanpa berkas.
   let aiOpen = $state(false);
-  let roomDocs = $state(0);
   // `revise`: jawaban menggantikan dokumen aktif (bisa di-Undo); jalur manual dipulihkan.
   function loadPasted(text, revise = false) {
-    if (shared && !confirm(`Ganti dokumen${shared} dengan jawaban AI ini?`)) return false;
     try {
       const doc = parseDocumentText(text);
       if (revise) {
@@ -689,7 +588,6 @@
   function openFacultySop(sop) {
     const opened = tabs.list.find((t) => t.remote?.id === sop.id);
     if (opened) return switchTab(opened.id);
-    if (collab.status !== 'off') return alert('Keluar dari ruang kolaborasi dulu untuk membuka SOP dari Pustaka Daring.');
     try {
       openInTab(parseDocumentText(sop.json));
     } catch {
@@ -870,8 +768,6 @@
     }
     const onHide = () => document.visibilityState === 'hidden' && flushAll();
     document.addEventListener('visibilitychange', onHide);
-    checkInvite();
-    window.addEventListener('hashchange', checkInvite);
     const onFs = () => (fullscreen = !!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onFs);
     window.addEventListener('wheel', onCtrlWheel, { passive: false });
@@ -884,7 +780,6 @@
     }
     return () => {
       document.removeEventListener('visibilitychange', onHide);
-      window.removeEventListener('hashchange', checkInvite);
       document.removeEventListener('fullscreenchange', onFs);
       window.removeEventListener('wheel', onCtrlWheel);
     };
@@ -962,8 +857,8 @@
       </div>
       <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP baru, impor SOP lama (PDF/Word), atau revisi SOP ini dengan bantuan asisten AI">🪄 Asisten AI</button>
       <span class="sep"></span>
-      <button class="icon" onclick={undo} disabled={!undoable} title="Urungkan (Ctrl+Z)">↶</button>
-      <button class="icon" onclick={redo} disabled={!redoable} title="Ulangi (Ctrl+Y)">↷</button>
+      <button class="icon" onclick={undo} disabled={!canUndo} title="Urungkan (Ctrl+Z)">↶</button>
+      <button class="icon" onclick={redo} disabled={!canRedo} title="Ulangi (Ctrl+Y)">↷</button>
       <button class="icon" class:on={findOpen} onclick={() => (findOpen = !findOpen)} title="Cari & ganti (Ctrl+F)" aria-label="Cari dan ganti">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
       </button>
@@ -978,20 +873,6 @@
         </svg>
       </button>
       <span class="sep"></span>
-      {#if collab.status !== 'off'}
-        <button class="btn ghost collab-btn" onclick={() => (collabOpen = true)} title="Ruang kolaborasi">
-          <span class="avatars">
-            <span class="avatar" style:background={collab.me.color}>{collab.me.name[0]?.toUpperCase()}</span>
-            {#each collab.peers.slice(0, 4) as p (p.id)}
-              <span class="avatar" style:background={p.color} title={p.name}>{p.name[0]?.toUpperCase()}</span>
-            {/each}
-            {#if collab.peers.length > 4}<span class="avatar more">+{collab.peers.length - 4}</span>{/if}
-          </span>
-          <span class="live" class:on={collab.online && collab.status === 'ready'}></span>
-        </button>
-      {:else}
-        <button class="btn ghost" onclick={() => (collabOpen = true)} title="Edit bersama secara real-time">Kolaborasi</button>
-      {/if}
       <button
         class="btn ghost check-btn"
         class:on={checkOpen}
@@ -1081,7 +962,7 @@
           <button class="close" onclick={() => closeTab(t.id)} title="Tutup tab (Alt+W)" aria-label="Tutup {tabTitle(t)}">×</button>
         </div>
       {/each}
-      <button class="add" onclick={() => addTab(emptyDocument())} disabled={collab.status !== 'off'} title={collab.status !== 'off' ? 'Keluar dari ruang kolaborasi untuk membuka tab baru' : 'Tab baru'} aria-label="Tab baru">+</button>
+      <button class="add" onclick={() => addTab(emptyDocument())} title="Tab baru" aria-label="Tab baru">+</button>
     </div>
     <FormatBar />
     {#if duration.text || duration.unread.length}
@@ -1108,21 +989,10 @@
   </div>
 
   <main class="workspace">
-    <section class="preview" onfocusin={onFocusIn}>
+    <section class="preview">
       {#if activeEditors && !empty}
         <div class="waiting" role="status">
           <span><strong>Sedang diedit juga oleh {activeEditors}.</strong> Yang menyimpan belakangan akan mendapat pilihan untuk menimpa atau membuat salinan.</span>
-        </div>
-      {/if}
-      {#if collab.status === 'connecting'}
-        <div class="waiting">
-          <span>
-            <strong>Menunggu dokumen ruang…</strong>
-            Dokumen akan muncul begitu tersambung dengan peserta lain yang sedang membuka ruang ini.
-          </span>
-          <button class="btn small" onclick={() => confirm('Isi ruang dengan dokumen yang sedang terbuka di sini?') && Collab.useLocalDocument()}>
-            Gunakan dokumen saya sebagai isi ruang
-          </button>
         </div>
       {/if}
       {#if docFont !== 'calibri'}
@@ -1167,7 +1037,7 @@
         </div>
       {:else}
         <div class="preview-scroll" bind:this={previewScroll}>
-          <Preview {pages} {zoom} editable={collab.status !== 'connecting'} />
+          <Preview {pages} {zoom} />
         </div>
       {/if}
     </section>
@@ -1186,8 +1056,7 @@
     </div>
   {/if}
 
-  <CollabDialog bind:open={collabOpen} bind:invite onsave={() => save(true)} />
-  <AiDialog bind:open={aiOpen} docKey={`${tabs.active}:${roomDocs}`} onpaste={loadPasted} />
+  <AiDialog bind:open={aiOpen} docKey={tabs.active} onpaste={loadPasted} />
   <PdfPreviewDialog
     bind:pdf={pdfDoc}
     ondownload={() => pdfSaved?.()}
