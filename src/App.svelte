@@ -644,7 +644,7 @@
     } catch {
       return alert('SOP ini rusak dan tidak bisa dibuka.');
     }
-    activeTab.remote = { id: sop.id, rev: sop.rev, title: sop.title, visibility: sop.visibility, canRename: Faculty.canManage(sop) };
+    activeTab.remote = { id: sop.id, rev: sop.rev, title: sop.title, visibility: sop.visibility, canRename: Faculty.canManage(sop), folder: sop.folder };
   }
 
   function onFacultyVisibility(id, visibility) {
@@ -713,8 +713,8 @@
     syncEditing();
   }
 
-  /** Mengunggah tab aktif, atau menyimpan perubahannya bila sudah tertaut. Hasil: berhasil atau tidak. */
-  async function saveToFaculty() {
+  /** Mengunggah tab aktif ke `folder`, atau menyimpan perubahannya bila sudah tertaut. Hasil: berhasil atau tidak. */
+  async function saveToFaculty(folder = null) {
     await Faculty.start();
     if (faculty.status !== 'in') {
       facultyOpen = true;
@@ -726,7 +726,7 @@
     try {
       if (!tab.remote) {
         if (isBlank(doc)) return notify('Dokumen masih kosong, belum ada yang diunggah'), false;
-        linkTab(tab, doc, await Faculty.uploadSop(doc));
+        linkTab(tab, doc, await Faculty.uploadSop(doc, undefined, folder));
         notify('Diunggah ke Pustaka Daring sebagai private.');
         return true;
       }
@@ -745,7 +745,7 @@
         if (choice === 'overwrite') r = await Faculty.saveSop(id, doc, rev, { overwrite: true });
         else {
           const title = `Salinan dari ${doc.header.namaSop || 'SOP tanpa judul'}`.slice(0, 300);
-          const copy = await Faculty.uploadSop(doc, title);
+          const copy = await Faculty.uploadSop(doc, title, tab.remote.folder);
           Faculty.setEditing(id, false);
           linkTab(tab, doc, copy);
           notify('Disimpan sebagai salinan private.');
@@ -1201,8 +1201,8 @@
     openIds={openRemoteIds}
     cansave={!empty && !activeTab?.remote}
     onopen={openFacultySop}
-    onupload={async () => {
-      if (await saveToFaculty()) facultyOpen = false;
+    onupload={async (folder) => {
+      if (await saveToFaculty(folder)) facultyOpen = false;
     }}
     onvisibility={onFacultyVisibility}
     onrenamed={onFacultyRenamed}

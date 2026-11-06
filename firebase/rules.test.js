@@ -347,6 +347,88 @@ describe('ruang penyimpanan', () => {
   });
 });
 
+describe('folder', () => {
+  const newFolder = (db, u, id, patch = {}) =>
+    setDoc(doc(db, 'folders', id), { name: 'Akademik', parent: null, createdBy: u, createdByName: USERS[u].name, createdAt: serverTimestamp(), ...patch });
+
+  it('semua anggota bisa membuat folder dan subfolder, termasuk di folder orang lain', async () => {
+    await assertSucceeds(newFolder(as('ali'), 'ali', 'f1'));
+    await assertSucceeds(newFolder(as('bud'), 'bud', 'f2', { parent: 'f1' }));
+    await assertSucceeds(newFolder(as('adm'), 'adm', 'f3', { parent: 'f2' }));
+  });
+  it('bukan anggota tidak bisa membuat atau melihat folder', async () => {
+    await newFolder(as('ali'), 'ali', 'f1');
+    await assertFails(newFolder(as('out'), 'out', 'x'));
+    await assertFails(getDoc(doc(as('out'), 'folders/f1')));
+    await assertFails(getDocs(collection(as('out'), 'folders')));
+    await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'folders')));
+  });
+  it('semua anggota bisa melihat daftar folder', async () => {
+    await newFolder(as('ali'), 'ali', 'f1');
+    assert.equal((await assertSucceeds(getDocs(collection(as('bud'), 'folders')))).size, 1);
+  });
+  it('tidak bisa mengaku sebagai pembuat lain atau memakai isian tidak sah', async () => {
+    await assertFails(newFolder(as('bud'), 'ali', 'x'));
+    await assertFails(newFolder(as('ali'), 'ali', 'x', { createdAt: Timestamp.fromMillis(0) }));
+    await assertFails(newFolder(as('ali'), 'ali', 'x', { name: '' }));
+    await assertFails(newFolder(as('ali'), 'ali', 'x', { name: '  spasi ' }));
+    await assertFails(newFolder(as('ali'), 'ali', 'x', { name: 'a'.repeat(121) }));
+    await assertFails(newFolder(as('ali'), 'ali', 'x', { parent: 5 }));
+    await assertFails(newFolder(as('ali'), 'ali', 'x', { lain: 1 }));
+  });
+  it('ubah nama, pindah, dan hapus hanya pembuat dan admin', async () => {
+    await newFolder(as('ali'), 'ali', 'f1');
+    await newFolder(as('ali'), 'ali', 'f2');
+    await assertFails(updateDoc(doc(as('bud'), 'folders/f1'), { name: 'Baru' }));
+    await assertFails(updateDoc(doc(as('bud'), 'folders/f1'), { parent: 'f2' }));
+    await assertFails(deleteDoc(doc(as('bud'), 'folders/f1')));
+    await assertSucceeds(updateDoc(doc(as('ali'), 'folders/f1'), { name: 'Baru', parent: 'f2' }));
+    await assertSucceeds(updateDoc(doc(as('adm'), 'folders/f1'), { name: 'Baru lagi', parent: null }));
+    await assertSucceeds(deleteDoc(doc(as('adm'), 'folders/f1')));
+    await assertSucceeds(deleteDoc(doc(as('ali'), 'folders/f2')));
+  });
+  it('folder tidak bisa menjadi induk dirinya, dan pembuatnya tidak bisa diubah', async () => {
+    await newFolder(as('ali'), 'ali', 'f1');
+    await assertFails(updateDoc(doc(as('ali'), 'folders/f1'), { parent: 'f1' }));
+    await assertFails(updateDoc(doc(as('adm'), 'folders/f1'), { createdBy: 'adm' }));
+  });
+  it('SOP bisa diunggah langsung ke folder, dengan atau tanpa field folder', async () => {
+    await assertSucceeds(create(as('ali'), 'ali', 'a', '{"a":1}', { folder: 'f1' }));
+    await assertSucceeds(create(as('ali'), 'ali', 'b', '{"a":1}', { folder: null }));
+    await assertSucceeds(create(as('ali'), 'ali', 'c'));
+    await assertFails(create(as('ali'), 'ali', 'd', '{"a":1}', { folder: 5 }));
+    await assertFails(create(as('ali'), 'ali', 'e', '{"a":1}', { folder: 'x'.repeat(65) }));
+  });
+  it('SOP hanya bisa dipindahkan oleh pembuat dan admin, termasuk SOP lama tanpa field folder', async () => {
+    await given('ali', 's', 'public');
+    await assertFails(updateDoc(doc(as('bud'), 'sops/s'), { folder: 'f1' }));
+    await assertSucceeds(updateDoc(doc(as('ali'), 'sops/s'), { folder: 'f1' }));
+    await assertSucceeds(updateDoc(doc(as('adm'), 'sops/s'), { folder: 'f2' }));
+    await assertSucceeds(updateDoc(doc(as('ali'), 'sops/s'), { folder: null }));
+    await assertFails(updateDoc(doc(as('ali'), 'sops/s'), { folder: 5 }));
+  });
+  it('pindah folder tidak bisa sekaligus mengubah data lain, dan SOP terhapus tidak bisa dipindahkan', async () => {
+    await given('ali', 's', 'public');
+    await assertFails(updateDoc(doc(as('ali'), 'sops/s'), { folder: 'f1', title: 'Lain' }));
+    await assertFails(updateDoc(doc(as('ali'), 'sops/s'), { folder: 'f1', visibility: 'private' }));
+    await toBin(as('ali'), 'ali', 's');
+    await assertFails(updateDoc(doc(as('ali'), 'sops/s'), { folder: 'f1' }));
+  });
+  it('menyimpan isi mempertahankan folder dan tidak bisa memindahkannya', async () => {
+    await create(as('ali'), 'ali', 's', '{"a":1}', { folder: 'f1' });
+    await updateDoc(doc(as('ali'), 'sops/s'), { visibility: 'public' });
+    const cur = await read('s');
+    await assertFails(save(as('bud'), 'bud', 's', cur, '{"a":2}', { folder: 'f2' }));
+    await assertSucceeds(save(as('bud'), 'bud', 's', cur, '{"a":2}'));
+    assert.equal((await read('s')).folder, 'f1');
+  });
+  it('folder tidak membuka akses: SOP private di folder orang lain tetap tertutup', async () => {
+    await newFolder(as('bud'), 'bud', 'f1');
+    await create(as('ali'), 'ali', 's', '{"a":1}', { folder: 'f1' });
+    await assertFails(getDoc(doc(as('bud'), 'sops/s')));
+  });
+});
+
 describe('sedang diedit', () => {
   const mark = (db, sopId, u, patch = {}) =>
     setDoc(doc(db, 'editing', `${sopId}_${u}`), { sopId, uid: u, name: USERS[u].name, at: serverTimestamp(), ...patch });

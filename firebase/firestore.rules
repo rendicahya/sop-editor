@@ -3,7 +3,8 @@ rules_version = '2';
 // Pustaka Daring. Satu-satunya penjaga data: aplikasi berjalan di browser, jadi semua batasan harus ada di sini.
 //
 //   members/{email}            { role: 'member' | 'admin', addedBy, addedAt }
-//   sops/{id}                  isi terkini beserta metadata
+//   folders/{id}               { name, parent, createdBy, createdByName, createdAt }: terlihat semua anggota
+//   sops/{id}                  isi terkini beserta metadata; `folder` berisi id folder (tidak ada/null = tingkat utama)
 //   sops/{id}/versions/{rev}   isi yang tertimpa, tidak bisa diubah
 //   editing/{sopId_uid}        keterangan "sedang diedit" (hanya info, bukan kunci)
 //   stats/usage                { bytes, limit, lastSop }: hanya admin yang bisa membaca
@@ -78,11 +79,16 @@ service cloud.firestore {
     function changed() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
+    // Keberadaan folder sengaja tidak diperiksa: folder yang sudah dihapus dibaca aplikasi sebagai tingkat utama.
+    function validFolderRef(v) {
+      return v == null || (v is string && v.size() <= 64);
+    }
 
     function isValidCreate(d) {
       return isMember()
-        && d.keys().hasOnly(['title', 'nomor', 'json', 'size', 'totalBytes', 'rev', 'visibility', 'createdBy', 'createdByName', 'createdByEmail', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName', 'deletedAt', 'deletedBy'])
+        && d.keys().hasOnly(['title', 'nomor', 'json', 'size', 'totalBytes', 'rev', 'visibility', 'folder', 'createdBy', 'createdByName', 'createdByEmail', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName', 'deletedAt', 'deletedBy'])
         && validContent(d)
+        && validFolderRef(d.get('folder', null))
         && d.visibility == 'private'
         && d.rev == 1
         && d.totalBytes == d.size
@@ -116,6 +122,13 @@ service cloud.firestore {
         && isMember()
         && isOwnerOrAdmin(r);
     }
+    function isFolderMove(d, r) {
+      return changed().hasOnly(['folder'])
+        && validFolderRef(d.folder)
+        && r.deletedBy == null
+        && isMember()
+        && isOwnerOrAdmin(r);
+    }
     function isMoveToBin(d, r) {
       return changed().hasOnly(['deletedAt', 'deletedBy'])
         && r.deletedBy == null
@@ -138,6 +151,7 @@ service cloud.firestore {
       allow create: if isValidCreate(request.resource.data);
       allow update: if isContentSave(id, request.resource.data, resource.data)
         || isVisibilityChange(request.resource.data, resource.data)
+        || isFolderMove(request.resource.data, resource.data)
         || isMoveToBin(request.resource.data, resource.data)
         || isRestore(request.resource.data, resource.data);
       allow delete: if isMember()
@@ -169,6 +183,30 @@ service cloud.firestore {
           && (parent().deletedBy == uid() || isAdmin())
           && !existsAfter(sopPath(id));
       }
+    }
+
+    // ---- Folder ----
+    // Semua anggota bisa membuat folder di mana saja. Ubah nama, pindah, dan hapus: pembuat dan admin.
+    function validFolder(d) {
+      return d.name is string
+        && d.name.size() > 0 && d.name.size() <= 120
+        && d.name == d.name.trim()
+        && validFolderRef(d.parent);
+    }
+    match /folders/{id} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && request.resource.data.keys().hasOnly(['name', 'parent', 'createdBy', 'createdByName', 'createdAt'])
+        && validFolder(request.resource.data)
+        && request.resource.data.createdBy == uid()
+        && request.resource.data.createdByName is string && request.resource.data.createdByName.size() <= 120
+        && request.resource.data.createdAt == request.time;
+      allow update: if isMember()
+        && isOwnerOrAdmin(resource.data)
+        && changed().hasOnly(['name', 'parent'])
+        && validFolder(request.resource.data)
+        && request.resource.data.parent != id;
+      allow delete: if isMember() && isOwnerOrAdmin(resource.data);
     }
 
     // ---- "Sedang diedit" ----

@@ -4,7 +4,7 @@
   import { faculty, isAdmin, canManage, canEdit } from './faculty.svelte.js';
 
   /**
-   * openIds: id SOP yang sedang terbuka di tab. onopen(sop), onupload(): di App.
+   * openIds: id SOP yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
    * onvisibility(id, visibility), onrenamed(id, hasil renameSop): tab yang terbuka mengikuti perubahan.
    * onbinned(id): tab SOP yang dihapus ditutup; hasilnya true bila tab dipertahankan karena ada perubahan belum tersimpan.
    */
@@ -14,6 +14,9 @@
   let view = $state('sops'); // sops | bin | admin
   let live = $state([]);
   let bin = $state([]);
+  let folders = $state([]);
+  let folderId = $state(null); // folder yang sedang dibuka; null = tingkat utama
+  let moving = $state(null); // { id, isFolder, target }: baris yang sedang memilih tujuan pindah
   let query = $state('');
   let busy = $state(false);
   let loadError = $state('');
@@ -48,9 +51,10 @@
     busy = true;
     loadError = '';
     try {
-      const r = await F.listSops();
+      const [r, f] = await Promise.all([F.listSops(), F.listFolders()]);
       live = r.live.map(withText);
       bin = r.bin.map(withText);
+      folders = f;
     } catch (e) {
       loadError = e.message;
     } finally {
@@ -63,8 +67,115 @@
     const q = query.trim().toLowerCase();
     return !q || q.split(/\s+/).every((w) => s.text.includes(w));
   };
-  const shownLive = $derived(live.filter(matches));
+  const searching = $derived(!!query.trim());
   const shownBin = $derived(bin.filter(matches));
+
+  // ---- Folder ----
+  const byId = $derived(new Map(folders.map((f) => [f.id, f])));
+  // Induk yang sudah dihapus, atau putaran akibat dua orang memindahkan bersamaan, dibaca sebagai tingkat
+  // utama. Aturan server tidak bisa memeriksa keduanya, dan tanpa ini foldernya tidak bisa dicapai.
+  const parents = $derived.by(() => {
+    const out = new Map();
+    for (const f of folders) {
+      const seen = new Set();
+      let p = f.parent;
+      while (p && p !== f.id && byId.has(p) && !seen.has(p)) {
+        seen.add(p);
+        p = byId.get(p).parent;
+      }
+      out.set(f.id, p === f.id || !byId.has(f.parent) ? null : f.parent);
+    }
+    return out;
+  });
+  const folderOf = (s) => (byId.has(s.folder) ? s.folder : null);
+  const here = $derived(byId.has(folderId) ? folderId : null);
+  const byName = (a, b) => a.name.localeCompare(b.name, 'id');
+  const childrenOf = (id) => folders.filter((f) => parents.get(f.id) === id).sort(byName);
+
+  /** Folder dari tingkat teratas sampai `id`. */
+  function pathOf(id) {
+    const path = [];
+    for (let f = byId.get(id); f; f = byId.get(parents.get(f.id))) path.unshift(f);
+    return path;
+  }
+  const pathText = (id) => pathOf(id).map((f) => f.name).join(' / ');
+  const crumbs = $derived(pathOf(here));
+
+  const shownFolders = $derived(
+    searching ? folders.filter((f) => query.trim().toLowerCase().split(/\s+/).every((w) => f.name.toLowerCase().includes(w))).sort(byName) : childrenOf(here)
+  );
+  const shownLive = $derived(live.filter((s) => (searching ? matches(s) : folderOf(s) === here)));
+
+  /** Semua folder berurutan menurut pohonnya, untuk pilihan tujuan pindah. */
+  const tree = $derived.by(() => {
+    const out = [];
+    const walk = (id, depth) => {
+      for (const f of childrenOf(id)) {
+        out.push({ ...f, depth });
+        walk(f.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  });
+  // Folder tidak bisa dipindahkan ke dirinya sendiri atau ke dalam subfoldernya.
+  const moveTargets = $derived(moving?.isFolder ? tree.filter((f) => !pathOf(f.id).some((a) => a.id === moving.id)) : tree);
+
+  function enter(id) {
+    folderId = id;
+    query = '';
+    history = null;
+    moving = null;
+  }
+
+  const nameTaken = (name, parent, except) =>
+    folders.some((f) => f.id !== except && parents.get(f.id) === parent && f.name.toLowerCase() === name.toLowerCase());
+  const askName = (label, current = '') => prompt(label, current)?.trim().slice(0, 120).trim();
+  const takenMessage = (name) => `Sudah ada folder bernama "${name}" di lokasi ini.`;
+
+  function newFolder() {
+    const name = askName('Nama folder baru:');
+    if (!name) return;
+    if (nameTaken(name, here)) return alert(takenMessage(name));
+    act(() => F.createFolder(name, here), 'Folder dibuat');
+  }
+
+  function renameFolder(f) {
+    const name = askName('Nama folder:', f.name);
+    if (!name || name === f.name) return;
+    if (nameTaken(name, parents.get(f.id), f.id)) return alert(takenMessage(name));
+    act(() => F.updateFolder(f.id, { name }), 'Nama folder diubah');
+  }
+
+  // Yang dihitung hanya isi yang terlihat. SOP private milik orang lain di folder ini akan tampil di tingkat
+  // utama bagi pemiliknya setelah foldernya dihapus, jadi isinya tidak hilang.
+  function removeFolder(f) {
+    const subs = childrenOf(f.id).length;
+    const sops = live.filter((s) => folderOf(s) === f.id).length;
+    if (subs || sops) {
+      const isi = [subs && `${subs} subfolder`, sops && `${sops} SOP`].filter(Boolean).join(' dan ');
+      return alert(`Folder "${f.name}" masih berisi ${isi}. Pindahkan isinya dulu. SOP milik orang lain hanya bisa dipindahkan oleh pembuatnya atau admin.`);
+    }
+    if (confirm(`Hapus folder "${f.name}"?`)) act(() => F.deleteFolder(f.id), 'Folder dihapus');
+  }
+
+  function toggleMove(id, isFolder, target) {
+    history = null;
+    moving = moving?.id === id ? null : { id, isFolder, target };
+  }
+
+  function submitMove(e, item) {
+    e.preventDefault();
+    const { id, isFolder, target } = moving;
+    moving = null;
+    if (isFolder) {
+      if (target === parents.get(id)) return;
+      if (nameTaken(item.name, target, id)) return alert(takenMessage(item.name));
+      act(() => F.updateFolder(id, { parent: target }), 'Folder dipindahkan');
+    } else if (target !== folderOf(item)) {
+      act(() => F.moveSop(id, target), 'SOP dipindahkan');
+    }
+  }
 
   async function act(fn, done) {
     try {
@@ -117,6 +228,7 @@
   }
 
   async function toggleHistory(s) {
+    moving = null;
     if (history?.id === s.id) return (history = null);
     try {
       history = { id: s.id, versions: await F.listVersions(s.id) };
@@ -163,6 +275,22 @@
   const namesEditing = (s) => (faculty.editing[s.id] ?? []).map((m) => m.name).join(', ');
 </script>
 
+{#snippet movePanel(item, isFolder)}
+  <form class="move" onsubmit={(e) => submitMove(e, item)}>
+    <label>
+      <span>Pindahkan ke</span>
+      <select bind:value={moving.target}>
+        <option value={null}>Utama</option>
+        {#each moveTargets as t (t.id)}
+          <option value={t.id}>{'   '.repeat(t.depth + 1)}{t.name}</option>
+        {/each}
+      </select>
+    </label>
+    <button class="btn small">Pindahkan</button>
+    <button type="button" class="btn small" onclick={() => (moving = null)}>Batal</button>
+  </form>
+{/snippet}
+
 <dialog bind:this={dialog} class="dialog" onclose={() => (open = false)}>
   <header>
     <h2>Pustaka Daring</h2>
@@ -188,7 +316,42 @@
     {#if loadError}<p class="error">{loadError} <button class="link" onclick={refresh}>Coba lagi</button></p>{/if}
 
     {#if view === 'sops'}
+      <div class="crumbs">
+        {#if searching}
+          <span class="muted">Hasil pencarian di semua folder</span>
+        {:else}
+          <nav aria-label="Lokasi folder">
+            <button class="crumb" aria-current={here ? undefined : 'location'} onclick={() => enter(null)}>Utama</button>
+            {#each crumbs as c (c.id)}
+              <span class="sep" aria-hidden="true">/</span>
+              <button class="crumb" aria-current={c.id === here ? 'location' : undefined} onclick={() => enter(c.id)}>{c.name}</button>
+            {/each}
+          </nav>
+          <button class="btn small" onclick={newFolder}>Folder baru</button>
+        {/if}
+      </div>
       <ul class="list">
+        {#each shownFolders as f (f.id)}
+          {@const subs = childrenOf(f.id).length}
+          {@const sops = live.filter((s) => folderOf(s) === f.id).length}
+          {@const parent = parents.get(f.id)}
+          <li>
+            <button class="main" onclick={() => enter(f.id)}>
+              <strong><span class="ico" aria-hidden="true">📁</span>{f.name}</strong>
+              <small>
+                {[searching && parent && `di ${pathText(parent)}`, subs && `${subs} subfolder`, `${sops} SOP`, `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}
+              </small>
+            </button>
+            {#if canManage(f)}
+              <span class="acts" role="group" aria-label="Tindakan folder">
+                <button class="btn small" class:on={moving?.id === f.id} aria-expanded={moving?.id === f.id} onclick={() => toggleMove(f.id, true, parent)}>Pindahkan</button>
+                <button class="btn small" onclick={() => renameFolder(f)}>Ubah nama</button>
+                <button class="btn small danger" onclick={() => removeFolder(f)}>Hapus</button>
+              </span>
+            {/if}
+            {#if moving?.id === f.id}{@render movePanel(f, true)}{/if}
+          </li>
+        {/each}
         {#each shownLive as s (s.id)}
           {@const manage = canManage(s)}
           {@const editors = namesEditing(s)}
@@ -200,7 +363,7 @@
                 {#if isOpen(s)}<em>terbuka di tab</em>{/if}
               </strong>
               <small title={s.createdByEmail}>
-                {[s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `diubah ${s.updatedByName}, ${when(s.updatedAt)}`].filter(Boolean).join(' · ')}
+                {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `diubah ${s.updatedByName}, ${when(s.updatedAt)}`].filter(Boolean).join(' · ')}
               </small>
               {#if editors}<small class="editing">✎ Sedang diedit oleh {editors}</small>{/if}
             </button>
@@ -209,6 +372,7 @@
               <button class="btn small" class:on={history?.id === s.id} onclick={() => toggleHistory(s)} aria-expanded={history?.id === s.id}>Riwayat</button>
               {#if manage}
                 <button class="btn small" onclick={() => toggleVisibility(s)}>{s.visibility === 'public' ? 'Jadikan private' : 'Jadikan public'}</button>
+                <button class="btn small" class:on={moving?.id === s.id} aria-expanded={moving?.id === s.id} onclick={() => toggleMove(s.id, false, folderOf(s))}>Pindahkan</button>
                 <button class="btn small" onclick={() => rename(s)}>Ubah nama</button>
                 <button class="btn small danger" title="Pindahkan ke Recycle bin" onclick={() => moveToBin(s)}>Hapus</button>
               {/if}
@@ -225,13 +389,15 @@
                 {/each}
               </div>
             {/if}
+            {#if moving?.id === s.id}{@render movePanel(s, false)}{/if}
           </li>
-        {:else}
-          <li class="empty">{busy ? 'Memuat…' : query.trim() ? 'Tidak ada yang cocok.' : 'Belum ada SOP yang bisa Anda lihat.'}</li>
         {/each}
+        {#if !shownFolders.length && !shownLive.length}
+          <li class="empty">{busy ? 'Memuat…' : searching ? 'Tidak ada yang cocok.' : here ? 'Folder ini kosong.' : 'Belum ada SOP yang bisa Anda lihat.'}</li>
+        {/if}
       </ul>
       <footer>
-        <button class="btn" disabled={!cansave} onclick={() => onupload()}>Unggah dokumen ini ke Pustaka Daring</button>
+        <button class="btn" disabled={!cansave} onclick={() => onupload(here)}>{here ? `Unggah dokumen ini ke folder ${byId.get(here).name}` : 'Unggah dokumen ini ke Pustaka Daring'}</button>
       </footer>
     {:else if view === 'bin'}
       <ul class="list">
@@ -396,6 +562,70 @@
     opacity: 0.8;
   }
   .bar input {
+    flex: 1;
+    min-width: 0;
+  }
+  .crumbs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 1.9rem;
+    margin-bottom: 0.45rem;
+    font-size: 0.85rem;
+  }
+  .crumbs nav {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.15rem 0.3rem;
+  }
+  .crumb {
+    border: 0;
+    background: none;
+    padding: 0.1rem 0.2rem;
+    font: inherit;
+    color: var(--accent);
+    cursor: pointer;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+  .crumb:hover {
+    text-decoration: underline;
+  }
+  .crumb[aria-current] {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .sep {
+    color: var(--muted);
+  }
+  .ico {
+    margin-right: 0.35rem;
+  }
+  .move {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    background: var(--surface-2);
+    font-size: 0.82rem;
+  }
+  .move label {
+    flex: 1;
+    min-width: 14rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .move span {
+    flex: none;
+  }
+  .move select {
     flex: 1;
     min-width: 0;
   }

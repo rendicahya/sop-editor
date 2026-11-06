@@ -198,10 +198,37 @@ export async function listVersions(id) {
   return snap.docs.map((d) => ({ ...d.data(), savedAt: ms(d.data().savedAt) })).sort((a, b) => b.rev - a.rev);
 }
 
+// ---- Folder ----
+
+export async function listFolders() {
+  const { F, db } = await load();
+  const snap = await F.getDocsFromServer(F.collection(db, 'folders'));
+  return snap.docs.map((d) => ({ ...d.data({ serverTimestamps: 'estimate' }), id: d.id, parent: d.data().parent ?? null }));
+}
+
+const folderWrite = (p) => p.catch((e) => { throw new Error(readable(e)); });
+
+export async function createFolder(name, parent) {
+  const { F, db } = await load();
+  const { uid, name: createdByName } = faculty.user;
+  await folderWrite(F.addDoc(F.collection(db, 'folders'), { name, parent, createdBy: uid, createdByName, createdAt: F.serverTimestamp() }));
+}
+
+/** data: { name } dan/atau { parent }. */
+export async function updateFolder(id, data) {
+  const { F, db } = await load();
+  await folderWrite(F.updateDoc(F.doc(db, 'folders', id), data));
+}
+
+export async function deleteFolder(id) {
+  const { F, db } = await load();
+  await folderWrite(F.deleteDoc(F.doc(db, 'folders', id)));
+}
+
 // ---- Menulis ----
 
 /** Mengunggah sebagai SOP baru: selalu private, dan akun ini tercatat sebagai pembuatnya. */
-export async function uploadSop(doc, title) {
+export async function uploadSop(doc, title, folder = null) {
   const { F, db } = await load();
   const { uid, email, name } = faculty.user;
   const c = cloudJson(doc, title);
@@ -209,13 +236,13 @@ export async function uploadSop(doc, title) {
   const b = F.writeBatch(db);
   const now = F.serverTimestamp();
   b.set(ref, {
-    ...c, totalBytes: c.size, rev: 1, visibility: 'private',
+    ...c, totalBytes: c.size, rev: 1, visibility: 'private', folder,
     createdBy: uid, createdByName: name, createdByEmail: email, createdAt: now,
     updatedAt: now, updatedBy: uid, updatedByName: name, deletedAt: null, deletedBy: null
   });
   b.update(F.doc(db, 'stats/usage'), { bytes: F.increment(c.size), lastSop: ref.id });
   await b.commit().catch(failed);
-  return { id: ref.id, rev: 1, title: c.title, visibility: 'private', canRename: true };
+  return { id: ref.id, rev: 1, title: c.title, visibility: 'private', canRename: true, folder };
 }
 
 /** Isi lama pindah ke riwayat dan isi baru ditulis dalam satu transaksi (lihat isContentSave di aturan). */
@@ -290,13 +317,14 @@ export async function restoreVersion(id, version) {
 }
 
 /** Hasil duplikat berdiri sendiri: private, dan pembuatnya adalah akun ini. */
-export const duplicateSop = (sop) => uploadSop(JSON.parse(sop.json), `Salinan dari ${sop.title || 'SOP tanpa judul'}`.slice(0, 300));
+export const duplicateSop = (sop) => uploadSop(JSON.parse(sop.json), `Salinan dari ${sop.title || 'SOP tanpa judul'}`.slice(0, 300), sop.folder);
 
 async function patch(id, data) {
   const { F, db } = await load();
   await F.updateDoc(F.doc(db, 'sops', id), data).catch(failed);
 }
 export const setVisibility = (id, visibility) => patch(id, { visibility });
+export const moveSop = (id, folder) => patch(id, { folder });
 export async function moveToBin(id) {
   const { F } = await load();
   await patch(id, { deletedAt: F.serverTimestamp(), deletedBy: faculty.user.uid });

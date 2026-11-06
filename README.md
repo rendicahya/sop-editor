@@ -152,9 +152,12 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
 | Tindakan | SOP public | SOP private |
 | --- | --- | --- |
 | Melihat, mengedit isi, menduplikat | Semua anggota | Pembuat dan admin |
-| Mengubah nama, menghapus, mengubah private/public | Pembuat dan admin | Pembuat dan admin |
+| Mengubah nama, memindahkan ke folder lain, menghapus, mengubah private/public | Pembuat dan admin | Pembuat dan admin |
 
-- SOP baru selalu private, dan pembuatnya tercatat permanen. Hasil duplikat menjadi SOP private milik yang menduplikat.
+- SOP baru selalu private, dan pembuatnya tercatat permanen. Hasil duplikat menjadi SOP private milik yang menduplikat, di folder yang sama.
+- **Folder** bertingkat tanpa batas kedalaman. Semua anggota bisa membuat folder dan subfolder di mana saja, sedangkan mengubah nama, memindahkan, dan menghapus folder hanya untuk pembuatnya dan admin. Dokumen diunggah ke folder yang sedang dibuka, dan pencarian mencakup semua folder.
+- Nama folder terlihat oleh semua anggota, tetapi folder tidak membuka akses: SOP private di dalamnya tetap hanya untuk pembuat dan admin.
+- Folder hanya bisa dihapus bila kosong. SOP yang foldernya sudah tidak ada, termasuk SOP private orang lain yang tidak terlihat oleh penghapus folder, tampil di tingkat utama.
 - SOP yang dihapus masuk **Recycle bin**. Pengguna hanya melihat, memulihkan, dan menghapus permanen yang dia hapus sendiri; admin menangani semuanya.
 - Setiap penyimpanan membuat versi di **Riwayat**. Bila SOP sudah diubah orang lain, penyimpan memilih: timpa, simpan sebagai salinan private, atau batal.
 - **Sedang diedit** hanya pemberitahuan, bukan kunci. Keterangan dari browser yang tertutup hilang sendiri setelah sekitar 5 menit.
@@ -200,7 +203,7 @@ Struktur utama:
 | `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan per tab (id tab = id entri), daftar, hapus |
 | `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, label, duplikat |
 | `src/lib/faculty.svelte.js` | Pustaka Daring: login, baca/tulis Firestore, riwayat, keterangan sedang diedit; Firebase dimuat saat pertama dipakai |
-| `src/lib/FacultyDialog.svelte` | Dialog Pustaka Daring: daftar, Recycle bin, tab Admin |
+| `src/lib/FacultyDialog.svelte` | Dialog Pustaka Daring: folder, daftar, Recycle bin, tab Admin |
 | `src/lib/FacultyConflict.svelte` | Pilihan saat penyimpanan bertabrakan |
 | `firebase/firestore.rules` | Aturan akses Pustaka Daring, diuji oleh `firebase/rules.test.js` di emulator |
 | `src/lib/xlsx.js` | Ekspor XLSX: mengisi template SOP (gaya, tema, logo), diagram sebagai shape DrawingML |
