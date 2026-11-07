@@ -1,22 +1,31 @@
 <script>
+  import { SvelteSet } from 'svelte/reactivity';
   import { haystack } from './library.js';
   import * as F from './faculty.svelte.js';
-  import { faculty, isAdmin, canManage, canEdit } from './faculty.svelte.js';
+  import { faculty, canManage, canEdit } from './faculty.svelte.js';
+  import AccessDialog from './AccessDialog.svelte';
+  import ContextMenu from './ContextMenu.svelte';
+  import Icon from './Icon.svelte';
+  import { tips } from './tips.js';
 
   /**
    * openIds: id SOP yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
-   * onvisibility(id, visibility), onrenamed(id, hasil renameSop): tab yang terbuka mengikuti perubahan.
+   * onloaded(live): daftar baru dimuat, tab yang terbuka mengikuti hak akses terbaru. onrenamed(id, hasil renameSop): tab mengikuti.
    * onbinned(id): tab SOP yang dihapus ditutup; hasilnya true bila tab dipertahankan karena ada perubahan belum tersimpan.
    */
-  let { open = $bindable(false), openIds = [], cansave = true, onopen, onupload, onvisibility, onrenamed, onbinned, onnotify } = $props();
+  let { open = $bindable(false), openIds = [], cansave = true, onopen, onupload, onloaded, onrenamed, onbinned, onnotify } = $props();
 
-  let dialog;
+  let dialog = $state();
+  let moveDialog;
   let view = $state('sops'); // sops | bin | admin
   let live = $state([]);
   let bin = $state([]);
   let folders = $state([]);
-  let folderId = $state(null); // folder yang sedang dibuka; null = tingkat utama
-  let moving = $state(null); // { id, isFolder, target }: baris yang sedang memilih tujuan pindah
+  let folderId = $state(null); // folder yang dipilih; null = tingkat utama
+  const expanded = new SvelteSet();
+  let moving = $state(null); // { item, isFolder, target }
+  let accessTarget = $state(null);
+  let menu = $state(null); // { x, y, items }
   let query = $state('');
   let busy = $state(false);
   let loadError = $state('');
@@ -47,50 +56,44 @@
     if (open && faculty.status === 'in' && view === 'admin') refreshAdmin();
   });
 
+  $effect(() => {
+    if (moving && !moveDialog.open) moveDialog.showModal();
+    else if (!moving && moveDialog.open) moveDialog.close();
+  });
+
   async function refresh() {
     busy = true;
     loadError = '';
     try {
       const [r, f] = await Promise.all([F.listSops(), F.listFolders()]);
+      // Penyebaran hak akses tidak boleh menghalangi tampilnya daftar; yang gagal dicoba lagi saat dimuat berikutnya.
+      await F.reconcileAccess(f, [...r.live, ...r.bin]).catch(() => {});
       live = r.live.map(withText);
       bin = r.bin.map(withText);
       folders = f;
+      onloaded(r.live);
     } catch (e) {
       loadError = e.message;
     } finally {
       busy = false;
     }
   }
-  const withText = (s) => ({ ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName, s.visibility] }) });
+  const withText = (s) => ({ ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName] }) });
 
-  const matches = (s) => {
-    const q = query.trim().toLowerCase();
-    return !q || q.split(/\s+/).every((w) => s.text.includes(w));
-  };
-  const searching = $derived(!!query.trim());
+  const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
+  const matches = (s) => words.every((w) => s.text.includes(w));
+  const searching = $derived(words.length > 0);
   const shownBin = $derived(bin.filter(matches));
 
   // ---- Folder ----
   const byId = $derived(new Map(folders.map((f) => [f.id, f])));
-  // Induk yang sudah dihapus, atau putaran akibat dua orang memindahkan bersamaan, dibaca sebagai tingkat
-  // utama. Aturan server tidak bisa memeriksa keduanya, dan tanpa ini foldernya tidak bisa dicapai.
-  const parents = $derived.by(() => {
-    const out = new Map();
-    for (const f of folders) {
-      const seen = new Set();
-      let p = f.parent;
-      while (p && p !== f.id && byId.has(p) && !seen.has(p)) {
-        seen.add(p);
-        p = byId.get(p).parent;
-      }
-      out.set(f.id, p === f.id || !byId.has(f.parent) ? null : f.parent);
-    }
-    return out;
-  });
+  const parents = $derived(F.resolveParents(folders));
   const folderOf = (s) => (byId.has(s.folder) ? s.folder : null);
   const here = $derived(byId.has(folderId) ? folderId : null);
   const byName = (a, b) => a.name.localeCompare(b.name, 'id');
   const childrenOf = (id) => folders.filter((f) => parents.get(f.id) === id).sort(byName);
+  /** Menambah isi perlu hak edit atas foldernya; tingkat utama terbuka untuk semua anggota. */
+  const canAdd = (id) => !id || (byId.has(id) && canEdit(byId.get(id)));
 
   /** Folder dari tingkat teratas sampai `id`. */
   function pathOf(id) {
@@ -101,31 +104,38 @@
   const pathText = (id) => pathOf(id).map((f) => f.name).join(' / ');
   const crumbs = $derived(pathOf(here));
 
-  const shownFolders = $derived(
-    searching ? folders.filter((f) => query.trim().toLowerCase().split(/\s+/).every((w) => f.name.toLowerCase().includes(w))).sort(byName) : childrenOf(here)
-  );
+  const shownFolders = $derived(searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))).sort(byName) : []);
   const shownLive = $derived(live.filter((s) => (searching ? matches(s) : folderOf(s) === here)));
+  const counts = $derived.by(() => {
+    const out = new Map();
+    for (const s of live) out.set(folderOf(s), (out.get(folderOf(s)) ?? 0) + 1);
+    return out;
+  });
 
   /** Semua folder berurutan menurut pohonnya, untuk pilihan tujuan pindah. */
-  const tree = $derived.by(() => {
+  const flatTree = $derived.by(() => {
     const out = [];
     const walk = (id, depth) => {
       for (const f of childrenOf(id)) {
-        out.push({ ...f, depth });
+        out.push({ id: f.id, name: f.name, depth });
         walk(f.id, depth + 1);
       }
     };
     walk(null, 0);
     return out;
   });
-  // Folder tidak bisa dipindahkan ke dirinya sendiri atau ke dalam subfoldernya.
-  const moveTargets = $derived(moving?.isFolder ? tree.filter((f) => !pathOf(f.id).some((a) => a.id === moving.id)) : tree);
+  // Tujuan harus boleh diedit. Folder tidak bisa dipindahkan ke dirinya sendiri atau ke dalam subfoldernya.
+  const moveTargets = $derived(flatTree.filter((t) => canAdd(t.id) && !(moving?.isFolder && pathOf(t.id).some((a) => a.id === moving.item.id))));
 
-  function enter(id) {
+  function select(id) {
+    view = 'sops';
     folderId = id;
     query = '';
     history = null;
-    moving = null;
+    for (const f of pathOf(id)) expanded.add(f.id);
+  }
+  function toggle(id) {
+    if (!expanded.delete(id)) expanded.add(id);
   }
 
   const nameTaken = (name, parent, except) =>
@@ -133,47 +143,46 @@
   const askName = (label, current = '') => prompt(label, current)?.trim().slice(0, 120).trim();
   const takenMessage = (name) => `Sudah ada folder bernama "${name}" di lokasi ini.`;
 
-  function newFolder() {
+  function newFolder(parent = here) {
     const name = askName('Nama folder baru:');
     if (!name) return;
-    if (nameTaken(name, here)) return alert(takenMessage(name));
-    act(() => F.createFolder(name, here), 'Folder dibuat');
+    if (nameTaken(name, parent)) return alert(takenMessage(name));
+    if (parent) expanded.add(parent);
+    act(() => F.createFolder(name, parent), 'Folder dibuat');
   }
 
   function renameFolder(f) {
     const name = askName('Nama folder:', f.name);
     if (!name || name === f.name) return;
     if (nameTaken(name, parents.get(f.id), f.id)) return alert(takenMessage(name));
-    act(() => F.updateFolder(f.id, { name }), 'Nama folder diubah');
+    act(() => F.renameFolder(f.id, name), 'Nama folder diubah');
   }
 
-  // Yang dihitung hanya isi yang terlihat. SOP private milik orang lain di folder ini akan tampil di tingkat
-  // utama bagi pemiliknya setelah foldernya dihapus, jadi isinya tidak hilang.
+  // Yang dihitung hanya isi yang terlihat. Isi dengan hak khusus milik orang lain akan tampil di tingkat utama
+  // bagi pemiliknya setelah foldernya dihapus, jadi tidak hilang.
   function removeFolder(f) {
     const subs = childrenOf(f.id).length;
     const sops = live.filter((s) => folderOf(s) === f.id).length;
     if (subs || sops) {
       const isi = [subs && `${subs} subfolder`, sops && `${sops} SOP`].filter(Boolean).join(' dan ');
-      return alert(`Folder "${f.name}" masih berisi ${isi}. Pindahkan isinya dulu. SOP milik orang lain hanya bisa dipindahkan oleh pembuatnya atau admin.`);
+      return alert(`Folder "${f.name}" masih berisi ${isi}. Pindahkan isinya dulu. SOP milik orang lain hanya bisa dipindahkan oleh pemiliknya atau admin.`);
     }
-    if (confirm(`Hapus folder "${f.name}"?`)) act(() => F.deleteFolder(f.id), 'Folder dihapus');
+    if (!confirm(`Hapus folder "${f.name}"?`)) return;
+    if (folderId === f.id) folderId = parents.get(f.id) ?? null;
+    act(() => F.deleteFolder(f.id), 'Folder dihapus');
   }
 
-  function toggleMove(id, isFolder, target) {
-    history = null;
-    moving = moving?.id === id ? null : { id, isFolder, target };
-  }
-
-  function submitMove(e, item) {
+  function submitMove(e) {
     e.preventDefault();
-    const { id, isFolder, target } = moving;
+    const { item, isFolder, target } = moving;
     moving = null;
+    const dest = byId.get(target) ?? null;
     if (isFolder) {
-      if (target === parents.get(id)) return;
-      if (nameTaken(item.name, target, id)) return alert(takenMessage(item.name));
-      act(() => F.updateFolder(id, { parent: target }), 'Folder dipindahkan');
+      if (target === parents.get(item.id)) return;
+      if (nameTaken(item.name, target, item.id)) return alert(takenMessage(item.name));
+      act(() => F.moveFolder(item, dest), 'Folder dipindahkan');
     } else if (target !== folderOf(item)) {
-      act(() => F.moveSop(id, target), 'SOP dipindahkan');
+      act(() => F.moveSop(item, dest), 'SOP dipindahkan');
     }
   }
 
@@ -209,18 +218,10 @@
     });
   }
 
-  function toggleVisibility(s) {
-    const next = s.visibility === 'public' ? 'private' : 'public';
-    const msg =
-      next === 'public'
-        ? `Jadikan "${titleOf(s)}" public?\n\nSemua anggota bisa membuka, mengedit isinya, dan menduplikatnya.`
-        : `Jadikan "${titleOf(s)}" private?\n\nHanya pembuat dan admin yang bisa membukanya. Salinan yang sudah dibuat orang lain tidak ikut tertarik.`;
-    if (!confirm(msg)) return;
-    act(async () => {
-      await F.setVisibility(s.id, next);
-      onvisibility(s.id, next);
-    }, next === 'public' ? 'SOP sekarang public' : 'SOP sekarang private');
-  }
+  const duplicate = (s) => act(() => F.duplicateSop(s), 'Salinan dibuat');
+  const moveSop = (s) => (moving = { item: s, isFolder: false, target: folderOf(s) });
+  const moveFolder = (f) => (moving = { item: f, isFolder: true, target: parents.get(f.id) ?? null });
+  const restoreFromBin = (s) => act(() => F.restoreFromBin(s.id), 'SOP dipulihkan');
 
   function purge(s) {
     const msg = `Hapus "${titleOf(s)}" secara permanen?\n\nSeluruh riwayat versinya, termasuk suntingan orang lain, ikut terhapus. Tindakan ini tidak bisa dibatalkan.`;
@@ -228,7 +229,6 @@
   }
 
   async function toggleHistory(s) {
-    moving = null;
     if (history?.id === s.id) return (history = null);
     try {
       history = { id: s.id, versions: await F.listVersions(s.id) };
@@ -243,6 +243,83 @@
     act(() => F.restoreVersion(s.id, v), 'Versi lama dikembalikan');
   }
 
+  // ---- Hak akses ----
+  function openAccess(kind, item) {
+    const up = kind === 'folders' ? parents.get(item.id) : folderOf(item);
+    accessTarget = { kind, item, name: kind === 'folders' ? item.name : titleOf(item), parent: byId.get(up) ?? null };
+  }
+  function saveAccess(data) {
+    const { kind, item } = accessTarget;
+    accessTarget = null;
+    act(() => F.setAccess(kind, item.id, data), 'Hak akses disimpan');
+  }
+  /** Ringkasan siapa yang bisa melihat, untuk lencana di daftar. */
+  function accessLabel(item) {
+    const readers = item.readers ?? [];
+    if (readers.includes(F.EVERYONE)) return 'Semua anggota';
+    const others = readers.filter((r) => r !== item.createdByEmail).length;
+    return others ? `${others} orang` : 'Private';
+  }
+  const accessTip = (item) => (canManage(item) ? 'Atur hak akses' : 'Lihat hak akses');
+
+  // ---- Menu klik kanan ----
+  function openMenu(e, items) {
+    e.preventDefault();
+    e.stopPropagation();
+    menu = { x: e.clientX, y: e.clientY, items };
+  }
+  function hereItems(id) {
+    const add = canAdd(id);
+    return [
+      { label: 'Folder baru di sini', run: () => newFolder(id), disabled: !add },
+      { label: 'Unggah dokumen ini ke sini', run: () => onupload(id), disabled: !add || !cansave }
+    ];
+  }
+  function folderMenu(f) {
+    const manage = canManage(f);
+    return [
+      { label: 'Buka', run: () => select(f.id) },
+      { sep: true },
+      ...hereItems(f.id),
+      { sep: true },
+      { label: accessTip(f), run: () => openAccess('folders', f) },
+      ...(manage
+        ? [
+            { label: 'Pindahkan', run: () => moveFolder(f) },
+            { label: 'Ubah nama', run: () => renameFolder(f) },
+            { sep: true },
+            { label: 'Hapus', run: () => removeFolder(f), danger: true }
+          ]
+        : [])
+    ];
+  }
+  function sopMenu(s) {
+    const manage = canManage(s);
+    return [
+      { label: 'Buka', run: () => openSop(s) },
+      { sep: true },
+      { label: 'Duplikat', run: () => duplicate(s) },
+      { label: 'Riwayat', run: () => toggleHistory(s) },
+      { label: accessTip(s), run: () => openAccess('sops', s) },
+      ...(manage
+        ? [
+            { label: 'Pindahkan', run: () => moveSop(s) },
+            { label: 'Ubah nama', run: () => rename(s) },
+            { sep: true },
+            { label: 'Hapus', run: () => moveToBin(s), danger: true }
+          ]
+        : [])
+    ];
+  }
+  const binMenu = (s) => [
+    { label: 'Pulihkan', run: () => restoreFromBin(s) },
+    { sep: true },
+    { label: 'Hapus permanen', run: () => purge(s), danger: true }
+  ];
+
+  const uploadBlocked = $derived(!canAdd(here) ? 'Anda hanya punya hak lihat di folder ini' : !cansave ? 'Dokumen ini kosong atau sudah tertaut ke Pustaka Daring' : '');
+  const uploadTip = $derived(uploadBlocked || (here ? `Unggah dokumen ini ke ${byId.get(here).name}` : 'Unggah dokumen ini ke Utama'));
+
   // ---- Admin ----
   async function refreshAdmin() {
     try {
@@ -256,7 +333,7 @@
   function addMember(e) {
     e.preventDefault();
     const email = newEmail.trim().toLowerCase();
-    if (!/^[^@\s/]+@ub\.ac\.id$/.test(email)) return alert('Masukkan alamat email @ub.ac.id.');
+    if (!/^[^@\s/]+@(ub\.ac\.id|gmail\.com)$/.test(email)) return alert('Masukkan alamat email @ub.ac.id atau @gmail.com.');
     newEmail = '';
     adminAct(() => F.setMember(email, newRole));
   }
@@ -275,148 +352,190 @@
   const namesEditing = (s) => (faculty.editing[s.id] ?? []).map((m) => m.name).join(', ');
 </script>
 
-{#snippet movePanel(item, isFolder)}
-  <form class="move" onsubmit={(e) => submitMove(e, item)}>
-    <label>
-      <span>Pindahkan ke</span>
-      <select bind:value={moving.target}>
-        <option value={null}>Utama</option>
-        {#each moveTargets as t (t.id)}
-          <option value={t.id}>{'   '.repeat(t.depth + 1)}{t.name}</option>
-        {/each}
-      </select>
-    </label>
-    <button class="btn small">Pindahkan</button>
-    <button type="button" class="btn small" onclick={() => (moving = null)}>Batal</button>
-  </form>
+{#snippet ib(icon, tip, run, opts = {})}
+  <button
+    type="button"
+    class="ib"
+    class:danger={opts.danger}
+    class:on={opts.on}
+    aria-label={tip}
+    aria-disabled={opts.disabled ? 'true' : undefined}
+    aria-expanded={opts.expanded}
+    data-tip={tip}
+    onclick={() => !opts.disabled && run()}
+  >
+    <Icon name={icon} />
+  </button>
 {/snippet}
 
-<dialog bind:this={dialog} class="dialog" onclose={() => (open = false)}>
+{#snippet node(f, depth)}
+  {@const kids = childrenOf(f.id)}
+  {@const opened = expanded.has(f.id)}
+  <li role="treeitem" aria-selected={view === 'sops' && here === f.id} aria-expanded={kids.length ? opened : undefined}>
+    <div class="tn" class:sel={view === 'sops' && here === f.id} style:padding-left="{depth * 0.9 + 0.2}rem" role="presentation" oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
+      {#if kids.length}
+        <button type="button" class="chev" class:open={opened} aria-label={opened ? `Tutup ${f.name}` : `Buka ${f.name}`} onclick={() => toggle(f.id)}><Icon name="chevron" size={13} /></button>
+      {:else}
+        <span class="chev none"></span>
+      {/if}
+      <button type="button" class="tname" onclick={() => select(f.id)}>
+        <Icon name="folder" size={15} />
+        <span>{f.name}</span>
+        {#if counts.get(f.id)}<small>{counts.get(f.id)}</small>{/if}
+      </button>
+    </div>
+    {#if kids.length && opened}
+      <ul role="group">
+        {#each kids as k (k.id)}{@render node(k, depth + 1)}{/each}
+      </ul>
+    {/if}
+  </li>
+{/snippet}
+
+<dialog bind:this={dialog} class="dialog" use:tips onclose={() => (open = false)}>
   <header>
     <h2>Pustaka Daring</h2>
-    <span class="grow"></span>
+    {#if faculty.status === 'in' && view !== 'admin'}
+      <input class="search" type="search" bind:value={query} placeholder="Cari nama, nomor, pembuat, pelaksana, atau kegiatan…" />
+    {:else}
+      <span class="grow"></span>
+    {/if}
     {#if faculty.user}
       <small class="who" title={faculty.user.email}>{faculty.user.name}{admin ? ' · Admin' : ''}</small>
-      <button class="btn small" onclick={() => F.signOut()}>Keluar</button>
+      {@render ib('logout', 'Keluar', () => F.signOut())}
     {/if}
-    <button class="x" onclick={() => (open = false)} aria-label="Tutup">×</button>
+    <button class="ib x" onclick={() => (open = false)} aria-label="Tutup" data-tip="Tutup"><Icon name="x" /></button>
   </header>
 
   {#if faculty.status === 'in'}
-    <div class="bar">
-      <div class="seg" role="tablist">
-        <button role="tab" aria-selected={view === 'sops'} class:on={view === 'sops'} onclick={() => (view = 'sops')}>SOP <span>{live.length}</span></button>
-        <button role="tab" aria-selected={view === 'bin'} class:on={view === 'bin'} onclick={() => (view = 'bin')}>Recycle bin <span>{bin.length}</span></button>
-        {#if admin}<button role="tab" aria-selected={view === 'admin'} class:on={view === 'admin'} onclick={() => (view = 'admin')}>Admin</button>{/if}
-      </div>
-      {#if view !== 'admin'}
-        <input type="search" bind:value={query} placeholder="Cari nama, nomor, pembuat, pelaksana, atau kegiatan…" />
-      {/if}
-    </div>
     {#if loadError}<p class="error">{loadError} <button class="link" onclick={refresh}>Coba lagi</button></p>{/if}
-
-    {#if view === 'sops'}
-      <div class="crumbs">
-        {#if searching}
-          <span class="muted">Hasil pencarian di semua folder</span>
-        {:else}
-          <nav aria-label="Lokasi folder">
-            <button class="crumb" aria-current={here ? undefined : 'location'} onclick={() => enter(null)}>Utama</button>
-            {#each crumbs as c (c.id)}
-              <span class="sep" aria-hidden="true">/</span>
-              <button class="crumb" aria-current={c.id === here ? 'location' : undefined} onclick={() => enter(c.id)}>{c.name}</button>
-            {/each}
-          </nav>
-          <button class="btn small" onclick={newFolder}>Folder baru</button>
-        {/if}
-      </div>
-      <ul class="list">
-        {#each shownFolders as f (f.id)}
-          {@const subs = childrenOf(f.id).length}
-          {@const sops = live.filter((s) => folderOf(s) === f.id).length}
-          {@const parent = parents.get(f.id)}
-          <li>
-            <button class="main" onclick={() => enter(f.id)}>
-              <strong><span class="ico" aria-hidden="true">📁</span>{f.name}</strong>
-              <small>
-                {[searching && parent && `di ${pathText(parent)}`, subs && `${subs} subfolder`, `${sops} SOP`, `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}
-              </small>
-            </button>
-            {#if canManage(f)}
-              <span class="acts" role="group" aria-label="Tindakan folder">
-                <button class="btn small" class:on={moving?.id === f.id} aria-expanded={moving?.id === f.id} onclick={() => toggleMove(f.id, true, parent)}>Pindahkan</button>
-                <button class="btn small" onclick={() => renameFolder(f)}>Ubah nama</button>
-                <button class="btn small danger" onclick={() => removeFolder(f)}>Hapus</button>
-              </span>
-            {/if}
-            {#if moving?.id === f.id}{@render movePanel(f, true)}{/if}
-          </li>
-        {/each}
-        {#each shownLive as s (s.id)}
-          {@const manage = canManage(s)}
-          {@const editors = namesEditing(s)}
-          <li>
-            <button class="main" onclick={() => openSop(s)}>
-              <strong>
-                {titleOf(s)}
-                <em class:public={s.visibility === 'public'}>{s.visibility === 'public' ? 'Public' : 'Private'}</em>
-                {#if isOpen(s)}<em>terbuka di tab</em>{/if}
-              </strong>
-              <small title={s.createdByEmail}>
-                {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `diubah ${s.updatedByName}, ${when(s.updatedAt)}`].filter(Boolean).join(' · ')}
-              </small>
-              {#if editors}<small class="editing">✎ Sedang diedit oleh {editors}</small>{/if}
-            </button>
-            <span class="acts" role="group" aria-label="Tindakan SOP">
-              <button class="btn small" onclick={() => act(() => F.duplicateSop(s), 'Salinan private dibuat')} title="Buat salinan private milik Anda">Duplikat</button>
-              <button class="btn small" class:on={history?.id === s.id} onclick={() => toggleHistory(s)} aria-expanded={history?.id === s.id}>Riwayat</button>
-              {#if manage}
-                <button class="btn small" onclick={() => toggleVisibility(s)}>{s.visibility === 'public' ? 'Jadikan private' : 'Jadikan public'}</button>
-                <button class="btn small" class:on={moving?.id === s.id} aria-expanded={moving?.id === s.id} onclick={() => toggleMove(s.id, false, folderOf(s))}>Pindahkan</button>
-                <button class="btn small" onclick={() => rename(s)}>Ubah nama</button>
-                <button class="btn small danger" title="Pindahkan ke Recycle bin" onclick={() => moveToBin(s)}>Hapus</button>
-              {/if}
-            </span>
-            {#if history?.id === s.id}
-              <div class="history">
-                {#each history.versions as v (v.rev)}
-                  <div>
-                    <span>{when(v.savedAt)} · {v.savedByName}</span>
-                    {#if canEdit(s)}<button class="btn small" disabled={isOpen(s)} title={isOpen(s) ? 'Tutup tabnya dulu untuk mengembalikan versi' : ''} onclick={() => restoreVersion(s, v)}>Kembalikan</button>{/if}
-                  </div>
-                {:else}
-                  <span class="muted">Belum ada versi lama.</span>
-                {/each}
+    <div class="panes">
+      <aside>
+        <div class="tree" role="presentation" oncontextmenu={(e) => openMenu(e, hereItems(null))}>
+          <ul role="tree" aria-label="Folder">
+            <li role="treeitem" aria-selected={view === 'sops' && !here}>
+              <div class="tn" class:sel={view === 'sops' && !here} style:padding-left="0.2rem" role="presentation">
+                <span class="chev none"></span>
+                <button type="button" class="tname" onclick={() => select(null)}>
+                  <Icon name="folder" size={15} />
+                  <span>Utama</span>
+                  {#if counts.get(null)}<small>{counts.get(null)}</small>{/if}
+                </button>
               </div>
+            </li>
+            {#each childrenOf(null) as f (f.id)}{@render node(f, 1)}{/each}
+          </ul>
+        </div>
+        <nav aria-label="Lainnya">
+          <button type="button" class="tname nav" class:sel={view === 'bin'} onclick={() => (view = 'bin')}>
+            <Icon name="trash" size={15} /><span>Recycle bin</span>{#if bin.length}<small>{bin.length}</small>{/if}
+          </button>
+          {#if admin}
+            <button type="button" class="tname nav" class:sel={view === 'admin'} onclick={() => (view = 'admin')}>
+              <Icon name="settings" size={15} /><span>Admin</span>
+            </button>
+          {/if}
+        </nav>
+      </aside>
+
+      <section class="content">
+        {#if view === 'sops'}
+          <div class="crumbs">
+            {#if searching}
+              <span class="muted grow">Hasil pencarian di semua folder</span>
+            {:else}
+              <nav class="grow" aria-label="Lokasi folder">
+                <button class="crumb" aria-current={here ? undefined : 'location'} onclick={() => select(null)}>Utama</button>
+                {#each crumbs as c (c.id)}
+                  <span class="sep" aria-hidden="true">/</span>
+                  <button class="crumb" aria-current={c.id === here ? 'location' : undefined} onclick={() => select(c.id)}>{c.name}</button>
+                {/each}
+              </nav>
             {/if}
-            {#if moving?.id === s.id}{@render movePanel(s, false)}{/if}
-          </li>
-        {/each}
-        {#if !shownFolders.length && !shownLive.length}
-          <li class="empty">{busy ? 'Memuat…' : searching ? 'Tidak ada yang cocok.' : here ? 'Folder ini kosong.' : 'Belum ada SOP yang bisa Anda lihat.'}</li>
-        {/if}
-      </ul>
-      <footer>
-        <button class="btn" disabled={!cansave} onclick={() => onupload(here)}>{here ? `Unggah dokumen ini ke folder ${byId.get(here).name}` : 'Unggah dokumen ini ke Pustaka Daring'}</button>
-      </footer>
-    {:else if view === 'bin'}
-      <ul class="list">
-        {#each shownBin as s (s.id)}
-          <li>
-            <div class="main static">
-              <strong>{titleOf(s)}</strong>
-              <small>{[s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `dihapus ${when(s.deletedAt)}`, size(s.totalBytes)].filter(Boolean).join(' · ')}</small>
-            </div>
-            <span class="acts" role="group" aria-label="Tindakan SOP">
-              <button class="btn small" onclick={() => act(() => F.restoreFromBin(s.id), 'SOP dipulihkan')}>Pulihkan</button>
-              <button class="btn small danger" onclick={() => purge(s)}>Hapus permanen</button>
-            </span>
-          </li>
-        {:else}
-          <li class="empty">{busy ? 'Memuat…' : query.trim() ? 'Tidak ada yang cocok.' : 'Recycle bin kosong.'}</li>
-        {/each}
-      </ul>
-    {:else if admin}
+            {#if here && !searching}
+              {@render ib('users', accessTip(byId.get(here)), () => openAccess('folders', byId.get(here)))}
+            {/if}
+            {@render ib('folderPlus', canAdd(here) ? 'Folder baru di sini' : 'Anda hanya punya hak lihat di folder ini', () => newFolder(), { disabled: !canAdd(here) })}
+            {@render ib('upload', uploadTip, () => onupload(here), { disabled: !!uploadBlocked })}
+            {@render ib('refresh', 'Muat ulang daftar', refresh)}
+          </div>
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+          <ul class="list" oncontextmenu={(e) => openMenu(e, hereItems(here))}>
+            {#each shownFolders as f (f.id)}
+              {@const parent = parents.get(f.id)}
+              <li oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
+                <button class="main" onclick={() => select(f.id)}>
+                  <strong><Icon name="folder" size={15} /> {f.name} <em class:shared={F.isShared(f)}>{accessLabel(f)}</em></strong>
+                  <small>{[parent && `di ${pathText(parent)}`, `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}</small>
+                </button>
+              </li>
+            {/each}
+            {#each shownLive as s (s.id)}
+              {@const manage = canManage(s)}
+              {@const editors = namesEditing(s)}
+              <li oncontextmenu={(e) => openMenu(e, sopMenu(s))}>
+                <button class="main" onclick={() => openSop(s)}>
+                  <strong>
+                    <Icon name="file" size={15} />
+                    {titleOf(s)}
+                    <em class:shared={F.isShared(s)}>{accessLabel(s)}</em>
+                    {#if s.custom && folderOf(s)}<em>Khusus</em>{/if}
+                    {#if !canEdit(s)}<em>Hanya lihat</em>{/if}
+                    {#if isOpen(s)}<em>Terbuka di tab</em>{/if}
+                  </strong>
+                  <small title={s.createdByEmail}>
+                    {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `diubah ${s.updatedByName}, ${when(s.updatedAt)}`].filter(Boolean).join(' · ')}
+                  </small>
+                  {#if editors}<small class="editing">✎ Sedang diedit oleh {editors}</small>{/if}
+                </button>
+                <span class="acts" role="group" aria-label="Tindakan SOP">
+                  {@render ib('copy', 'Duplikat sebagai milik Anda', () => duplicate(s))}
+                  {@render ib('history', 'Riwayat', () => toggleHistory(s), { on: history?.id === s.id, expanded: history?.id === s.id })}
+                  {@render ib('users', accessTip(s), () => openAccess('sops', s))}
+                  {#if manage}
+                    {@render ib('move', 'Pindahkan', () => moveSop(s))}
+                    {@render ib('pencil', 'Ubah nama', () => rename(s))}
+                    {@render ib('trash', 'Pindahkan ke Recycle bin', () => moveToBin(s), { danger: true })}
+                  {/if}
+                </span>
+                {#if history?.id === s.id}
+                  <div class="history">
+                    {#each history.versions as v (v.rev)}
+                      <div>
+                        <span>{when(v.savedAt)} · {v.savedByName}</span>
+                        {#if canEdit(s)}
+                          {@render ib('restore', isOpen(s) ? 'Tutup tabnya dulu untuk mengembalikan versi' : 'Kembalikan versi ini', () => restoreVersion(s, v), { disabled: isOpen(s) })}
+                        {/if}
+                      </div>
+                    {:else}
+                      <span class="muted">Belum ada versi lama.</span>
+                    {/each}
+                  </div>
+                {/if}
+              </li>
+            {/each}
+            {#if !shownFolders.length && !shownLive.length}
+              <li class="empty">{busy ? 'Memuat…' : searching ? 'Tidak ada yang cocok.' : here ? 'Belum ada SOP di folder ini.' : 'Belum ada SOP di sini.'}</li>
+            {/if}
+          </ul>
+        {:else if view === 'bin'}
+          <ul class="list">
+            {#each shownBin as s (s.id)}
+              <li oncontextmenu={(e) => openMenu(e, binMenu(s))}>
+                <div class="main static">
+                  <strong><Icon name="file" size={15} /> {titleOf(s)}</strong>
+                  <small>{[s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `dihapus ${when(s.deletedAt)}`, size(s.totalBytes)].filter(Boolean).join(' · ')}</small>
+                </div>
+                <span class="acts" role="group" aria-label="Tindakan SOP">
+                  {@render ib('restore', 'Pulihkan', () => restoreFromBin(s))}
+                  {@render ib('trash', 'Hapus permanen', () => purge(s), { danger: true })}
+                </span>
+              </li>
+            {:else}
+              <li class="empty">{busy ? 'Memuat…' : query.trim() ? 'Tidak ada yang cocok.' : 'Recycle bin kosong.'}</li>
+            {/each}
+          </ul>
+        {:else if admin}
       <div class="admin">
         <section>
           <h3>Penyimpanan</h3>
@@ -428,8 +547,8 @@
               Kuota baca dan tulis harian hanya terlihat di Firebase Console.
             </small>
             <div class="row">
-              <button class="btn small" onclick={changeLimit}>Ubah batas</button>
-              <button class="btn small" onclick={recount}>Hitung ulang</button>
+              {@render ib('gauge', 'Ubah batas penyimpanan', changeLimit)}
+              {@render ib('refresh', 'Hitung ulang pemakaian', recount)}
             </div>
           {:else}
             <small>Memuat…</small>
@@ -438,12 +557,12 @@
         <section>
           <h3>Anggota <span class="muted">{members.length}</span></h3>
           <form onsubmit={addMember} class="row">
-            <input bind:value={newEmail} type="email" placeholder="nama@ub.ac.id" aria-label="Email anggota baru" />
+            <input bind:value={newEmail} type="email" placeholder="nama@ub.ac.id atau nama@gmail.com" aria-label="Email anggota baru" />
             <select bind:value={newRole} aria-label="Peran">
               <option value="member">Anggota</option>
               <option value="admin">Admin</option>
             </select>
-            <button class="btn small" disabled={!newEmail.trim()}>Tambah</button>
+            <button class="ib" aria-label="Tambah anggota" data-tip="Tambah anggota" disabled={!newEmail.trim()}><Icon name="plus" /></button>
           </form>
           <ul class="members">
             {#each members as m (m.email)}
@@ -454,20 +573,22 @@
                   <option value="member">Anggota</option>
                   <option value="admin">Admin</option>
                 </select>
-                <button class="btn small danger" disabled={self} onclick={() => removeMember(m)}>Cabut</button>
+                {@render ib('trash', self ? 'Anda tidak bisa mencabut akses sendiri' : 'Cabut akses', () => removeMember(m), { danger: true, disabled: self })}
               </li>
             {/each}
           </ul>
         </section>
       </div>
-    {/if}
+        {/if}
+      </section>
+    </div>
   {:else}
     <div class="gate">
       {#if faculty.status === 'out'}
-        <p>Pustaka Daring menyimpan SOP bersama secara daring. Masuk dengan akun Google <strong>@ub.ac.id</strong> yang sudah didaftarkan admin.</p>
+        <p>Pustaka Daring menyimpan SOP bersama secara daring. Masuk dengan akun Google <strong>@ub.ac.id</strong> atau <strong>@gmail.com</strong> yang sudah didaftarkan admin.</p>
         <button class="btn primary" onclick={() => F.signIn().catch((e) => alert(e.message))}>Masuk dengan Google</button>
       {:else if faculty.status === 'domain'}
-        <p><strong>{faculty.user.email}</strong> tidak bisa dipakai. Pustaka Daring hanya untuk akun @ub.ac.id.</p>
+        <p><strong>{faculty.user.email}</strong> tidak bisa dipakai. Pustaka Daring hanya untuk akun @ub.ac.id atau @gmail.com.</p>
         <button class="btn" onclick={() => F.signOut().then(() => F.signIn()).catch((e) => alert(e.message))}>Ganti akun</button>
       {:else if faculty.status === 'notMember'}
         <p><strong>{faculty.user.email}</strong> belum terdaftar sebagai anggota. Minta admin Pustaka Daring mendaftarkan akun ini.</p>
@@ -480,15 +601,41 @@
       {/if}
     </div>
   {/if}
+  {#if menu}<ContextMenu x={menu.x} y={menu.y} items={menu.items} host={dialog} onclose={() => (menu = null)} />{/if}
 </dialog>
+
+<dialog bind:this={moveDialog} class="dialog small-dialog" onclose={() => (moving = null)}>
+  {#if moving}
+    <form onsubmit={submitMove}>
+      <h2>Pindahkan</h2>
+      <p class="muted moved">{moving.isFolder ? moving.item.name : titleOf(moving.item)}</p>
+      <label class="move">
+        <span>Ke folder</span>
+        <select bind:value={moving.target}>
+          <option value={null}>Utama</option>
+          {#each moveTargets as t (t.id)}
+            <option value={t.id}>{'   '.repeat(t.depth + 1)}{t.name}</option>
+          {/each}
+        </select>
+      </label>
+      {#if !moving.item.custom}<small class="muted">Hak aksesnya akan mengikuti folder tujuan.</small>{/if}
+      <footer class="end">
+        <button type="button" class="btn" onclick={() => (moving = null)}>Batal</button>
+        <button class="btn primary">Pindahkan</button>
+      </footer>
+    </form>
+  {/if}
+</dialog>
+
+<AccessDialog target={accessTarget} onsave={saveAccess} onclose={() => (accessTarget = null)} />
 
 <style>
   .dialog {
-    width: min(880px, calc(100vw - 2rem));
-    max-height: min(720px, calc(100vh - 3rem));
+    width: min(1180px, calc(100vw - 2rem));
+    max-height: calc(100vh - 3rem);
     border: 0;
     border-radius: 14px;
-    padding: 1.1rem 1.2rem;
+    padding: 1rem 1.1rem;
     box-shadow: 0 20px 50px rgb(0 0 0 / 0.25);
     background: var(--surface);
     color: var(--text);
@@ -500,6 +647,9 @@
   .dialog::backdrop {
     background: rgb(15 23 42 / 0.45);
   }
+  .small-dialog {
+    width: min(460px, calc(100vw - 2rem));
+  }
   header {
     display: flex;
     align-items: center;
@@ -509,6 +659,7 @@
   h2 {
     margin: 0;
     font-size: 1.1rem;
+    flex: none;
   }
   h3 {
     margin: 0 0 0.45rem;
@@ -516,8 +667,19 @@
   }
   .grow {
     flex: 1;
+    min-width: 0;
+  }
+  .search {
+    flex: 1;
+    min-width: 0;
+    margin: 0 0.5rem;
   }
   .who {
+    flex: none;
+    max-width: 14rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: var(--muted);
     font-size: 0.8rem;
   }
@@ -525,57 +687,155 @@
     color: var(--muted);
     font-weight: 400;
   }
-  .x {
-    border: 0;
-    background: none;
-    font-size: 1.4rem;
-    line-height: 1;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .bar {
-    display: flex;
-    gap: 0.6rem;
-    margin-bottom: 0.6rem;
-  }
-  .seg {
-    display: flex;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    overflow: hidden;
+  .ib {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex: none;
-  }
-  .seg button {
-    border: 0;
+    width: 1.85rem;
+    height: 1.85rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 7px;
     background: none;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    font-weight: 500;
     color: var(--muted);
+    cursor: pointer;
   }
-  .seg button.on {
+  .ib:hover:not([aria-disabled='true']):not(:disabled) {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .ib.danger:hover:not([aria-disabled='true']):not(:disabled) {
+    color: var(--danger);
+  }
+  .ib.on {
     background: var(--accent-soft);
     color: var(--accent);
   }
-  .seg span {
-    font-size: 0.75rem;
-    opacity: 0.8;
+  .ib[aria-disabled='true'],
+  .ib:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
-  .bar input {
+  .panes {
+    flex: 0 1 auto;
+    min-height: 0;
+    height: min(660px, calc(100vh - 8rem));
+    display: grid;
+    grid-template-columns: minmax(200px, 270px) minmax(0, 1fr);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  aside {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  .tree {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.35rem;
+  }
+  .tree ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .tn {
+    display: flex;
+    align-items: center;
+    border-radius: 6px;
+  }
+  .tn:hover {
+    background: var(--line);
+  }
+  .tn.sel,
+  .tname.nav.sel {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .chev {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 1.2rem;
+    height: 1.2rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .chev.none {
+    cursor: default;
+  }
+  .chev.open :global(svg) {
+    transform: rotate(90deg);
+  }
+  .tname {
     flex: 1;
     min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.35rem 0.28rem 0.1rem;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+    cursor: pointer;
+  }
+  .tname :global(svg) {
+    flex: none;
+  }
+  .tname span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tname small {
+    flex: none;
+    color: var(--muted);
+    font-size: 0.72rem;
+  }
+  aside nav {
+    flex: none;
+    padding: 0.35rem;
+    border-top: 1px solid var(--line);
+  }
+  .tname.nav {
+    width: 100%;
+    padding-left: 0.5rem;
+    border-radius: 6px;
+  }
+  .tname.nav:hover:not(.sel) {
+    background: var(--line);
+  }
+  .content {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    padding: 0.45rem 0.6rem;
   }
   .crumbs {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    min-height: 1.9rem;
-    margin-bottom: 0.45rem;
+    gap: 0.15rem;
+    min-height: 2rem;
+    margin-bottom: 0.35rem;
     font-size: 0.85rem;
   }
   .crumbs nav {
-    flex: 1;
-    min-width: 0;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -601,54 +861,25 @@
   .sep {
     color: var(--muted);
   }
-  .ico {
-    margin-right: 0.35rem;
-  }
-  .move {
-    flex-basis: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0.5rem;
-    border-radius: 8px;
-    background: var(--surface-2);
-    font-size: 0.82rem;
-  }
-  .move label {
-    flex: 1;
-    min-width: 14rem;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-  .move span {
-    flex: none;
-  }
-  .move select {
-    flex: 1;
-    min-width: 0;
-  }
   .list {
     list-style: none;
     margin: 0;
     padding: 0;
     overflow: auto;
     flex: 1;
-    min-height: 10rem;
-    border: 1px solid var(--line);
-    border-radius: 10px;
+    min-height: 0;
   }
   .list > li {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.45rem 0.6rem;
+    padding: 0.4rem 0.45rem;
     border-bottom: 1px solid var(--line);
+    border-radius: 6px;
   }
-  .list > li:last-child {
-    border-bottom: 0;
+  .list > li:hover:not(.empty) {
+    background: var(--surface-2);
   }
   .main {
     flex: 1 1 18rem;
@@ -664,6 +895,10 @@
     cursor: pointer;
     color: inherit;
     font: inherit;
+  }
+  .main strong :global(svg) {
+    vertical-align: -2px;
+    color: var(--muted);
   }
   .main.static {
     cursor: default;
@@ -687,9 +922,10 @@
     border: 1px solid var(--line);
     border-radius: 99px;
     padding: 0.03rem 0.45rem;
-    margin-left: 0.3rem;
+    margin-left: 0.2rem;
+    white-space: nowrap;
   }
-  em.public {
+  em.shared {
     color: var(--accent);
     background: var(--accent-soft);
     border-color: transparent;
@@ -697,28 +933,6 @@
   .acts {
     display: inline-flex;
     flex: none;
-  }
-  .acts .btn {
-    position: relative;
-    margin-left: -1px;
-    border-radius: 0;
-  }
-  .acts .btn:hover:not(:disabled) {
-    z-index: 1;
-  }
-  .acts .btn:first-child {
-    margin-left: 0;
-    border-radius: 7px 0 0 7px;
-  }
-  .acts .btn:last-child {
-    border-radius: 0 7px 7px 0;
-  }
-  .acts .on {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-  .danger {
-    color: var(--danger);
   }
   .btn:disabled {
     opacity: 0.45;
@@ -731,7 +945,8 @@
     gap: 0.25rem;
     padding: 0.4rem 0.5rem;
     border-radius: 8px;
-    background: var(--surface-2);
+    background: var(--surface);
+    border: 1px solid var(--line);
     font-size: 0.82rem;
   }
   .history div {
@@ -745,9 +960,35 @@
     color: var(--muted);
     padding: 1.5rem !important;
     font-size: 0.9rem;
+    border-bottom: 0 !important;
   }
-  footer {
-    margin-top: 0.8rem;
+  .moved {
+    margin: 0.2rem 0 0.7rem;
+    font-size: 0.88rem;
+    overflow-wrap: anywhere;
+  }
+  .move {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.86rem;
+    margin-bottom: 0.4rem;
+  }
+  .move span {
+    flex: none;
+  }
+  .move select {
+    flex: 1;
+    min-width: 0;
+  }
+  .small-dialog small {
+    font-size: 0.78rem;
+  }
+  .end {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-top: 0.9rem;
   }
   .gate {
     padding: 1.5rem 0.5rem;
@@ -774,6 +1015,7 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    padding: 0.3rem 0.2rem;
   }
   .admin section {
     flex: none;

@@ -12,21 +12,31 @@ const config = {
   appId: '1:973015723802:web:3d8b506ba52ec33022c6a3'
 };
 
-const DOMAIN = /@ub\.ac\.id$/;
+const DOMAIN = /@(ub\.ac\.id|gmail\.com)$/; // sama dengan inDomain() di firestore.rules
 export const MAX_SOP_BYTES = 524288; // sama dengan batas di firestore.rules
 const DEFAULT_LIMIT = 500 * 1000 * 1000;
 const EDITING_BEAT = 2 * 60 * 1000;
 const EDITING_EXPIRY = 5 * 60 * 1000;
 
 /**
- * status: idle | loading | out | domain (bukan akun @ub.ac.id) | notMember | in | error.
+ * status: idle | loading | out | domain (bukan akun @ub.ac.id atau @gmail.com) | notMember | in | error.
  * editing: sopId → daftar orang lain yang sedang mengedit.
  */
 export const faculty = $state({ status: 'idle', user: null, role: null, error: '', editing: {} });
 
 export const isAdmin = () => faculty.status === 'in' && faculty.role === 'admin';
 export const canManage = (sop) => isAdmin() || sop.createdBy === faculty.user?.uid;
-export const canEdit = (sop) => !sop.deletedBy && (sop.visibility === 'public' || canManage(sop));
+export const EVERYONE = '*';
+const granted = (list) => !!list && (list.includes(EVERYONE) || list.includes(faculty.user?.email));
+export const canRead = (item) => canManage(item) || granted(item.readers);
+export const canEdit = (sop) => !sop.deletedBy && (canManage(sop) || granted(sop.editors));
+/** Ada orang lain selain pemiliknya yang bisa melihat. */
+export const isShared = (item) => (item.readers ?? []).some((r) => r !== item.createdByEmail);
+/** Bentuk `tab.remote` untuk SOP yang terbuka di tab. */
+export const remoteOf = (sop) => ({
+  id: sop.id, rev: sop.rev, title: sop.title, folder: sop.folder ?? null,
+  shared: isShared(sop), canEdit: canEdit(sop), canRename: canManage(sop)
+});
 
 /** code: conflict | gone | full | denied | too-big | blank */
 export class FacultyError extends Error {
@@ -104,7 +114,7 @@ export function start() {
 export async function signIn() {
   const { A, auth } = await load();
   const provider = new A.GoogleAuthProvider();
-  provider.setCustomParameters({ hd: 'ub.ac.id', prompt: 'select_account' });
+  provider.setCustomParameters({ prompt: 'select_account' });
   try {
     await A.signInWithPopup(auth, provider);
   } catch (e) {
@@ -177,13 +187,13 @@ async function ensureUsage() {
 export async function listSops() {
   const { F, db } = await load();
   const col = F.collection(db, 'sops');
-  const uid = faculty.user.uid;
+  const { uid, email } = faculty.user;
   const q = (...w) => F.getDocsFromServer(F.query(col, ...w));
   const snaps = isAdmin()
     ? [await F.getDocsFromServer(col)]
     : await Promise.all([
-        q(F.where('deletedBy', '==', null), F.where('visibility', '==', 'public')),
-        q(F.where('deletedBy', '==', null), F.where('createdBy', '==', uid)),
+        q(F.where('deletedBy', '==', null), F.where('readers', 'array-contains', email)),
+        q(F.where('deletedBy', '==', null), F.where('readers', 'array-contains', EVERYONE)),
         q(F.where('deletedBy', '==', uid))
       ]);
   const all = new Map();
@@ -202,22 +212,81 @@ export async function listVersions(id) {
 
 export async function listFolders() {
   const { F, db } = await load();
-  const snap = await F.getDocsFromServer(F.collection(db, 'folders'));
-  return snap.docs.map((d) => ({ ...d.data({ serverTimestamps: 'estimate' }), id: d.id, parent: d.data().parent ?? null }));
+  const col = F.collection(db, 'folders');
+  const { uid, email } = faculty.user;
+  const q = (...w) => F.getDocsFromServer(F.query(col, ...w));
+  const snaps = isAdmin()
+    ? [await F.getDocsFromServer(col)]
+    : await Promise.all([q(F.where('readers', 'array-contains', email)), q(F.where('readers', 'array-contains', EVERYONE)), q(F.where('createdBy', '==', uid))]);
+  const all = new Map();
+  for (const s of snaps) for (const d of s.docs) all.set(d.id, { ...d.data({ serverTimestamps: 'estimate' }), id: d.id, parent: d.data().parent ?? null });
+  return [...all.values()];
+}
+
+/**
+ * Induk tiap folder setelah dibersihkan: induk yang tidak terlihat atau sudah dihapus, dan putaran akibat dua orang
+ * memindahkan bersamaan, dibaca sebagai tingkat utama. Aturan server tidak bisa memeriksa keduanya.
+ */
+export function resolveParents(folders) {
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const out = new Map();
+  for (const f of folders) {
+    const seen = new Set();
+    let p = f.parent;
+    while (p && p !== f.id && byId.has(p) && !seen.has(p)) {
+      seen.add(p);
+      p = byId.get(p).parent;
+    }
+    out.set(f.id, p === f.id || !byId.has(f.parent) ? null : f.parent);
+  }
+  return out;
 }
 
 const folderWrite = (p) => p.catch((e) => { throw new Error(readable(e)); });
 
-export async function createFolder(name, parent) {
-  const { F, db } = await load();
-  const { uid, name: createdByName } = faculty.user;
-  await folderWrite(F.addDoc(F.collection(db, 'folders'), { name, parent, createdBy: uid, createdByName, createdAt: F.serverTimestamp() }));
+const union = (a, b) => [...new Set([...a, ...b])];
+const owned = (owner) => (owner ? [owner] : []);
+/** Daftar hak akses yang wajib dimiliki item yang mengikuti `parent` (null: tingkat utama). */
+export function inherited(parent, owner) {
+  return parent
+    ? { readers: union(parent.readers ?? [], owned(owner)), editors: union(parent.editors ?? [], owned(owner)) }
+    : { readers: owned(owner), editors: owned(owner) };
 }
 
-/** data: { name } dan/atau { parent }. */
-export async function updateFolder(id, data) {
+/** Mengembalikan folder bila akun ini boleh menambah isinya, selain itu null (tingkat utama). */
+async function usableFolder(id) {
+  if (!id) return null;
   const { F, db } = await load();
-  await folderWrite(F.updateDoc(F.doc(db, 'folders', id), data));
+  try {
+    const snap = await F.getDocFromServer(F.doc(db, 'folders', id));
+    if (snap.exists() && (isAdmin() || canManage(snap.data()) || granted(snap.data().editors))) return snap.data();
+  } catch (e) {
+    if (e.code !== 'permission-denied') throw e;
+  }
+  return null;
+}
+
+export async function createFolder(name, parent) {
+  const { F, db } = await load();
+  const { uid, email, name: createdByName } = faculty.user;
+  const up = await folderWrite(usableFolder(parent));
+  if (parent && !up) throw new Error('Anda tidak punya hak edit di folder ini.');
+  await folderWrite(F.addDoc(F.collection(db, 'folders'), {
+    name, parent, custom: false, ...inherited(up, email),
+    createdBy: uid, createdByName, createdByEmail: email, createdAt: F.serverTimestamp()
+  }));
+}
+
+export async function renameFolder(id, name) {
+  const { F, db } = await load();
+  await folderWrite(F.updateDoc(F.doc(db, 'folders', id), { name }));
+}
+
+/** `target` adalah folder tujuan (null: tingkat utama). Isi folder menyusul lewat reconcileAccess. */
+export async function moveFolder(f, target) {
+  const { F, db } = await load();
+  const lists = f.custom ? {} : inherited(target, f.createdByEmail);
+  await folderWrite(F.updateDoc(F.doc(db, 'folders', f.id), { parent: target?.id ?? null, ...lists }));
 }
 
 export async function deleteFolder(id) {
@@ -225,24 +294,107 @@ export async function deleteFolder(id) {
   await folderWrite(F.deleteDoc(F.doc(db, 'folders', id)));
 }
 
+// ---- Hak akses ----
+
+/** data: { custom, readers, editors }. Isi folder menyusul lewat reconcileAccess. */
+export async function setAccess(kind, id, data) {
+  const { F, db } = await load();
+  await folderWrite(F.updateDoc(F.doc(db, kind, id), data));
+}
+
+const sameList = (a = [], b = []) => a.length === b.length && new Set([...a, ...b]).size === a.length;
+const WRITE_CHUNK = 10; // aturan server punya batas evaluasi per permintaan
+
+/**
+ * Menyamakan daftar hak akses semua item yang terlihat dengan folder induknya, dari tingkat teratas ke bawah. Dijalankan
+ * setiap daftar dimuat, sehingga penyebaran yang terputus (mis. koneksi hilang) selesai saat dibuka berikutnya. Admin
+ * sekaligus mengonversi data dari sebelum hak akses per pengguna. Mengubah `folders` dan `sops` di tempat.
+ */
+export async function reconcileAccess(folders, sops) {
+  const { F, db } = await load();
+  const admin = isAdmin();
+  const { uid, email } = faculty.user;
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const parents = resolveParents(folders);
+  const writes = [];
+  const queue = (kind, item, data) => {
+    Object.assign(item, data);
+    writes.push({ ref: F.doc(db, kind, item.id), data, item });
+  };
+
+  for (const f of folders) {
+    if (f.createdBy === uid && !f.createdByEmail) {
+      f.createdByEmail = email;
+      writes.push({ ref: F.doc(db, 'folders', f.id), data: { createdByEmail: email }, item: f });
+    }
+  }
+
+  const visit = (f) => {
+    const up = byId.get(parents.get(f.id));
+    if (f.readers === undefined) {
+      // Dulu semua anggota bisa melihat folder dan mengisinya.
+      if (admin) queue('folders', f, up ? { custom: false, ...inherited(up, f.createdByEmail) } : { custom: true, readers: union([EVERYONE], owned(f.createdByEmail)), editors: union([EVERYONE], owned(f.createdByEmail)) });
+    } else if (!f.custom) {
+      // Induknya tidak terlihat oleh akun ini: daftarnya tidak bisa diketahui. Untuk admin berarti sudah terhapus.
+      const unknown = f.parent && !byId.has(f.parent) && !admin;
+      const cycle = f.parent && byId.has(f.parent) && !up;
+      const want = inherited(up, f.createdByEmail);
+      if (!unknown && !cycle && (!sameList(f.readers, want.readers) || !sameList(f.editors, want.editors))) queue('folders', f, want);
+    }
+    for (const c of folders) if (parents.get(c.id) === f.id) visit(c);
+  };
+  for (const f of folders) if (!parents.get(f.id)) visit(f);
+
+  for (const s of sops) {
+    const up = byId.get(s.folder) ?? null;
+    if (s.readers === undefined) {
+      if (!admin) continue;
+      const all = union([EVERYONE], [s.createdByEmail]);
+      const data = s.visibility === 'public'
+        ? (up ? { custom: false, ...inherited(up, s.createdByEmail) } : { custom: true, readers: all, editors: all })
+        : { custom: !!up, ...inherited(null, s.createdByEmail) }; // SOP private di dalam folder tetap private
+      queue('sops', s, data);
+      writes.at(-1).data = { ...data, visibility: F.deleteField() };
+      delete s.visibility;
+    } else if (!s.custom && !s.deletedBy && (admin || !s.folder || up)) {
+      const want = inherited(up, s.createdByEmail);
+      if (!sameList(s.readers, want.readers) || !sameList(s.editors, want.editors)) queue('sops', s, want);
+    }
+  }
+
+  for (let i = 0; i < writes.length; i += WRITE_CHUNK) {
+    const chunk = writes.slice(i, i + WRITE_CHUNK);
+    const b = F.writeBatch(db);
+    chunk.forEach((w) => b.update(w.ref, w.data));
+    // Satu penolakan (mis. folder baru saja berubah lagi) tidak boleh menggagalkan yang lain dalam kelompoknya.
+    await b.commit().catch(() => Promise.allSettled(chunk.map((w) => F.updateDoc(w.ref, w.data))));
+  }
+}
+
 // ---- Menulis ----
 
-/** Mengunggah sebagai SOP baru: selalu private, dan akun ini tercatat sebagai pembuatnya. */
+/**
+ * Mengunggah sebagai SOP baru yang mengikuti hak akses foldernya; akun ini tercatat sebagai pemiliknya.
+ * Tanpa hak edit di `folder`, SOP masuk ke tingkat utama.
+ */
 export async function uploadSop(doc, title, folder = null) {
   const { F, db } = await load();
   const { uid, email, name } = faculty.user;
   const c = cloudJson(doc, title);
+  const up = await usableFolder(folder).catch(failed);
+  if (!up) folder = null;
+  const lists = inherited(up, email);
   const ref = F.doc(F.collection(db, 'sops'));
   const b = F.writeBatch(db);
   const now = F.serverTimestamp();
   b.set(ref, {
-    ...c, totalBytes: c.size, rev: 1, visibility: 'private', folder,
+    ...c, totalBytes: c.size, rev: 1, custom: false, ...lists, folder,
     createdBy: uid, createdByName: name, createdByEmail: email, createdAt: now,
     updatedAt: now, updatedBy: uid, updatedByName: name, deletedAt: null, deletedBy: null
   });
   b.update(F.doc(db, 'stats/usage'), { bytes: F.increment(c.size), lastSop: ref.id });
   await b.commit().catch(failed);
-  return { id: ref.id, rev: 1, title: c.title, visibility: 'private', canRename: true, folder };
+  return remoteOf({ id: ref.id, rev: 1, title: c.title, folder, createdBy: uid, createdByEmail: email, ...lists });
 }
 
 /** Isi lama pindah ke riwayat dan isi baru ditulis dalam satu transaksi (lihat isContentSave di aturan). */
@@ -270,7 +422,7 @@ async function readForWrite(tx, ref) {
   if (!snap.exists() || snap.data().deletedBy) throw goneError();
   return snap.data();
 }
-const goneError = () => new FacultyError('gone', 'SOP ini sudah dihapus atau dijadikan private oleh pembuatnya.');
+const goneError = () => new FacultyError('gone', 'SOP ini sudah dihapus, atau hak akses Anda sudah dicabut.');
 
 /**
  * Menyimpan perubahan dari salinan `baseRev`. Bila SOP sudah diubah orang lain, melempar `conflict`
@@ -316,15 +468,15 @@ export async function restoreVersion(id, version) {
   }).catch(failed);
 }
 
-/** Hasil duplikat berdiri sendiri: private, dan pembuatnya adalah akun ini. */
+/** Hasil duplikat berdiri sendiri: pemiliknya akun ini, dan hak aksesnya mengikuti folder tempatnya. */
 export const duplicateSop = (sop) => uploadSop(JSON.parse(sop.json), `Salinan dari ${sop.title || 'SOP tanpa judul'}`.slice(0, 300), sop.folder);
 
 async function patch(id, data) {
   const { F, db } = await load();
   await F.updateDoc(F.doc(db, 'sops', id), data).catch(failed);
 }
-export const setVisibility = (id, visibility) => patch(id, { visibility });
-export const moveSop = (id, folder) => patch(id, { folder });
+/** `target` adalah folder tujuan (null: tingkat utama). SOP dengan hak khusus tidak berubah daftarnya. */
+export const moveSop = (s, target) => patch(s.id, { folder: target?.id ?? null, ...(s.custom ? {} : inherited(target, s.createdByEmail)) });
 export async function moveToBin(id) {
   const { F } = await load();
   await patch(id, { deletedAt: F.serverTimestamp(), deletedBy: faculty.user.uid });
@@ -359,7 +511,7 @@ async function clearMark(sopId, uid) {
   await F.deleteDoc(F.doc(db, 'editing', `${sopId}_${uid}`));
 }
 
-/** Tandai (atau lepaskan tanda) bahwa akun ini sedang mengedit SOP public `sopId`. */
+/** Tandai (atau lepaskan tanda) bahwa akun ini sedang mengedit SOP bersama `sopId`. */
 export function setEditing(sopId, on) {
   if (faculty.status !== 'in' || on === marks.has(sopId)) return;
   if (on) {

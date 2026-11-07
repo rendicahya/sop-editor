@@ -3,12 +3,16 @@ rules_version = '2';
 // Pustaka Daring. Satu-satunya penjaga data: aplikasi berjalan di browser, jadi semua batasan harus ada di sini.
 //
 //   members/{email}            { role: 'member' | 'admin', addedBy, addedAt }
-//   folders/{id}               { name, parent, createdBy, createdByName, createdAt }: terlihat semua anggota
+//   folders/{id}               { name, parent, custom, readers, editors, createdBy, createdByName, createdByEmail, createdAt }
 //   sops/{id}                  isi terkini beserta metadata; `folder` berisi id folder (tidak ada/null = tingkat utama)
 //   sops/{id}/versions/{rev}   isi yang tertimpa, tidak bisa diubah
 //   editing/{sopId_uid}        keterangan "sedang diedit" (hanya info, bukan kunci)
 //   stats/usage                { bytes, limit, lastSop }: hanya admin yang bisa membaca
 //   stats/capacity             tanpa isi: boleh dibaca selama pustaka belum penuh
+//
+// Hak akses: `readers` (view atau edit) dan `editors` (edit) berisi email, atau '*' untuk semua anggota. Pemilik
+// selalu tercantum. `custom` false berarti mengikuti folder induk: daftarnya harus sama persis dengan milik induk
+// ditambah pemiliknya. Daftar disalin ke tiap dokumen karena kueri Firestore tidak bisa menelusuri rantai folder.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -19,10 +23,11 @@ service cloud.firestore {
     function uid() {
       return request.auth.uid;
     }
+    // Staf yang belum punya email UB memakai Gmail. Akun Gmail siapa pun lolos di sini; yang menentukan adalah isMember().
     function inDomain() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && email().matches('.*@ub[.]ac[.]id$');
+        && email().matches('.*@(ub[.]ac[.]id|gmail[.]com)$');
     }
     function memberPath() {
       return /databases/$(database)/documents/members/$(email());
@@ -52,15 +57,18 @@ service cloud.firestore {
     function isOwnerOrAdmin(sop) {
       return sop.createdBy == uid() || isAdmin();
     }
+    function granted(list) {
+      return email() in list || '*' in list;
+    }
     function canRead(sop) {
       return isMember() && (
         isAdmin()
-        || (sop.deletedBy == null && (sop.visibility == 'public' || sop.createdBy == uid()))
+        || (sop.deletedBy == null && (sop.createdBy == uid() || granted(sop.readers)))
         || sop.deletedBy == uid()
       );
     }
     function canEdit(sop) {
-      return isMember() && sop.deletedBy == null && (sop.visibility == 'public' || isOwnerOrAdmin(sop));
+      return isMember() && sop.deletedBy == null && (isOwnerOrAdmin(sop) || granted(sop.editors));
     }
     function jsonBytes(d) {
       return d.json.toUtf8().size();
@@ -79,17 +87,53 @@ service cloud.firestore {
     function changed() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
-    // Keberadaan folder sengaja tidak diperiksa: folder yang sudah dihapus dibaca aplikasi sebagai tingkat utama.
     function validFolderRef(v) {
-      return v == null || (v is string && v.size() <= 64);
+      return v == null || (v is string && v.size() <= 64 && v.matches('[^/]+'));
+    }
+
+    // ---- Hak akses ----
+    function folderPath(id) {
+      return /databases/$(database)/documents/folders/$(id);
+    }
+    function ownerSet(owner) {
+      return (owner == null ? [] : [owner]).toSet();
+    }
+    function validAccess(d) {
+      return d.custom is bool
+        && d.readers is list && d.readers.size() <= 200
+        && d.editors is list && d.editors.size() <= 200
+        && d.readers.hasAll(d.editors);
+    }
+    // Daftar sama persis dengan milik folder induk ditambah pemiliknya. Tanpa induk (tingkat utama, atau foldernya
+    // sudah terhapus), hanya pemiliknya. Karena isinya sudah ditentukan, siapa pun boleh menyalinnya.
+    function mirrors(d, owner, folder) {
+      return folder == null || !existsAfter(folderPath(folder))
+        ? d.readers.toSet() == ownerSet(owner) && d.editors.toSet() == ownerSet(owner)
+        : d.readers.toSet() == getAfter(folderPath(folder)).data.readers.toSet().union(ownerSet(owner))
+          && d.editors.toSet() == getAfter(folderPath(folder)).data.editors.toSet().union(ownerSet(owner));
+    }
+    function accessOk(d, owner, folder) {
+      return validAccess(d)
+        && d.editors.toSet().hasAll(ownerSet(owner))
+        && (d.custom == true || mirrors(d, owner, folder));
+    }
+    // Isi folder (SOP, subfolder, atau yang dipindahkan ke dalamnya) hanya boleh ditambah oleh yang punya hak edit.
+    function canAddTo(folder) {
+      return folder == null
+        || isAdmin()
+        || get(folderPath(folder)).data.createdBy == uid()
+        || granted(get(folderPath(folder)).data.editors);
     }
 
     function isValidCreate(d) {
       return isMember()
-        && d.keys().hasOnly(['title', 'nomor', 'json', 'size', 'totalBytes', 'rev', 'visibility', 'folder', 'createdBy', 'createdByName', 'createdByEmail', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName', 'deletedAt', 'deletedBy'])
+        && d.keys().hasOnly(['title', 'nomor', 'json', 'size', 'totalBytes', 'rev', 'folder', 'custom', 'readers', 'editors', 'createdBy', 'createdByName', 'createdByEmail', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName', 'deletedAt', 'deletedBy'])
         && validContent(d)
         && validFolderRef(d.get('folder', null))
-        && d.visibility == 'private'
+        && canAddTo(d.get('folder', null))
+        && validAccess(d)
+        && d.custom == false
+        && mirrors(d, email(), d.get('folder', null))
         && d.rev == 1
         && d.totalBytes == d.size
         && d.createdBy == uid()
@@ -115,19 +159,32 @@ service cloud.firestore {
         && usageChangedBy(d.size)
         && withinLimit();
     }
-    function isVisibilityChange(d, r) {
-      return changed().hasOnly(['visibility'])
-        && d.visibility in ['private', 'public']
+    // `visibility` hanya ada pada SOP dari sebelum hak akses per pengguna; perubahan ini sekaligus membuangnya.
+    function isAccessChange(d, r) {
+      return changed().hasOnly(['custom', 'readers', 'editors', 'visibility'])
+        && !d.keys().hasAny(['visibility'])
+        && (r.deletedBy == null || isAdmin())
+        && isMember()
+        && isOwnerOrAdmin(r)
+        && accessOk(d, r.createdByEmail, r.get('folder', null));
+    }
+    function isAccessSync(d, r) {
+      return changed().hasOnly(['readers', 'editors'])
+        && r.custom == false
         && r.deletedBy == null
         && isMember()
-        && isOwnerOrAdmin(r);
+        && validAccess(d)
+        && mirrors(d, r.createdByEmail, r.get('folder', null));
     }
     function isFolderMove(d, r) {
-      return changed().hasOnly(['folder'])
+      return changed().hasOnly(['folder', 'readers', 'editors'])
         && validFolderRef(d.folder)
         && r.deletedBy == null
         && isMember()
-        && isOwnerOrAdmin(r);
+        && isOwnerOrAdmin(r)
+        && canAddTo(d.folder)
+        && validAccess(d)
+        && (r.custom == true ? (d.readers == r.readers && d.editors == r.editors) : mirrors(d, r.createdByEmail, d.folder));
     }
     function isMoveToBin(d, r) {
       return changed().hasOnly(['deletedAt', 'deletedBy'])
@@ -150,7 +207,8 @@ service cloud.firestore {
       allow read: if canRead(resource.data);
       allow create: if isValidCreate(request.resource.data);
       allow update: if isContentSave(id, request.resource.data, resource.data)
-        || isVisibilityChange(request.resource.data, resource.data)
+        || isAccessChange(request.resource.data, resource.data)
+        || isAccessSync(request.resource.data, resource.data)
         || isFolderMove(request.resource.data, resource.data)
         || isMoveToBin(request.resource.data, resource.data)
         || isRestore(request.resource.data, resource.data);
@@ -186,7 +244,8 @@ service cloud.firestore {
     }
 
     // ---- Folder ----
-    // Semua anggota bisa membuat folder di mana saja. Ubah nama, pindah, dan hapus: pembuat dan admin.
+    // Di tingkat utama semua anggota bisa membuat folder; di dalam folder perlu hak edit atas folder itu.
+    // Ubah nama, pindah, hak akses, dan hapus: pemilik dan admin.
     function validFolder(d) {
       return d.name is string
         && d.name.size() > 0 && d.name.size() <= 120
@@ -194,18 +253,46 @@ service cloud.firestore {
         && validFolderRef(d.parent);
     }
     match /folders/{id} {
-      allow read: if isMember();
+      allow read: if isMember() && (isOwnerOrAdmin(resource.data) || granted(resource.data.readers));
       allow create: if isMember()
-        && request.resource.data.keys().hasOnly(['name', 'parent', 'createdBy', 'createdByName', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['name', 'parent', 'custom', 'readers', 'editors', 'createdBy', 'createdByName', 'createdByEmail', 'createdAt'])
         && validFolder(request.resource.data)
+        && canAddTo(request.resource.data.parent)
+        && validAccess(request.resource.data)
+        && request.resource.data.custom == false
+        && mirrors(request.resource.data, email(), request.resource.data.parent)
         && request.resource.data.createdBy == uid()
+        && request.resource.data.createdByEmail == email()
         && request.resource.data.createdByName is string && request.resource.data.createdByName.size() <= 120
         && request.resource.data.createdAt == request.time;
-      allow update: if isMember()
-        && isOwnerOrAdmin(resource.data)
-        && changed().hasOnly(['name', 'parent'])
-        && validFolder(request.resource.data)
-        && request.resource.data.parent != id;
+      allow update: if isMember() && (
+        // Ubah nama
+        (isOwnerOrAdmin(resource.data) && changed().hasOnly(['name']) && validFolder(request.resource.data))
+        // Pindah; folder yang mengikuti induk langsung memakai daftar induk barunya
+        || (isOwnerOrAdmin(resource.data)
+          && changed().hasOnly(['parent', 'readers', 'editors'])
+          && validFolder(request.resource.data)
+          && request.resource.data.parent != id
+          && canAddTo(request.resource.data.parent)
+          && validAccess(request.resource.data)
+          && (resource.data.custom == true
+            ? (request.resource.data.readers == resource.data.readers && request.resource.data.editors == resource.data.editors)
+            : mirrors(request.resource.data, resource.data.get('createdByEmail', null), request.resource.data.parent)))
+        // Hak akses
+        || (isOwnerOrAdmin(resource.data)
+          && changed().hasOnly(['custom', 'readers', 'editors'])
+          && accessOk(request.resource.data, resource.data.get('createdByEmail', null), resource.data.parent))
+        // Menyalin daftar dari induk
+        || (changed().hasOnly(['readers', 'editors'])
+          && resource.data.custom == false
+          && validAccess(request.resource.data)
+          && mirrors(request.resource.data, resource.data.get('createdByEmail', null), resource.data.parent))
+        // Folder dari sebelum hak akses per pengguna belum mencatat email pemiliknya
+        || (changed().hasOnly(['createdByEmail'])
+          && !resource.data.keys().hasAny(['createdByEmail'])
+          && resource.data.createdBy == uid()
+          && request.resource.data.createdByEmail == email())
+      );
       allow delete: if isMember() && isOwnerOrAdmin(resource.data);
     }
 
@@ -218,8 +305,7 @@ service cloud.firestore {
         && key == request.resource.data.sopId + '_' + uid()
         && request.resource.data.at == request.time
         && request.resource.data.name is string && request.resource.data.name.size() <= 120
-        && get(sopPath(request.resource.data.sopId)).data.visibility == 'public'
-        && get(sopPath(request.resource.data.sopId)).data.deletedBy == null;
+        && canEdit(get(sopPath(request.resource.data.sopId)).data);
       // Keterangan yang sudah kedaluwarsa boleh dibersihkan siapa saja (browser pemiliknya mungkin sudah tertutup).
       allow delete: if isMember() && (resource.data.uid == uid() || isAdmin() || resource.data.at < request.time - duration.value(5, 'm'));
     }
@@ -247,15 +333,16 @@ service cloud.firestore {
 
     // ---- Anggota ----
     match /members/{member} {
-      allow get: if inDomain() && (member == email() || isAdmin());
-      allow list: if isAdmin();
+      // Semua anggota bisa melihat daftar ini untuk memilih kepada siapa file dibagikan.
+      allow get: if inDomain() && (member == email() || isMember());
+      allow list: if isMember();
       allow create: if isAdmin() && validMember(member);
       allow update: if isAdmin() && member != email() && validMember(member);
       // Admin tidak bisa mencabut aksesnya sendiri, agar pustaka tidak kehilangan admin terakhir.
       allow delete: if isAdmin() && member != email();
 
       function validMember(member) {
-        return member.matches('^[^@/]+@ub[.]ac[.]id$')
+        return member.matches('^[^@/]+@(ub[.]ac[.]id|gmail[.]com)$')
           && member == member.lower()
           && request.resource.data.keys().hasOnly(['role', 'addedBy', 'addedAt'])
           && request.resource.data.role in ['member', 'admin']

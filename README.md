@@ -63,7 +63,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   dan dokumennya bisa diduplikasi.
   **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen: satu entri boleh berlabel lebih dari satu,
   daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
-- **Pustaka Daring**: SOP bersama secara daring untuk akun @ub.ac.id yang didaftarkan admin. Lihat [Pustaka Daring](#pustaka-daring).
+- **Pustaka Daring**: SOP bersama secara daring untuk akun @ub.ac.id atau @gmail.com yang didaftarkan admin. Lihat [Pustaka Daring](#pustaka-daring).
   Label hanya ada di pustaka (tidak masuk berkas .sop).
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
@@ -149,17 +149,19 @@ atau ganda dibuat ulang, `next`/`alt` boleh berisi nomor urut atau nama kegiatan
 
 SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat gambar.
 
-| Tindakan | SOP public | SOP private |
-| --- | --- | --- |
-| Melihat, mengedit isi, menduplikat | Semua anggota | Pembuat dan admin |
-| Mengubah nama, memindahkan ke folder lain, menghapus, mengubah private/public | Pembuat dan admin | Pembuat dan admin |
+| Tindakan | Lihat | Edit | Pemilik dan admin |
+| --- | --- | --- | --- |
+| Membuka, menduplikat, melihat riwayat dan daftar hak akses | Ya | Ya | Ya |
+| Mengedit isi SOP, menambah SOP dan subfolder ke dalam folder | | Ya | Ya |
+| Mengubah nama, memindahkan, menghapus, mengatur hak akses | | | Ya |
 
-- SOP baru selalu private, dan pembuatnya tercatat permanen. Hasil duplikat menjadi SOP private milik yang menduplikat, di folder yang sama.
-- **Folder** bertingkat tanpa batas kedalaman. Semua anggota bisa membuat folder dan subfolder di mana saja, sedangkan mengubah nama, memindahkan, dan menghapus folder hanya untuk pembuatnya dan admin. Dokumen diunggah ke folder yang sedang dibuka, dan pencarian mencakup semua folder.
-- Nama folder terlihat oleh semua anggota, tetapi folder tidak membuka akses: SOP private di dalamnya tetap hanya untuk pembuat dan admin.
-- Folder hanya bisa dihapus bila kosong. SOP yang foldernya sudah tidak ada, termasuk SOP private orang lain yang tidak terlihat oleh penghapus folder, tampil di tingkat utama.
+- **Hak akses** diberikan per anggota, sebagai Lihat atau Edit, pada file maupun folder. Pilihan **Semua anggota** tersedia untuk yang dipakai bersama. Pemilik selalu bisa melihat dan mengedit.
+- File dan subfolder **mengikuti folder induknya** secara bawaan, termasuk pemilik folder itu. Pilihan **Khusus** pada file atau subfolder menggantikan hak dari induk sepenuhnya. File baru di tingkat utama hanya bisa dilihat pemiliknya.
+- Daftar hak disalin ke setiap dokumen karena kueri Firestore tidak bisa menelusuri rantai folder. Aplikasi menyebarkan perubahan ke isi folder dan menyelesaikannya saat daftar dimuat berikutnya bila terputus; aturan server hanya menerima salinan yang sama persis dengan daftar folder induk.
+- **Folder** bertingkat tanpa batas kedalaman. Semua anggota bisa membuat folder di tingkat utama. Dokumen diunggah ke folder yang sedang dipilih, dan pencarian mencakup semua yang bisa dilihat.
+- Folder hanya bisa dihapus bila kosong. Isi yang tidak terlihat oleh penghapusnya, dan folder yang induknya tidak terlihat, tampil di tingkat utama.
 - SOP yang dihapus masuk **Recycle bin**. Pengguna hanya melihat, memulihkan, dan menghapus permanen yang dia hapus sendiri; admin menangani semuanya.
-- Setiap penyimpanan membuat versi di **Riwayat**. Bila SOP sudah diubah orang lain, penyimpan memilih: timpa, simpan sebagai salinan private, atau batal.
+- Setiap penyimpanan membuat versi di **Riwayat**. Bila SOP sudah diubah orang lain, penyimpan memilih: timpa, simpan sebagai salinan, atau batal. Pemegang hak Lihat hanya bisa menyimpan sebagai salinan.
 - **Sedang diedit** hanya pemberitahuan, bukan kunci. Keterangan dari browser yang tertutup hilang sendiri setelah sekitar 5 menit.
 - Pemakaian dan batas penyimpanan hanya tampil untuk admin. Angkanya perkiraan dari ukuran JSON, belum termasuk indeks Firestore.
 
@@ -203,7 +205,8 @@ Struktur utama:
 | `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan per tab (id tab = id entri), daftar, hapus |
 | `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, label, duplikat |
 | `src/lib/faculty.svelte.js` | Pustaka Daring: login, baca/tulis Firestore, riwayat, keterangan sedang diedit; Firebase dimuat saat pertama dipakai |
-| `src/lib/FacultyDialog.svelte` | Dialog Pustaka Daring: folder, daftar, Recycle bin, tab Admin |
+| `src/lib/FacultyDialog.svelte` | Dialog Pustaka Daring: pohon folder, daftar file, menu klik kanan, Recycle bin, tab Admin |
+| `src/lib/AccessDialog.svelte` | Dialog hak akses file dan folder |
 | `src/lib/FacultyConflict.svelte` | Pilihan saat penyimpanan bertabrakan |
 | `firebase/firestore.rules` | Aturan akses Pustaka Daring, diuji oleh `firebase/rules.test.js` di emulator |
 | `src/lib/xlsx.js` | Ekspor XLSX: mengisi template SOP (gaya, tema, logo), diagram sebagai shape DrawingML |

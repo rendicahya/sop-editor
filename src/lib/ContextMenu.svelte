@@ -2,7 +2,8 @@
   // Menu klik kanan. Item: { label, run, disabled, danger, checked, hint, title } | { sep: true } | { head }.
   // Menu tidak mengambil fokus (isian yang diklik kanan tetap fokus dengan seleksinya), jadi navigasi
   // keyboard (↑/↓, Enter, Esc) ditangkap di window pada fase capture.
-  let { x, y, items, onclose } = $props();
+  // `host`: tempat menu ditempel. Di dalam <dialog> modal harus dialog itu sendiri, karena <body> ada di bawahnya.
+  let { x, y, items, onclose, host = null } = $props();
 
   let el = $state();
   let active = $state(-1);
@@ -55,7 +56,7 @@
 
   /** Menu ditempel di <body> agar posisi fixed tidak terpengaruh transformasi halaman. */
   function portal(node) {
-    document.body.appendChild(node);
+    (host ?? document.body).appendChild(node);
     return { destroy: () => node.remove() };
   }
 </script>

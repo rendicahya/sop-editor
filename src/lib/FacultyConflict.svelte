@@ -20,11 +20,11 @@
         tersimpan di Riwayat dan masih bisa dikembalikan.
       </p>
     {:else}
-      <p>{info.message} Pekerjaan Anda tidak hilang, karena masih bisa disimpan sebagai salinan private.</p>
+      <p>{info.message} Pekerjaan Anda tidak hilang, karena masih bisa disimpan sebagai salinan milik Anda.</p>
     {/if}
     <footer>
       <button class="btn" onclick={() => onchoice('cancel')}>Batal</button>
-      <button class="btn" class:primary={!info.canOverwrite} onclick={() => onchoice('copy')}>Simpan sebagai salinan private</button>
+      <button class="btn" class:primary={!info.canOverwrite} onclick={() => onchoice('copy')}>Simpan sebagai salinan</button>
       {#if info.canOverwrite}<button class="btn primary" onclick={() => onchoice('overwrite')}>Timpa dengan versi saya</button>{/if}
     </footer>
   {/if}

@@ -610,7 +610,7 @@
     }
   }
 
-  // Pustaka Daring. Tab yang tertaut menyimpan tab.remote: { id, rev, title, visibility, canRename }.
+  // Pustaka Daring. Tab yang tertaut menyimpan tab.remote: lihat Faculty.remoteOf.
   let facultyOpen = $state(false);
   let conflict = $state(null);
   let conflictChosen;
@@ -627,12 +627,12 @@
     if (faculty.status === 'in') untrack(syncEditing);
   });
 
-  /** Tanda "sedang diedit" mengikuti tab yang punya perubahan belum tersimpan (SOP public saja). */
+  /** Tanda "sedang diedit" mengikuti tab yang punya perubahan belum tersimpan (SOP bersama yang boleh diedit saja). */
   function syncEditing() {
     for (const t of tabs.list) {
       if (!t.remote) continue;
       const dirty = t.id === tabs.active ? current !== clean : stash.get(t.id)?.json !== stash.get(t.id)?.clean;
-      Faculty.setEditing(t.remote.id, t.remote.visibility === 'public' && dirty);
+      Faculty.setEditing(t.remote.id, t.remote.shared && t.remote.canEdit && dirty);
     }
   }
 
@@ -644,12 +644,15 @@
     } catch {
       return alert('SOP ini rusak dan tidak bisa dibuka.');
     }
-    activeTab.remote = { id: sop.id, rev: sop.rev, title: sop.title, visibility: sop.visibility, canRename: Faculty.canManage(sop), folder: sop.folder };
+    activeTab.remote = Faculty.remoteOf(sop);
   }
 
-  function onFacultyVisibility(id, visibility) {
-    const t = tabs.list.find((x) => x.remote?.id === id);
-    if (t) t.remote.visibility = visibility;
+  /** Daftar pustaka baru dimuat: tab yang terbuka mengikuti hak akses terbaru. */
+  function onFacultyLoaded(live) {
+    for (const t of tabs.list) {
+      const sop = t.remote && live.find((s) => s.id === t.remote.id);
+      if (sop) Object.assign(t.remote, { ...Faculty.remoteOf(sop), rev: t.remote.rev, title: t.remote.title });
+    }
     syncEditing();
   }
 
@@ -727,15 +730,16 @@
       if (!tab.remote) {
         if (isBlank(doc)) return notify('Dokumen masih kosong, belum ada yang diunggah'), false;
         linkTab(tab, doc, await Faculty.uploadSop(doc, undefined, folder));
-        notify('Diunggah ke Pustaka Daring sebagai private.');
+        notify('Diunggah ke Pustaka Daring.');
         return true;
       }
       const { id, rev } = tab.remote;
       let r;
       try {
+        if (!tab.remote.canEdit) throw new Faculty.FacultyError('denied', 'Anda hanya punya hak lihat pada SOP ini.');
         r = await Faculty.saveSop(id, doc, rev);
       } catch (e) {
-        if (e.code !== 'conflict' && e.code !== 'gone') throw e;
+        if (!['conflict', 'gone', 'denied'].includes(e.code)) throw e;
         const canOverwrite = e.code === 'conflict';
         const choice = await new Promise((resolve) => {
           conflictChosen = resolve;
@@ -748,7 +752,7 @@
           const copy = await Faculty.uploadSop(doc, title, tab.remote.folder);
           Faculty.setEditing(id, false);
           linkTab(tab, doc, copy);
-          notify('Disimpan sebagai salinan private.');
+          notify('Disimpan sebagai salinan milik Anda.');
           return true;
         }
       }
@@ -1111,6 +1115,11 @@
 
   <main class="workspace">
     <section class="preview">
+      {#if activeTab?.remote && !activeTab.remote.canEdit}
+        <div class="waiting" role="status">
+          <span><strong>Anda hanya punya hak lihat pada SOP ini.</strong> Perubahan hanya bisa disimpan sebagai salinan milik Anda.</span>
+        </div>
+      {/if}
       {#if activeEditors && !empty}
         <div class="waiting" role="status">
           <span><strong>Sedang diedit juga oleh {activeEditors}.</strong> Yang menyimpan belakangan akan mendapat pilihan untuk menimpa atau membuat salinan.</span>
@@ -1204,7 +1213,7 @@
     onupload={async (folder) => {
       if (await saveToFaculty(folder)) facultyOpen = false;
     }}
-    onvisibility={onFacultyVisibility}
+    onloaded={onFacultyLoaded}
     onrenamed={onFacultyRenamed}
     onbinned={onFacultyBinned}
     onnotify={notify}
