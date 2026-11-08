@@ -35,7 +35,7 @@ export const isShared = (item) => (item.readers ?? []).some((r) => r !== item.cr
 /** Bentuk `tab.remote` untuk SOP yang terbuka di tab. */
 export const remoteOf = (sop) => ({
   id: sop.id, rev: sop.rev, title: sop.title, folder: sop.folder ?? null,
-  shared: isShared(sop), canEdit: canEdit(sop), canRename: canManage(sop)
+  shared: isShared(sop), canEdit: canEdit(sop), canRename: canEdit(sop)
 });
 
 /** code: conflict | gone | full | denied | too-big | blank */
@@ -253,13 +253,13 @@ export function inherited(parent, owner) {
     : { readers: owned(owner), editors: owned(owner) };
 }
 
-/** Mengembalikan folder bila akun ini boleh menambah isinya, selain itu null (tingkat utama). */
+/** Mengembalikan folder bila akun ini boleh menambah isinya (pemilik atau admin), selain itu null (tingkat utama). */
 async function usableFolder(id) {
   if (!id) return null;
   const { F, db } = await load();
   try {
     const snap = await F.getDocFromServer(F.doc(db, 'folders', id));
-    if (snap.exists() && (isAdmin() || canManage(snap.data()) || granted(snap.data().editors))) return snap.data();
+    if (snap.exists() && canManage(snap.data())) return snap.data();
   } catch (e) {
     if (e.code !== 'permission-denied') throw e;
   }
@@ -270,7 +270,7 @@ export async function createFolder(name, parent) {
   const { F, db } = await load();
   const { uid, email, name: createdByName } = faculty.user;
   const up = await folderWrite(usableFolder(parent));
-  if (parent && !up) throw new Error('Anda tidak punya hak edit di folder ini.');
+  if (parent && !up) throw new Error('Hanya pemilik folder ini yang bisa menambah isinya.');
   await folderWrite(F.addDoc(F.collection(db, 'folders'), {
     name, parent, custom: false, ...inherited(up, email),
     createdBy: uid, createdByName, createdByEmail: email, createdAt: F.serverTimestamp()
@@ -375,7 +375,7 @@ export async function reconcileAccess(folders, sops) {
 
 /**
  * Mengunggah sebagai SOP baru yang mengikuti hak akses foldernya; akun ini tercatat sebagai pemiliknya.
- * Tanpa hak edit di `folder`, SOP masuk ke tingkat utama.
+ * Bila `folder` bukan milik akun ini (dan bukan admin), SOP masuk ke tingkat utama.
  */
 export async function uploadSop(doc, title, folder = null) {
   const { F, db } = await load();
@@ -426,7 +426,7 @@ const goneError = () => new FacultyError('gone', 'SOP ini sudah dihapus, atau ha
 
 /**
  * Menyimpan perubahan dari salinan `baseRev`. Bila SOP sudah diubah orang lain, melempar `conflict`
- * kecuali `overwrite`. Selain pembuat dan admin, Nama SOP selalu mengikuti nama di pustaka.
+ * kecuali `overwrite`.
  */
 export async function saveSop(id, doc, baseRev, { overwrite = false } = {}) {
   const { F, db } = await load();
@@ -436,7 +436,7 @@ export async function saveSop(id, doc, baseRev, { overwrite = false } = {}) {
     if (cur.rev !== baseRev && !overwrite) {
       throw new FacultyError('conflict', 'SOP ini sudah diubah orang lain.', { by: cur.updatedByName, at: ms(cur.updatedAt) });
     }
-    const c = cloudJson(doc, canManage(cur) ? undefined : cur.title);
+    const c = cloudJson(doc);
     if (c.json === cur.json && c.title === cur.title) return { rev: cur.rev, title: cur.title, unchanged: true };
     writeContent(F, db, tx, ref, cur, c);
     return { rev: cur.rev + 1, title: c.title };

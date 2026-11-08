@@ -152,13 +152,14 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
 | Tindakan | Lihat | Edit | Pemilik dan admin |
 | --- | --- | --- | --- |
 | Membuka, menduplikat, melihat riwayat dan daftar hak akses | Ya | Ya | Ya |
-| Mengedit isi SOP, menambah SOP dan subfolder ke dalam folder | | Ya | Ya |
-| Mengubah nama, memindahkan, menghapus, mengatur hak akses | | | Ya |
+| Mengedit isi SOP, mengubah nama SOP dan folder | | Ya | Ya |
+| Menambah SOP dan subfolder ke dalam folder, memindahkan, menghapus, mengatur hak akses | | | Ya |
 
+- Hanya akun yang didaftarkan admin (@ub.ac.id atau @gmail.com) yang bisa masuk. **Semua anggota** berarti semua akun terdaftar itu, dan semua anggota bisa melihat daftar email anggota untuk memilih kepada siapa file dibagikan.
 - **Hak akses** diberikan per anggota, sebagai Lihat atau Edit, pada file maupun folder. Pilihan **Semua anggota** tersedia untuk yang dipakai bersama. Pemilik selalu bisa melihat dan mengedit.
 - File dan subfolder **mengikuti folder induknya** secara bawaan, termasuk pemilik folder itu. Pilihan **Khusus** pada file atau subfolder menggantikan hak dari induk sepenuhnya. File baru di tingkat utama hanya bisa dilihat pemiliknya.
 - Daftar hak disalin ke setiap dokumen karena kueri Firestore tidak bisa menelusuri rantai folder. Aplikasi menyebarkan perubahan ke isi folder dan menyelesaikannya saat daftar dimuat berikutnya bila terputus; aturan server hanya menerima salinan yang sama persis dengan daftar folder induk.
-- **Folder** bertingkat tanpa batas kedalaman. Semua anggota bisa membuat folder di tingkat utama. Dokumen diunggah ke folder yang sedang dipilih, dan pencarian mencakup semua yang bisa dilihat.
+- **Folder** bertingkat tanpa batas kedalaman. Semua anggota bisa membuat folder di tingkat utama; isi sebuah folder hanya bisa ditambah pemiliknya dan admin. Dokumen diunggah ke folder yang sedang dipilih, dan pencarian mencakup semua yang bisa dilihat.
 - Folder hanya bisa dihapus bila kosong. Isi yang tidak terlihat oleh penghapusnya, dan folder yang induknya tidak terlihat, tampil di tingkat utama.
 - SOP yang dihapus masuk **Recycle bin**. Pengguna hanya melihat, memulihkan, dan menghapus permanen yang dia hapus sendiri; admin menangani semuanya.
 - Setiap penyimpanan membuat versi di **Riwayat**. Bila SOP sudah diubah orang lain, penyimpan memilih: timpa, simpan sebagai salinan, atau batal. Pemegang hak Lihat hanya bisa menyimpan sebagai salinan.

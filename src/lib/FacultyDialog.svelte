@@ -92,8 +92,8 @@
   const here = $derived(byId.has(folderId) ? folderId : null);
   const byName = (a, b) => a.name.localeCompare(b.name, 'id');
   const childrenOf = (id) => folders.filter((f) => parents.get(f.id) === id).sort(byName);
-  /** Menambah isi perlu hak edit atas foldernya; tingkat utama terbuka untuk semua anggota. */
-  const canAdd = (id) => !id || (byId.has(id) && canEdit(byId.get(id)));
+  /** Menambah isi hanya untuk pemilik folder dan admin; tingkat utama terbuka untuk semua anggota. */
+  const canAdd = (id) => !id || (byId.has(id) && canManage(byId.get(id)));
 
   /** Folder dari tingkat teratas sampai `id`. */
   function pathOf(id) {
@@ -124,7 +124,7 @@
     walk(null, 0);
     return out;
   });
-  // Tujuan harus boleh diedit. Folder tidak bisa dipindahkan ke dirinya sendiri atau ke dalam subfoldernya.
+  // Tujuan harus folder milik sendiri (admin: semua folder). Folder tidak bisa dipindahkan ke dirinya sendiri atau ke dalam subfoldernya.
   const moveTargets = $derived(flatTree.filter((t) => canAdd(t.id) && !(moving?.isFolder && pathOf(t.id).some((a) => a.id === moving.item.id))));
 
   function select(id) {
@@ -283,10 +283,10 @@
       ...hereItems(f.id),
       { sep: true },
       { label: accessTip(f), run: () => openAccess('folders', f) },
+      ...(canEdit(f) ? [{ label: 'Ubah nama', run: () => renameFolder(f) }] : []),
       ...(manage
         ? [
             { label: 'Pindahkan', run: () => moveFolder(f) },
-            { label: 'Ubah nama', run: () => renameFolder(f) },
             { sep: true },
             { label: 'Hapus', run: () => removeFolder(f), danger: true }
           ]
@@ -301,10 +301,10 @@
       { label: 'Duplikat', run: () => duplicate(s) },
       { label: 'Riwayat', run: () => toggleHistory(s) },
       { label: accessTip(s), run: () => openAccess('sops', s) },
+      ...(canEdit(s) ? [{ label: 'Ubah nama', run: () => rename(s) }] : []),
       ...(manage
         ? [
             { label: 'Pindahkan', run: () => moveSop(s) },
-            { label: 'Ubah nama', run: () => rename(s) },
             { sep: true },
             { label: 'Hapus', run: () => moveToBin(s), danger: true }
           ]
@@ -317,7 +317,8 @@
     { label: 'Hapus permanen', run: () => purge(s), danger: true }
   ];
 
-  const uploadBlocked = $derived(!canAdd(here) ? 'Anda hanya punya hak lihat di folder ini' : !cansave ? 'Dokumen ini kosong atau sudah tertaut ke Pustaka Daring' : '');
+  const noAddTip = 'Hanya pemilik folder ini yang bisa menambah isinya';
+  const uploadBlocked = $derived(!canAdd(here) ? noAddTip : !cansave ? 'Dokumen ini kosong atau sudah tertaut ke Pustaka Daring' : '');
   const uploadTip = $derived(uploadBlocked || (here ? `Unggah dokumen ini ke ${byId.get(here).name}` : 'Unggah dokumen ini ke Utama'));
 
   // ---- Admin ----
@@ -455,7 +456,7 @@
             {#if here && !searching}
               {@render ib('users', accessTip(byId.get(here)), () => openAccess('folders', byId.get(here)))}
             {/if}
-            {@render ib('folderPlus', canAdd(here) ? 'Folder baru di sini' : 'Anda hanya punya hak lihat di folder ini', () => newFolder(), { disabled: !canAdd(here) })}
+            {@render ib('folderPlus', canAdd(here) ? 'Folder baru di sini' : noAddTip, () => newFolder(), { disabled: !canAdd(here) })}
             {@render ib('upload', uploadTip, () => onupload(here), { disabled: !!uploadBlocked })}
             {@render ib('refresh', 'Muat ulang daftar', refresh)}
           </div>
@@ -492,9 +493,9 @@
                   {@render ib('copy', 'Duplikat sebagai milik Anda', () => duplicate(s))}
                   {@render ib('history', 'Riwayat', () => toggleHistory(s), { on: history?.id === s.id, expanded: history?.id === s.id })}
                   {@render ib('users', accessTip(s), () => openAccess('sops', s))}
+                  {#if canEdit(s)}{@render ib('pencil', 'Ubah nama', () => rename(s))}{/if}
                   {#if manage}
                     {@render ib('move', 'Pindahkan', () => moveSop(s))}
-                    {@render ib('pencil', 'Ubah nama', () => rename(s))}
                     {@render ib('trash', 'Pindahkan ke Recycle bin', () => moveToBin(s), { danger: true })}
                   {/if}
                 </span>

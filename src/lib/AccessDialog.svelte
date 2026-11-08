@@ -137,9 +137,9 @@
 
       <small>
         {#if isFolder}
-          Lihat: membuka folder dan isinya. Edit: juga mengedit isi SOP serta menambah SOP dan subfolder. Isi folder ikut berubah, kecuali yang hak aksesnya khusus.
+          Lihat: membuka folder dan isinya. Edit: juga mengubah nama folder dan mengedit isi SOP di dalamnya. Menambah isi folder hanya untuk pemiliknya dan admin. Isi folder ikut berubah, kecuali yang hak aksesnya khusus.
         {:else}
-          Lihat: membuka dan menduplikat. Edit: juga mengubah isinya. Mengganti nama, memindahkan, dan menghapus tetap hanya untuk pemilik dan admin.
+          Lihat: membuka dan menduplikat. Edit: juga mengubah isi dan namanya. Memindahkan dan menghapus tetap hanya untuk pemilik dan admin.
         {/if}
       </small>
 

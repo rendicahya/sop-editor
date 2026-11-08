@@ -167,12 +167,12 @@ describe('hak akses SOP', () => {
     await assertSucceeds(getDoc(doc(as('bud'), 'sops/s/versions/1')));
     await assertFails(save(as('bud'), 'bud', 's', await read('s'), '{"a":3}'));
   });
-  it('hak edit: bisa menyimpan, tetapi bukan mengubah nama, memindahkan, menghapus, atau mengubah hak akses', async () => {
+  it('hak edit: bisa menyimpan dan mengubah nama, tetapi bukan memindahkan, menghapus, atau mengubah hak akses', async () => {
     await given('ali', 's');
     await updateDoc(doc(as('ali'), 'sops/s'), custom('ali', [], [BUD]));
     const cur = await read('s');
     await assertSucceeds(save(as('bud'), 'bud', 's', cur, '{"a":3}'));
-    await assertFails(save(as('bud'), 'bud', 's', await read('s'), '{"a":4}', { title: 'Baru' }));
+    await assertSucceeds(save(as('bud'), 'bud', 's', await read('s'), '{"a":4}', { title: 'Baru' }));
     await assertFails(updateDoc(doc(as('bud'), 'sops/s'), custom('ali', [], [BUD, 'x@ub.ac.id'])));
     await assertFails(updateDoc(doc(as('bud'), 'sops/s'), { folder: null }));
     await assertFails(toBin(as('bud'), 'bud', 's'));
@@ -298,9 +298,10 @@ describe('mengedit isi', () => {
 });
 
 describe('rename', () => {
-  it('hanya pembuat dan admin', async () => {
-    const cur = await given('ali', 's', 'public');
-    await assertFails(save(as('bud'), 'bud', 's', cur, '{"a":2}', { title: 'Baru' }));
+  it('pembuat, admin, dan pemegang hak edit; hak lihat tidak cukup', async () => {
+    const cur = await given('ali', 's');
+    await updateDoc(doc(as('ali'), 'sops/s'), custom('ali', [USERS.bud.email]));
+    await assertFails(save(as('bud'), 'bud', 's', await read('s'), '{"a":2}', { title: 'Baru' }));
     await assertSucceeds(save(as('ali'), 'ali', 's', cur, '{"a":2}', { title: 'Baru' }));
     await assertSucceeds(save(as('adm'), 'adm', 's', await read('s'), '{"a":3}', { title: 'Baru lagi' }));
   });
@@ -428,14 +429,15 @@ describe('folder', () => {
     await assertSucceeds(newFolder(as('ali'), 'ali', 'f1'));
     await assertSucceeds(newFolder(as('bud'), 'bud', 'f2'));
   });
-  it('subfolder di folder orang lain perlu hak edit atas folder itu', async () => {
+  it('subfolder hanya bisa dibuat pemilik folder induk dan admin; hak edit tidak cukup', async () => {
     await newFolder(as('ali'), 'ali', 'f1');
     const lists = { readers: [ALI, BUD], editors: [ALI, BUD] };
     await assertFails(newFolder(as('bud'), 'bud', 'x', { parent: 'f1', ...lists }));
-    await shareFolder('ali', 'f1', [BUD]);
-    await assertFails(newFolder(as('bud'), 'bud', 'x', { parent: 'f1', readers: [ALI, BUD], editors: [ALI, BUD] }));
     await shareFolder('ali', 'f1', [], [BUD]);
-    await assertSucceeds(newFolder(as('bud'), 'bud', 'f2', { parent: 'f1', ...lists }));
+    await assertFails(newFolder(as('bud'), 'bud', 'x', { parent: 'f1', ...lists }));
+    await assertSucceeds(newFolder(as('ali'), 'ali', 'f2', { parent: 'f1', readers: [ALI, BUD], editors: [ALI, BUD] }));
+    const adm = USERS.adm.email;
+    await assertSucceeds(newFolder(as('adm'), 'adm', 'f3', { parent: 'f1', readers: [ALI, BUD, adm], editors: [ALI, BUD, adm] }));
   });
   it('bukan anggota tidak bisa membuat atau melihat folder', async () => {
     await newFolder(as('ali'), 'ali', 'f1');
@@ -468,11 +470,15 @@ describe('folder', () => {
     await assertFails(newFolder(as('ali'), 'ali', 'x', { custom: true }));
     await assertFails(newFolder(as('ali'), 'ali', 'x', { readers: ['*', ALI] }));
   });
-  it('ubah nama, pindah, dan hapus hanya pemilik dan admin; hak edit tidak cukup', async () => {
+  it('hak edit cukup untuk ubah nama; pindah, hak akses, dan hapus hanya pemilik dan admin', async () => {
     await newFolder(as('ali'), 'ali', 'f1');
     await newFolder(as('ali'), 'ali', 'f2');
+    await newFolder(as('ali'), 'ali', 'f3');
+    await shareFolder('ali', 'f3', [BUD]);
+    await assertFails(updateDoc(doc(as('bud'), 'folders/f3'), { name: 'Lihat saja' }));
     await shareFolder('ali', 'f1', [], [BUD]);
-    await assertFails(updateDoc(doc(as('bud'), 'folders/f1'), { name: 'Baru' }));
+    await assertSucceeds(updateDoc(doc(as('bud'), 'folders/f1'), { name: 'Oleh Bud' }));
+    await assertFails(updateDoc(doc(as('bud'), 'folders/f1'), { name: 'Oleh Bud', parent: null, lain: 1 }));
     await assertFails(updateDoc(doc(as('bud'), 'folders/f1'), { parent: 'f2' }));
     await assertFails(deleteDoc(doc(as('bud'), 'folders/f1')));
     await assertFails(updateDoc(doc(as('bud'), 'folders/f1'), custom('ali')));
@@ -488,21 +494,26 @@ describe('folder', () => {
     await assertFails(updateDoc(doc(as('ali'), 'folders/f1'), { parent: 'f1' }));
     await assertFails(updateDoc(doc(as('adm'), 'folders/f1'), { createdBy: 'adm' }));
   });
-  it('folder hanya bisa dipindahkan ke folder yang boleh diedit', async () => {
+  it('folder hanya bisa dipindahkan ke folder milik sendiri', async () => {
     await newFolder(as('ali'), 'ali', 'f1');
     await newFolder(as('bud'), 'bud', 'mine');
+    await newFolder(as('bud'), 'bud', 'dest');
     const lists = { readers: [ALI, BUD], editors: [ALI, BUD] };
-    await assertFails(updateDoc(doc(as('bud'), 'folders/mine'), { parent: 'f1', ...lists }));
     await shareFolder('ali', 'f1', [], [BUD]);
-    await assertSucceeds(updateDoc(doc(as('bud'), 'folders/mine'), { parent: 'f1', ...lists }));
+    await assertFails(updateDoc(doc(as('bud'), 'folders/mine'), { parent: 'f1', ...lists }));
+    await assertSucceeds(updateDoc(doc(as('bud'), 'folders/mine'), { parent: 'dest' }));
   });
   it('isi folder mewarisi hak akses: SOP baru wajib menyalin daftar folder ditambah pemiliknya', async () => {
     await newFolder(as('ali'), 'ali', 'f1');
     await shareFolder('ali', 'f1', [], [BUD]);
-    const both = { readers: [ALI, BUD], editors: [ALI, BUD] };
-    await assertFails(create(as('bud'), 'bud', 'x', '{"a":1}', { folder: 'f1' }));
-    await assertSucceeds(create(as('bud'), 'bud', 'a', '{"a":1}', inFolder(both, 'f1')));
+    const adm = USERS.adm.email;
+    const both = { readers: [ALI, BUD, adm], editors: [ALI, BUD, adm] };
+    await assertFails(create(as('bud'), 'bud', 'x', '{"a":1}', inFolder({ readers: [ALI, BUD], editors: [ALI, BUD] }, 'f1')));
+    await assertFails(create(as('adm'), 'adm', 'x', '{"a":1}', { folder: 'f1' }));
+    await assertSucceeds(create(as('adm'), 'adm', 'a', '{"a":1}', inFolder(both, 'f1')));
+    // Pemilik folder dan pemegang hak folder bisa membuka SOP orang lain di dalamnya.
     await assertSucceeds(getDoc(doc(as('ali'), 'sops/a')));
+    await assertSucceeds(save(as('bud'), 'bud', 'a', await read('a'), '{"a":2}'));
   });
   it('tidak bisa mengunggah ke folder tanpa hak edit, folder yang tidak ada, atau rujukan tidak sah', async () => {
     await newFolder(as('ali'), 'ali', 'f1');

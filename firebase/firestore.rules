@@ -117,12 +117,12 @@ service cloud.firestore {
         && d.editors.toSet().hasAll(ownerSet(owner))
         && (d.custom == true || mirrors(d, owner, folder));
     }
-    // Isi folder (SOP, subfolder, atau yang dipindahkan ke dalamnya) hanya boleh ditambah oleh yang punya hak edit.
+    // Isi folder (SOP, subfolder, atau yang dipindahkan ke dalamnya) hanya boleh ditambah pemilik folder dan admin.
+    // Hak edit atas folder hanya untuk mengubah namanya dan isi SOP yang mengikutinya.
     function canAddTo(folder) {
       return folder == null
         || isAdmin()
-        || get(folderPath(folder)).data.createdBy == uid()
-        || granted(get(folderPath(folder)).data.editors);
+        || get(folderPath(folder)).data.createdBy == uid();
     }
 
     function isValidCreate(d) {
@@ -154,7 +154,6 @@ service cloud.firestore {
         && validContent(d)
         && d.rev == r.rev + 1
         && d.totalBytes == r.totalBytes + d.size
-        && (d.title == r.title || isOwnerOrAdmin(r))
         && existsAfter(/databases/$(database)/documents/sops/$(id)/versions/$(string(r.rev)))
         && usageChangedBy(d.size)
         && withinLimit();
@@ -244,8 +243,8 @@ service cloud.firestore {
     }
 
     // ---- Folder ----
-    // Di tingkat utama semua anggota bisa membuat folder; di dalam folder perlu hak edit atas folder itu.
-    // Ubah nama, pindah, hak akses, dan hapus: pemilik dan admin.
+    // Di tingkat utama semua anggota bisa membuat folder; di dalam folder hanya pemilik folder itu dan admin.
+    // Ubah nama: pemilik, admin, dan pemegang hak edit. Pindah, hak akses, dan hapus: pemilik dan admin.
     function validFolder(d) {
       return d.name is string
         && d.name.size() > 0 && d.name.size() <= 120
@@ -267,7 +266,7 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
       allow update: if isMember() && (
         // Ubah nama
-        (isOwnerOrAdmin(resource.data) && changed().hasOnly(['name']) && validFolder(request.resource.data))
+        ((isOwnerOrAdmin(resource.data) || granted(resource.data.editors)) && changed().hasOnly(['name']) && validFolder(request.resource.data))
         // Pindah; folder yang mengikuti induk langsung memakai daftar induk barunya
         || (isOwnerOrAdmin(resource.data)
           && changed().hasOnly(['parent', 'readers', 'editors'])
