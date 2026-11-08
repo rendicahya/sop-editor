@@ -176,15 +176,79 @@
     e.preventDefault();
     const { item, isFolder, target } = moving;
     moving = null;
+    moveTo(item, isFolder, target);
+  }
+  function moveTo(item, isFolder, target) {
     const dest = byId.get(target) ?? null;
     if (isFolder) {
       if (target === parents.get(item.id)) return;
       if (nameTaken(item.name, target, item.id)) return alert(takenMessage(item.name));
+      if (target) expanded.add(target);
       act(() => F.moveFolder(item, dest), 'Folder dipindahkan');
     } else if (target !== folderOf(item)) {
       act(() => F.moveSop(item, dest), 'SOP dipindahkan');
     }
   }
+
+  // ---- Seret dan lepas ----
+  // Yang bisa diseret: SOP dan folder yang boleh dipindahkan (pemilik dan admin). Tempat lepas: folder di pohon,
+  // breadcrumb, folder di hasil pencarian, dan area daftar (folder yang sedang dibuka).
+  let drag = $state(null); // { item, isFolder }
+  let dropAt = $state(undefined); // id folder yang sedang disorot; null = Utama
+  let hoverTimer;
+  const parentOf = (d) => (d.isFolder ? (parents.get(d.item.id) ?? null) : folderOf(d.item));
+  function canDrop(target) {
+    if (!drag || target === parentOf(drag) || !canAdd(target)) return false;
+    return !(drag.isFolder && target && pathOf(target).some((a) => a.id === drag.item.id));
+  }
+  function dragStart(e, item, isFolder) {
+    if (!canManage(item)) return e.preventDefault();
+    e.stopPropagation();
+    menu = null;
+    drag = { item, isFolder };
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', isFolder ? item.name : titleOf(item));
+  }
+  function dragOver(e, target) {
+    if (!drag) return;
+    e.stopPropagation();
+    if (!canDrop(target)) {
+      e.dataTransfer.dropEffect = 'none';
+      if (dropAt === target) dropAt = undefined;
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dropAt !== target) {
+      dropAt = target;
+      clearTimeout(hoverTimer);
+      // Folder tertutup terbuka sendiri bila disorot sebentar, agar subfoldernya bisa dituju.
+      if (target && !expanded.has(target)) hoverTimer = setTimeout(() => dropAt === target && expanded.add(target), 700);
+    }
+  }
+  function dragLeave(e, target) {
+    if (dropAt === target && !e.currentTarget.contains(e.relatedTarget)) dropAt = undefined;
+  }
+  function dropOn(e, target) {
+    e.preventDefault();
+    e.stopPropagation();
+    const d = drag;
+    const ok = canDrop(target);
+    dragEnd();
+    if (d && ok) moveTo(d.item, d.isFolder, target);
+  }
+  function dragEnd() {
+    clearTimeout(hoverTimer);
+    drag = null;
+    dropAt = undefined;
+  }
+  /** Atribut tempat lepas untuk folder `target` (null = Utama). */
+  const dropzone = (target) => ({
+    ondragover: (e) => dragOver(e, target),
+    ondragenter: (e) => dragOver(e, target),
+    ondragleave: (e) => dragLeave(e, target),
+    ondrop: (e) => dropOn(e, target)
+  });
 
   async function act(fn, done) {
     try {
@@ -373,7 +437,7 @@
   {@const kids = childrenOf(f.id)}
   {@const opened = expanded.has(f.id)}
   <li role="treeitem" aria-selected={view === 'sops' && here === f.id} aria-expanded={kids.length ? opened : undefined}>
-    <div class="tn" class:sel={view === 'sops' && here === f.id} style:padding-left="{depth * 0.9 + 0.2}rem" role="presentation" oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
+    <div class="tn" class:sel={view === 'sops' && here === f.id} class:drop={dropAt === f.id} class:dragging={drag?.item === f} style:padding-left="{depth * 0.9 + 0.2}rem" role="presentation" draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
       {#if kids.length}
         <button type="button" class="chev" class:open={opened} aria-label={opened ? `Tutup ${f.name}` : `Buka ${f.name}`} onclick={() => toggle(f.id)}><Icon name="chevron" size={13} /></button>
       {:else}
@@ -415,7 +479,7 @@
         <div class="tree" role="presentation" oncontextmenu={(e) => openMenu(e, hereItems(null))}>
           <ul role="tree" aria-label="Folder">
             <li role="treeitem" aria-selected={view === 'sops' && !here}>
-              <div class="tn" class:sel={view === 'sops' && !here} style:padding-left="0.2rem" role="presentation">
+              <div class="tn" class:sel={view === 'sops' && !here} class:drop={dropAt === null} style:padding-left="0.2rem" role="presentation" {...dropzone(null)}>
                 <span class="chev none"></span>
                 <button type="button" class="tname" onclick={() => select(null)}>
                   <Icon name="folder" size={15} />
@@ -446,10 +510,10 @@
               <span class="muted grow">Hasil pencarian di semua folder</span>
             {:else}
               <nav class="grow" aria-label="Lokasi folder">
-                <button class="crumb" aria-current={here ? undefined : 'location'} onclick={() => select(null)}>Utama</button>
+                <button class="crumb" class:drop={dropAt === null} aria-current={here ? undefined : 'location'} onclick={() => select(null)} {...dropzone(null)}>Utama</button>
                 {#each crumbs as c (c.id)}
                   <span class="sep" aria-hidden="true">/</span>
-                  <button class="crumb" aria-current={c.id === here ? 'location' : undefined} onclick={() => select(c.id)}>{c.name}</button>
+                  <button class="crumb" class:drop={dropAt === c.id} aria-current={c.id === here ? 'location' : undefined} onclick={() => select(c.id)} {...dropzone(c.id)}>{c.name}</button>
                 {/each}
               </nav>
             {/if}
@@ -461,10 +525,10 @@
             {@render ib('refresh', 'Muat ulang daftar', refresh)}
           </div>
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <ul class="list" oncontextmenu={(e) => openMenu(e, hereItems(here))}>
+          <ul class="list" class:drop={!searching && drag && dropAt === here} oncontextmenu={(e) => openMenu(e, hereItems(here))} {...(searching ? {} : dropzone(here))}>
             {#each shownFolders as f (f.id)}
               {@const parent = parents.get(f.id)}
-              <li oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
+              <li class:drop={dropAt === f.id} class:dragging={drag?.item === f} draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
                 <button class="main" onclick={() => select(f.id)}>
                   <strong><Icon name="folder" size={15} /> {f.name} <em class:shared={F.isShared(f)}>{accessLabel(f)}</em></strong>
                   <small>{[parent && `di ${pathText(parent)}`, `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}</small>
@@ -474,7 +538,7 @@
             {#each shownLive as s (s.id)}
               {@const manage = canManage(s)}
               {@const editors = namesEditing(s)}
-              <li oncontextmenu={(e) => openMenu(e, sopMenu(s))}>
+              <li class:dragging={drag?.item === s} draggable={manage} ondragstart={(e) => dragStart(e, s, false)} ondragend={dragEnd} oncontextmenu={(e) => openMenu(e, sopMenu(s))}>
                 <button class="main" onclick={() => openSop(s)}>
                   <strong>
                     <Icon name="file" size={15} />
@@ -753,6 +817,21 @@
   }
   .tn:hover {
     background: var(--line);
+  }
+  .tn.drop,
+  .crumb.drop,
+  .list > li.drop {
+    background: var(--accent-soft);
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .list.drop {
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
+    border-radius: 6px;
+  }
+  .dragging {
+    opacity: 0.45;
   }
   .tn.sel,
   .tname.nav.sel {
