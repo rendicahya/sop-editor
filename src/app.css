@@ -635,11 +635,39 @@ button:disabled {
   font-size: 0.95em;
 }
 /* ---------- HP: aplikasi tidak didukung ---------- */
+.signin-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  background: var(--bg);
+  color: var(--text);
+}
+.signin-gate strong {
+  font-size: 1.25rem;
+}
+.signin-gate p {
+  margin: 0;
+  max-width: 26rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.signin-gate p.error {
+  color: var(--danger);
+}
+
 .mobile-block {
   display: none;
 }
 @media (max-width: 760px), (hover: none) and (pointer: coarse) {
-  .app {
+  .app,
+  .signin-gate {
     display: none;
   }
   .mobile-block {

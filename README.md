@@ -9,6 +9,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
 
 ## Fitur
 
+- **Wajib masuk dengan akun Google** sebelum aplikasi bisa dipakai. Akun Google apa pun boleh memakai editor; Pustaka Daring tetap hanya untuk akun yang didaftarkan admin. Dokumen tetap tersimpan di perangkat dan tidak dikirim ke mana pun hanya karena login. Sesi login diingat, jadi aplikasi tetap bisa dibuka saat luring setelah pernah masuk.
 - Format baku SOP Universitas Brawijaya: logo UB selalu tercetak; dokumen baru otomatis berisi kop kementerian sampai
   "UNIVERSITAS BRAWIJAYA" (kementerian, Fakultas Ilmu Komputer, UB), awalan nomor SOP `UN10/F15/`, pengesah Dekan FILKOM beserta nama dan NIP-nya,
   serta tanggal pembuatan dan tanggal efektif hari ini. Semuanya tetap bisa diubah.

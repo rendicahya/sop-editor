@@ -850,11 +850,17 @@
     await saveDoc(newTabId(), JSON.stringify(doc), name);
   }
 
+  // Aplikasi hanya bisa dipakai setelah masuk dengan akun Google (lihat .signin-gate).
+  const signedIn = $derived(!!faculty.user);
+  $effect(() => {
+    if (!signedIn) untrack(() => (facultyOpen = libraryOpen = false));
+  });
+
   onMount(() => {
+    Faculty.start();
     const session = loadSession();
     if (session) {
       resumeSession(session);
-      if (tabs.list.some((t) => t.remote)) Faculty.start();
     } else {
       // Aplikasi dibuka kosong: tab dari sesi sebelumnya disimpan ke Pustaka (bisa dibuka lagi dari sana).
       for (const t of tabs.list) {
@@ -895,6 +901,7 @@
   onbeforeunload={onBeforeUnload}
   onpagehide={onPageHide}
   onkeydown={(e) => {
+    if (!signedIn) return;
     if (e.key === 'Escape') {
       exportOpen = saveOpen = false;
       libraryMenu = null;
@@ -931,6 +938,7 @@
 <div
   class="app"
   class:dragging
+  inert={!signedIn}
   role="application"
   ondragover={(e) => {
     if (e.dataTransfer?.types.includes('Files')) {
@@ -1224,6 +1232,22 @@
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
   {#if dragging}<div class="dropzone">Lepaskan berkas .sop untuk membuka</div>{/if}
 </div>
+
+{#if !signedIn}
+  <div class="signin-gate">
+    <img src="./favicon.svg" alt="" width="56" height="56" />
+    <strong>SOP Editor</strong>
+    {#if faculty.status === 'out'}
+      <p>Masuk dengan akun Google Anda untuk memakai aplikasi ini.</p>
+      <button class="btn primary" onclick={() => Faculty.signIn().catch((e) => alert(e.message))}>Masuk dengan Google</button>
+    {:else if faculty.status === 'error'}
+      <p class="error">{faculty.error}</p>
+      <button class="btn" onclick={() => Faculty.start()}>Coba lagi</button>
+    {:else}
+      <p>Memuat…</p>
+    {/if}
+  </div>
+{/if}
 
 <!-- Ditampilkan (lewat CSS) menggantikan aplikasi di layar HP. -->
 <div class="mobile-block">

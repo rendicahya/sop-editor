@@ -84,7 +84,8 @@ async function applyUser(u) {
   if (!u) return Object.assign(faculty, { status: 'out', user: null, role: null, error: '' });
   const user = { uid: u.uid, email: u.email.toLowerCase(), name: (u.displayName || u.email).slice(0, 120) };
   if (!u.emailVerified || !DOMAIN.test(user.email)) return Object.assign(faculty, { status: 'domain', user, role: null, error: '' });
-  faculty.status = 'loading';
+  // `user` langsung diisi: aplikasi sudah boleh dipakai selagi keanggotaan pustaka diperiksa (juga saat luring).
+  Object.assign(faculty, { status: 'loading', user, role: null, error: '' });
   try {
     const { F, db } = await load();
     const m = await F.getDocFromServer(F.doc(db, 'members', user.email));
