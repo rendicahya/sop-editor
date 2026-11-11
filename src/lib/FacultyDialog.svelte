@@ -34,6 +34,10 @@
   let members = $state([]);
   let newEmail = $state('');
   let newRole = $state('member');
+  let newGroup = $state(''); // grup untuk anggota baru; '' = tanpa grup
+  let groups = $state([]);
+  let groupName = $state('');
+  let openGroup = $state(null); // id grup yang daftar anggotanya sedang dibuka
 
   const admin = $derived(faculty.status === 'in' && faculty.role === 'admin');
 
@@ -321,8 +325,10 @@
   function accessLabel(item) {
     const readers = item.readers ?? [];
     if (readers.includes(F.EVERYONE)) return 'Semua anggota';
-    const others = readers.filter((r) => r !== item.createdByEmail).length;
-    return others ? `${others} orang` : 'Private';
+    const others = readers.filter((r) => r !== item.createdByEmail);
+    const nGroups = others.filter(F.isGroup).length;
+    const nPeople = others.length - nGroups;
+    return [nGroups && `${nGroups} grup`, nPeople && `${nPeople} orang`].filter(Boolean).join(' · ') || 'Private';
   }
   const accessTip = (item) => (canManage(item) ? 'Atur hak akses' : 'Lihat hak akses');
 
@@ -388,7 +394,7 @@
   // ---- Admin ----
   async function refreshAdmin() {
     try {
-      [usage, members] = await Promise.all([F.getUsage(), F.listMembers()]);
+      [usage, members, groups] = await Promise.all([F.getUsage(), F.listMembers(), F.listGroups()]);
     } catch (e) {
       alert(e.message);
     }
@@ -400,7 +406,34 @@
     const email = newEmail.trim().toLowerCase();
     if (!/^[^@\s/]+@(ub\.ac\.id|gmail\.com)$/.test(email)) return alert('Masukkan alamat email @ub.ac.id atau @gmail.com.');
     newEmail = '';
-    adminAct(() => F.setMember(email, newRole));
+    const existing = members.find((m) => m.email === email);
+    const kept = existing?.groups ?? [];
+    adminAct(() => F.setMember(email, newRole, newGroup ? [...new Set([...kept, newGroup])] : kept));
+  }
+
+  const groupNames = (m) => m.groups.map((id) => groups.find((g) => g.id === id)?.name).filter(Boolean);
+  const inGroup = (g) => members.filter((m) => m.groups.includes(g.id));
+  const cleanName = (s) => s.trim().replace(/\s+/g, ' ').slice(0, 80);
+  function addGroup(e) {
+    e.preventDefault();
+    const name = cleanName(groupName);
+    if (!name) return;
+    if (groups.some((g) => g.name.toLowerCase() === name.toLowerCase())) return alert(`Grup ${name} sudah ada.`);
+    groupName = '';
+    adminAct(async () => (openGroup = await F.createGroup(name)));
+  }
+  function renameGroup(g) {
+    const name = cleanName(prompt('Nama grup:', g.name) ?? '');
+    if (name && name !== g.name) adminAct(() => F.renameGroup(g.id, name));
+  }
+  function deleteGroup(g) {
+    if (confirm(`Hapus grup ${g.name}? Anggotanya tetap terdaftar, tetapi hak akses yang diberikan lewat grup ini tidak berlaku lagi.`)) {
+      adminAct(() => F.deleteGroup(g.id, members));
+    }
+  }
+  function toggleInGroup(g, m, on) {
+    const emails = inGroup(g).map((x) => x.email).filter((x) => x !== m.email);
+    adminAct(() => F.setGroupMembers(g.id, on ? [...emails, m.email] : emails, members));
   }
   function removeMember(m) {
     if (confirm(`Cabut akses ${m.email}? SOP buatannya tetap ada.`)) adminAct(() => F.removeMember(m.email));
@@ -627,14 +660,21 @@
               <option value="member">Anggota</option>
               <option value="admin">Admin</option>
             </select>
+            {#if groups.length}
+              <select bind:value={newGroup} aria-label="Grup anggota baru">
+                <option value="">Tanpa grup</option>
+                {#each groups as g (g.id)}<option value={g.id}>{g.name}</option>{/each}
+              </select>
+            {/if}
             <button class="ib" aria-label="Tambah anggota" data-tip="Tambah anggota" disabled={!newEmail.trim()}><Icon name="plus" /></button>
           </form>
           <ul class="members">
             {#each members as m (m.email)}
               {@const self = m.email === faculty.user.email}
+              {@const gn = groupNames(m)}
               <li>
-                <span>{m.email}{self ? ' (Anda)' : ''}</span>
-                <select value={m.role} disabled={self} aria-label={`Peran ${m.email}`} onchange={(e) => adminAct(() => F.setMember(m.email, e.currentTarget.value))}>
+                <span>{m.email}{self ? ' (Anda)' : ''}{#if gn.length}<small class="groups-of">{gn.join(', ')}</small>{/if}</span>
+                <select value={m.role} disabled={self} aria-label={`Peran ${m.email}`} onchange={(e) => adminAct(() => F.setMember(m.email, e.currentTarget.value, m.groups))}>
                   <option value="member">Anggota</option>
                   <option value="admin">Admin</option>
                 </select>
@@ -642,6 +682,37 @@
               </li>
             {/each}
           </ul>
+        </section>
+        <section>
+          <h3>Grup <span class="muted">{groups.length}</span></h3>
+          <small>Grup bisa dipilih di Hak akses seperti email, sehingga semua anggotanya mendapat hak yang sama sekaligus. Anggota yang ditambahkan ke grup langsung mendapat hak grup itu.</small>
+          <form onsubmit={addGroup} class="row">
+            <input bind:value={groupName} maxlength="80" placeholder="Nama grup baru, mis. Prodi Informatika" aria-label="Nama grup baru" />
+            <button class="ib" aria-label="Buat grup" data-tip="Buat grup" disabled={!groupName.trim()}><Icon name="plus" /></button>
+          </form>
+          {#if groups.length}
+            <ul class="members">
+              {#each groups as g (g.id)}
+                {@const shown = openGroup === g.id}
+                {@const count = inGroup(g).length}
+                <li class="group">
+                  <div class="group-head">
+                    <span>{g.name} <small class="groups-of">{count} anggota</small></span>
+                    {@render ib('users', shown ? 'Tutup daftar anggota' : 'Atur anggota grup', () => (openGroup = shown ? null : g.id), { on: shown, expanded: shown })}
+                    {@render ib('pencil', 'Ubah nama grup', () => renameGroup(g))}
+                    {@render ib('trash', 'Hapus grup', () => deleteGroup(g), { danger: true })}
+                  </div>
+                  {#if shown}
+                    <div class="group-members">
+                      {#each members as m (m.email)}
+                        <label><input type="checkbox" checked={m.groups.includes(g.id)} onchange={(e) => toggleInGroup(g, m, e.currentTarget.checked)} /> {m.email}</label>
+                      {/each}
+                    </div>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          {/if}
         </section>
       </div>
         {/if}
@@ -1158,5 +1229,39 @@
     flex: 1;
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+  .admin .groups-of {
+    display: block;
+    font-size: 0.76rem;
+  }
+  .members li.group {
+    display: block;
+  }
+  .group-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .group-members {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    max-height: 14rem;
+    overflow: auto;
+    margin: 0.35rem 0 0.15rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    background: var(--surface-2);
+  }
+  .group-members label {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+  .group-members input {
+    width: auto;
+    margin: 0;
   }
 </style>

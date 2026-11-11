@@ -2,7 +2,7 @@ rules_version = '2';
 
 // Pustaka Daring. Satu-satunya penjaga data: aplikasi berjalan di browser, jadi semua batasan harus ada di sini.
 //
-//   members/{email}            { role: 'member' | 'admin', addedBy, addedAt }
+//   members/{email}            { role: 'member' | 'admin', addedBy, addedAt, groups: [id grup] }
 //   folders/{id}               { name, parent, custom, readers, editors, createdBy, createdByName, createdByEmail, createdAt }
 //   sops/{id}                  isi terkini beserta metadata; `folder` berisi id folder (tidak ada/null = tingkat utama)
 //   sops/{id}/versions/{rev}   isi yang tertimpa, tidak bisa diubah
@@ -10,7 +10,9 @@ rules_version = '2';
 //   stats/usage                { bytes, limit, lastSop }: hanya admin yang bisa membaca
 //   stats/capacity             tanpa isi: boleh dibaca selama pustaka belum penuh
 //
-// Hak akses: `readers` (view atau edit) dan `editors` (edit) berisi email, atau '*' untuk semua anggota. Pemilik
+//   groups/{id}                { name }: hanya admin yang mengelola; anggotanya tercatat di members/{email}.groups
+//
+// Hak akses: `readers` (view atau edit) dan `editors` (edit) berisi email, id grup, atau '*' untuk semua anggota. Pemilik
 // selalu tercantum. `custom` false berarti mengikuti folder induk: daftarnya harus sama persis dengan milik induk
 // ditambah pemiliknya. Daftar disalin ke tiap dokumen karena kueri Firestore tidak bisa menelusuri rantai folder.
 service cloud.firestore {
@@ -57,8 +59,12 @@ service cloud.firestore {
     function isOwnerOrAdmin(sop) {
       return sop.createdBy == uid() || isAdmin();
     }
+    // Grup tempat akun ini berada; tercatat pada dokumen anggotanya sendiri sehingga cukup satu pembacaan.
+    function myGroups() {
+      return get(memberPath()).data.get('groups', []);
+    }
     function granted(list) {
-      return email() in list || '*' in list;
+      return email() in list || '*' in list || list.hasAny(myGroups());
     }
     function canRead(sop) {
       return isMember() && (
@@ -336,18 +342,40 @@ service cloud.firestore {
       allow get: if inDomain() && (member == email() || isMember());
       allow list: if isMember();
       allow create: if isAdmin() && validMember(member);
-      allow update: if isAdmin() && member != email() && validMember(member);
+      // Admin tidak bisa mengubah perannya sendiri, tetapi boleh mengatur grupnya sendiri.
+      allow update: if isAdmin() && (
+        (member != email() && validMember(member))
+        || (changed().hasOnly(['groups']) && validGroups(request.resource.data))
+      );
       // Admin tidak bisa mencabut aksesnya sendiri, agar pustaka tidak kehilangan admin terakhir.
       allow delete: if isAdmin() && member != email();
 
+      function validGroups(d) {
+        return d.get('groups', []) is list && d.get('groups', []).size() <= 50;
+      }
       function validMember(member) {
         return member.matches('^[^@/]+@(ub[.]ac[.]id|gmail[.]com)$')
           && member == member.lower()
-          && request.resource.data.keys().hasOnly(['role', 'addedBy', 'addedAt'])
+          && request.resource.data.keys().hasOnly(['role', 'addedBy', 'addedAt', 'groups'])
           && request.resource.data.role in ['member', 'admin']
+          && validGroups(request.resource.data)
           && request.resource.data.addedBy == email()
           && request.resource.data.addedAt == request.time;
       }
+    }
+
+    // ---- Grup ----
+    // Mempermudah pemberian hak akses kepada banyak orang. Untuk sementara hanya admin yang mengelolanya.
+    // Id grup tidak boleh berupa '*' atau mengandung '@' agar tidak tertukar dengan email di daftar hak akses.
+    match /groups/{id} {
+      allow read: if isMember();
+      allow create, update: if isAdmin()
+        && !id.matches('.*[@*/].*')
+        && request.resource.data.keys().hasOnly(['name'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80
+        && request.resource.data.name == request.resource.data.name.trim();
+      allow delete: if isAdmin();
     }
   }
 }

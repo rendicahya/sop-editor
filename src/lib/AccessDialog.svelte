@@ -14,6 +14,7 @@
   let follow = $state(true);
   let rows = $state([]); // { who, role: 'view' | 'edit' }
   let members = $state([]);
+  let groups = $state([]);
   let who = $state('');
   let role = $state('view');
   let error = $state('');
@@ -30,8 +31,17 @@
   }
   const followed = $derived(toRows(F.inherited(parent, owner)));
   const shown = $derived(parent && follow ? followed : rows);
-  const label = (w) => (w === F.EVERYONE ? EVERYONE_LABEL : w);
-  const choices = $derived(members.map((m) => m.email).filter((e) => e !== owner && !rows.some((r) => r.who === e)));
+  const groupLabel = (g) => `Grup ${g.name}`;
+  const label = (w) => {
+    if (w === F.EVERYONE) return EVERYONE_LABEL;
+    if (!F.isGroup(w)) return w;
+    const g = groups.find((x) => x.id === w);
+    return g ? groupLabel(g) : 'Grup yang sudah dihapus';
+  };
+  const choices = $derived([
+    ...groups.filter((g) => !rows.some((r) => r.who === g.id)).map(groupLabel),
+    ...members.map((m) => m.email).filter((e) => e !== owner && !rows.some((r) => r.who === e))
+  ]);
 
   $effect(() => {
     if (target && !dialog.open) {
@@ -41,6 +51,8 @@
       role = 'view';
       error = '';
       dialog.showModal();
+      // Nama grup juga dibutuhkan saat hanya melihat, agar yang tampil bukan id-nya.
+      F.listGroups().then((g) => (groups = g)).catch(() => {});
       if (manage) F.listMembers().then((m) => (members = m)).catch(() => {});
     } else if (!target && dialog.open) dialog.close();
   });
@@ -53,11 +65,14 @@
 
   function add(e) {
     e.preventDefault();
-    const typed = who.trim().toLowerCase();
-    const value = typed === EVERYONE_LABEL.toLowerCase() ? F.EVERYONE : typed;
+    const typed = who.trim().replace(/\s+/g, ' ').toLowerCase();
+    const group = groups.find((g) => groupLabel(g).toLowerCase() === typed || g.name.toLowerCase() === typed);
+    const value = typed === EVERYONE_LABEL.toLowerCase() ? F.EVERYONE : group ? group.id : typed;
     if (!value) return;
-    if (value !== F.EVERYONE && !members.some((m) => m.email === value)) {
-      error = `${typed} belum terdaftar sebagai anggota. Minta admin mendaftarkannya.`;
+    if (value !== F.EVERYONE && !group && !members.some((m) => m.email === value)) {
+      error = typed.includes('@')
+        ? `${typed} belum terdaftar sebagai anggota. Minta admin mendaftarkannya.`
+        : `Tidak ada anggota atau grup bernama ${who.trim()}.`;
       return;
     }
     if (value === owner) {
@@ -121,12 +136,12 @@
 
       {#if manage && !(parent && follow)}
         <div class="add">
-          <input bind:value={who} list="access-members" placeholder="Email anggota" aria-label="Email anggota" onkeydown={(e) => e.key === 'Enter' && add(e)} />
+          <input bind:value={who} list="access-members" placeholder="Email anggota atau nama grup" aria-label="Email anggota atau nama grup" onkeydown={(e) => e.key === 'Enter' && add(e)} />
           <datalist id="access-members">
             <option value={EVERYONE_LABEL}></option>
             {#each choices as c (c)}<option value={c}></option>{/each}
           </datalist>
-          <select bind:value={role} aria-label="Hak untuk anggota ini">
+          <select bind:value={role} aria-label="Hak untuk anggota atau grup ini">
             <option value="view">Lihat</option>
             <option value="edit">Edit</option>
           </select>

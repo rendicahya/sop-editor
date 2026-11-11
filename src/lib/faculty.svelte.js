@@ -22,7 +22,7 @@ const EDITING_EXPIRY = 5 * 60 * 1000;
  * status: idle | loading | out | domain (bukan akun @ub.ac.id atau @gmail.com) | notMember | in | error.
  * editing: sopId → daftar orang lain yang sedang mengedit.
  */
-export const faculty = $state({ status: 'idle', user: null, role: null, error: '', editing: {} });
+export const faculty = $state({ status: 'idle', user: null, role: null, groups: [], error: '', editing: {} });
 
 // Email anggota yang terakhir lolos pemeriksaan di server, agar aplikasi tetap bisa dipakai saat luring.
 const MEMBER_KEY = 'sop-member';
@@ -47,7 +47,11 @@ export const canUseApp = () =>
 export const isAdmin = () => faculty.status === 'in' && faculty.role === 'admin';
 export const canManage = (sop) => isAdmin() || sop.createdBy === faculty.user?.uid;
 export const EVERYONE = '*';
-const granted = (list) => !!list && (list.includes(EVERYONE) || list.includes(faculty.user?.email));
+/** Isi daftar hak akses selain email dan '*' adalah id grup. */
+export const isGroup = (who) => who !== EVERYONE && !who.includes('@');
+/** Semua isi daftar hak akses yang berlaku untuk akun ini. */
+const myTokens = () => [faculty.user?.email, EVERYONE, ...faculty.groups];
+const granted = (list) => !!list && myTokens().some((t) => list.includes(t));
 export const canRead = (item) => canManage(item) || granted(item.readers);
 export const canEdit = (sop) => !sop.deletedBy && (canManage(sop) || granted(sop.editors));
 /** Ada orang lain selain pemiliknya yang bisa melihat. */
@@ -101,6 +105,7 @@ function readable(e) {
 }
 
 async function applyUser(u) {
+  faculty.groups = [];
   if (!u) return Object.assign(faculty, { status: 'out', user: null, role: null, error: '' });
   const user = { uid: u.uid, email: u.email.toLowerCase(), name: (u.displayName || u.email).slice(0, 120) };
   if (!u.emailVerified || !DOMAIN.test(user.email)) {
@@ -119,7 +124,7 @@ async function applyUser(u) {
     const role = m.data().role;
     if (role === 'admin') await ensureUsage();
     rememberMember(user.email);
-    Object.assign(faculty, { status: 'in', user, role, error: '' });
+    Object.assign(faculty, { status: 'in', user, role, groups: m.data().groups ?? [], error: '' });
   } catch (e) {
     Object.assign(faculty, { status: 'error', user, role: null, error: readable(e) });
   }
@@ -212,17 +217,24 @@ async function ensureUsage() {
 
 // ---- Daftar ----
 
+/** Email, '*', dan grup akun ini, dibagi sesuai batas 30 nilai per kueri `array-contains-any`. */
+function tokenChunks() {
+  const all = myTokens();
+  const out = [];
+  for (let i = 0; i < all.length; i += 30) out.push(all.slice(i, i + 30));
+  return out;
+}
+
 /** SOP yang boleh dilihat akun ini: { live, bin }. Admin melihat semua, termasuk seluruh recycle bin. */
 export async function listSops() {
   const { F, db } = await load();
   const col = F.collection(db, 'sops');
-  const { uid, email } = faculty.user;
+  const { uid } = faculty.user;
   const q = (...w) => F.getDocsFromServer(F.query(col, ...w));
   const snaps = isAdmin()
     ? [await F.getDocsFromServer(col)]
     : await Promise.all([
-        q(F.where('deletedBy', '==', null), F.where('readers', 'array-contains', email)),
-        q(F.where('deletedBy', '==', null), F.where('readers', 'array-contains', EVERYONE)),
+        ...tokenChunks().map((t) => q(F.where('deletedBy', '==', null), F.where('readers', 'array-contains-any', t))),
         q(F.where('deletedBy', '==', uid))
       ]);
   const all = new Map();
@@ -242,11 +254,11 @@ export async function listVersions(id) {
 export async function listFolders() {
   const { F, db } = await load();
   const col = F.collection(db, 'folders');
-  const { uid, email } = faculty.user;
+  const { uid } = faculty.user;
   const q = (...w) => F.getDocsFromServer(F.query(col, ...w));
   const snaps = isAdmin()
     ? [await F.getDocsFromServer(col)]
-    : await Promise.all([q(F.where('readers', 'array-contains', email)), q(F.where('readers', 'array-contains', EVERYONE)), q(F.where('createdBy', '==', uid))]);
+    : await Promise.all([...tokenChunks().map((t) => q(F.where('readers', 'array-contains-any', t))), q(F.where('createdBy', '==', uid))]);
   const all = new Map();
   for (const s of snaps) for (const d of s.docs) all.set(d.id, { ...d.data({ serverTimestamps: 'estimate' }), id: d.id, parent: d.data().parent ?? null });
   return [...all.values()];
@@ -633,15 +645,57 @@ export async function recountUsage() {
 export async function listMembers() {
   const { F, db } = await load();
   const snap = await F.getDocsFromServer(F.collection(db, 'members'));
-  return snap.docs.map((d) => ({ email: d.id, role: d.data().role })).sort((a, b) => a.email.localeCompare(b.email));
+  return snap.docs.map((d) => ({ email: d.id, role: d.data().role, groups: d.data().groups ?? [] })).sort((a, b) => a.email.localeCompare(b.email));
 }
 
-export async function setMember(email, role) {
+/** `groups` ikut ditulis agar mengubah peran tidak mengeluarkan anggota dari grupnya. */
+export async function setMember(email, role, groups = []) {
   const { F, db } = await load();
-  await F.setDoc(F.doc(db, 'members', email), { role, addedBy: faculty.user.email, addedAt: F.serverTimestamp() });
+  await F.setDoc(F.doc(db, 'members', email), { role, groups, addedBy: faculty.user.email, addedAt: F.serverTimestamp() });
 }
 
 export async function removeMember(email) {
   const { F, db } = await load();
   await F.deleteDoc(F.doc(db, 'members', email));
+}
+
+// ---- Grup: semua anggota bisa melihat untuk memberi hak akses, hanya admin yang mengelola ----
+
+export async function listGroups() {
+  const { F, db } = await load();
+  const snap = await F.getDocsFromServer(F.collection(db, 'groups'));
+  return snap.docs.map((d) => ({ id: d.id, name: d.data().name })).sort((a, b) => a.name.localeCompare(b.name, 'id'));
+}
+
+export async function createGroup(name) {
+  const { F, db } = await load();
+  return (await F.addDoc(F.collection(db, 'groups'), { name })).id;
+}
+
+export async function renameGroup(id, name) {
+  const { F, db } = await load();
+  await F.updateDoc(F.doc(db, 'groups', id), { name });
+}
+
+/** Menyamakan isi grup `id` dengan `emails`. `members` adalah hasil listMembers. */
+export async function setGroupMembers(id, emails, members) {
+  const { F, db } = await load();
+  const want = new Set(emails);
+  const changes = members.filter((m) => m.groups.includes(id) !== want.has(m.email));
+  for (let i = 0; i < changes.length; i += WRITE_CHUNK) {
+    const b = F.writeBatch(db);
+    for (const m of changes.slice(i, i + WRITE_CHUNK)) {
+      b.update(F.doc(db, 'members', m.email), { groups: m.groups.includes(id) ? F.arrayRemove(id) : F.arrayUnion(id) });
+    }
+    await b.commit();
+  }
+  if (want.has(faculty.user.email)) faculty.groups = union(faculty.groups, [id]);
+  else faculty.groups = faculty.groups.filter((g) => g !== id);
+}
+
+/** Anggotanya dikeluarkan lebih dulu. Hak akses yang memakai grup ini tidak lagi berlaku untuk siapa pun. */
+export async function deleteGroup(id, members) {
+  const { F, db } = await load();
+  await setGroupMembers(id, [], members);
+  await F.deleteDoc(F.doc(db, 'groups', id));
 }

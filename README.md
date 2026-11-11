@@ -157,7 +157,8 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
 | Menambah SOP dan subfolder ke dalam folder, memindahkan, menghapus, mengatur hak akses | | | Ya |
 
 - Hanya akun yang didaftarkan admin (@ub.ac.id atau @gmail.com) yang bisa masuk. **Semua anggota** berarti semua akun terdaftar itu, dan semua anggota bisa melihat daftar email anggota untuk memilih kepada siapa file dibagikan.
-- **Hak akses** diberikan per anggota, sebagai Lihat atau Edit, pada file maupun folder. Pilihan **Semua anggota** tersedia untuk yang dipakai bersama. Pemilik selalu bisa melihat dan mengedit.
+- **Hak akses** diberikan per anggota atau per grup, sebagai Lihat atau Edit, pada file maupun folder. Pilihan **Semua anggota** tersedia untuk yang dipakai bersama. Pemilik selalu bisa melihat dan mengedit.
+- **Grup** (mis. per prodi atau unit) dibuat dan diisi oleh admin di tab **Admin**. Anggota baru bisa langsung dimasukkan ke grup saat didaftarkan. Hak yang diberikan ke grup berlaku untuk semua anggotanya: yang ditambahkan ke grup langsung mendapatkannya, dan yang dikeluarkan langsung kehilangan. Menghapus grup tidak menghapus anggotanya.
 - File dan subfolder **mengikuti folder induknya** secara bawaan, termasuk pemilik folder itu. Pilihan **Khusus** pada file atau subfolder menggantikan hak dari induk sepenuhnya. File baru di tingkat utama hanya bisa dilihat pemiliknya.
 - Daftar hak disalin ke setiap dokumen karena kueri Firestore tidak bisa menelusuri rantai folder. Aplikasi menyebarkan perubahan ke isi folder dan menyelesaikannya saat daftar dimuat berikutnya bila terputus; aturan server hanya menerima salinan yang sama persis dengan daftar folder induk.
 - **Folder** bertingkat tanpa batas kedalaman. Semua anggota bisa membuat folder di tingkat utama; isi sebuah folder hanya bisa ditambah pemiliknya dan admin. Dokumen diunggah ke folder yang sedang dipilih, dan pencarian mencakup semua yang bisa dilihat.

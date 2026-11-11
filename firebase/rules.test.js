@@ -692,3 +692,64 @@ describe('anggota', () => {
     await assertFails(getDoc(doc(as('bud'), 'sops/s')));
   });
 });
+
+describe('grup', () => {
+  const BUD = 'bud@ub.ac.id';
+  const join = (db, email, groups) => updateDoc(doc(db, 'members', email), { groups });
+
+  it('hanya admin yang bisa membuat, mengubah, menghapus grup, dan mengatur anggotanya', async () => {
+    await assertFails(setDoc(doc(as('ali'), 'groups/g1'), { name: 'Prodi' }));
+    await assertSucceeds(setDoc(doc(as('adm'), 'groups/g1'), { name: 'Prodi' }));
+    await assertSucceeds(getDocs(collection(as('ali'), 'groups')));
+    await assertFails(getDocs(collection(as('out'), 'groups')));
+    await assertFails(updateDoc(doc(as('ali'), 'groups/g1'), { name: 'Lain' }));
+    await assertFails(join(as('ali'), 'ali@ub.ac.id', ['g1']));
+    await assertFails(join(as('ali'), BUD, ['g1']));
+    await assertSucceeds(join(as('adm'), BUD, ['g1']));
+    await assertSucceeds(join(as('adm'), 'adm@ub.ac.id', ['g1']));
+    await assertFails(updateDoc(doc(as('adm'), 'members/adm@ub.ac.id'), { role: 'member', groups: [] }));
+    await assertSucceeds(updateDoc(doc(as('adm'), 'groups/g1'), { name: 'Lain' }));
+    await assertFails(deleteDoc(doc(as('ali'), 'groups/g1')));
+    await assertSucceeds(deleteDoc(doc(as('adm'), 'groups/g1')));
+  });
+  it('nama dan id grup harus wajar', async () => {
+    await assertFails(setDoc(doc(as('adm'), 'groups/g1'), { name: '' }));
+    await assertFails(setDoc(doc(as('adm'), 'groups/g1'), { name: ' Prodi' }));
+    await assertFails(setDoc(doc(as('adm'), 'groups/g1'), { name: 'Prodi', extra: 1 }));
+    await assertFails(setDoc(doc(as('adm'), 'groups/*'), { name: 'Prodi' }));
+    await assertFails(setDoc(doc(as('adm'), 'groups/x@ub.ac.id'), { name: 'Prodi' }));
+  });
+  it('hak yang diberikan ke grup berlaku untuk anggotanya saja, dan hilang saat dikeluarkan', async () => {
+    await setDoc(doc(as('adm'), 'groups/g1'), { name: 'Prodi' });
+    await join(as('adm'), BUD, ['g1']);
+    const cur = await given('ali', 's');
+    await updateDoc(doc(as('ali'), 'sops/s'), custom('ali', [], ['g1']));
+    await assertSucceeds(getDoc(doc(as('bud'), 'sops/s')));
+    await assertSucceeds(save(as('bud'), 'bud', 's', cur, '{"a":2}'));
+    await assertFails(getDoc(doc(as('gml'), 'sops/s')));
+    await join(as('adm'), BUD, []);
+    await assertFails(getDoc(doc(as('bud'), 'sops/s')));
+  });
+  it('kueri daftar per grup: hanya untuk grup tempat akun ini berada', async () => {
+    await setDoc(doc(as('adm'), 'groups/g1'), { name: 'Prodi' });
+    await setDoc(doc(as('adm'), 'groups/g2'), { name: 'Lab' });
+    await join(as('adm'), BUD, ['g1']);
+    await given('ali', 's1');
+    await given('ali', 's2');
+    await updateDoc(doc(as('ali'), 'sops/s1'), custom('ali', ['g1']));
+    await updateDoc(doc(as('ali'), 'sops/s2'), custom('ali', ['g2']));
+    const live = where('deletedBy', '==', null);
+    const ids = async (...w) => (await assertSucceeds(getDocs(query(collection(as('bud'), 'sops'), ...w)))).docs.map((d) => d.id);
+    assert.deepEqual(await ids(live, where('readers', 'array-contains', 'g1')), ['s1']);
+    assert.deepEqual(await ids(live, where('readers', 'array-contains-any', [BUD, '*', 'g1'])), ['s1']);
+    await assertFails(getDocs(query(collection(as('bud'), 'sops'), live, where('readers', 'array-contains', 'g2'))));
+  });
+  it('folder yang dibagikan ke grup', async () => {
+    await setDoc(doc(as('adm'), 'groups/g1'), { name: 'Prodi' });
+    await join(as('adm'), BUD, ['g1']);
+    await seed((db) => setDoc(doc(db, 'folders/f'), { name: 'F', parent: null, custom: true, readers: ['ali@ub.ac.id', 'g1'], editors: ['ali@ub.ac.id'], createdBy: 'ali', createdByName: 'Ali', createdByEmail: 'ali@ub.ac.id', createdAt: serverTimestamp() }));
+    await assertSucceeds(getDoc(doc(as('bud'), 'folders/f')));
+    assert.equal((await assertSucceeds(getDocs(query(collection(as('bud'), 'folders'), where('readers', 'array-contains', 'g1'))))).size, 1);
+    await assertFails(getDoc(doc(as('gml'), 'folders/f')));
+  });
+});
