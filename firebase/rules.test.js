@@ -105,6 +105,7 @@ beforeEach(async () => {
     await setDoc(doc(db, 'members/gml@gmail.com'), { role: 'member' });
     await setDoc(doc(db, 'members/yah@yahoo.com'), { role: 'admin' });
     await setDoc(usage(db), { bytes: 0, limit: 1000000, lastSop: '' });
+    await setDoc(doc(db, 'stats/rpsUsage'), { bytes: 0, limit: 1000000, lastSop: '' });
   });
 });
 
@@ -751,5 +752,125 @@ describe('grup', () => {
     await assertSucceeds(getDoc(doc(as('bud'), 'folders/f')));
     assert.equal((await assertSucceeds(getDocs(query(collection(as('bud'), 'folders'), where('readers', 'array-contains', 'g1'))))).size, 1);
     await assertFails(getDoc(doc(as('gml'), 'folders/f')));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RPS Editor: koleksi rps/rpsFolders/rpsEditing dan stats/rpsUsage memakai aturan yang sama dengan SOP,
+// terpisah dari koleksi SOP. curricula: katalog CPL/CPMK per prodi.
+// ---------------------------------------------------------------------------
+
+const rpsUsage = (db) => doc(db, 'stats/rpsUsage');
+function createRps(db, u, id, json = '{"r":1}', patch = {}, counter = rpsUsage) {
+  const b = writeBatch(db);
+  b.set(doc(db, 'rps', id), newSop(u, json, { title: 'RPS A', nomor: 'COM1', ...patch }));
+  b.update(counter(db), { bytes: increment(bytes(json)), lastSop: id });
+  return b.commit();
+}
+async function readRps(id) {
+  let d;
+  await seed(async (db) => (d = (await getDoc(doc(db, 'rps', id))).data()));
+  return d;
+}
+function saveRps(db, u, id, cur, json) {
+  const size = bytes(json);
+  const b = writeBatch(db);
+  b.set(doc(db, 'rps', id, 'versions', String(cur.rev)), {
+    rev: cur.rev, title: cur.title, nomor: cur.nomor, json: cur.json, size: cur.size,
+    savedAt: cur.updatedAt, savedBy: cur.updatedBy, savedByName: cur.updatedByName
+  });
+  b.update(doc(db, 'rps', id), { json, size, totalBytes: cur.totalBytes + size, rev: cur.rev + 1, updatedAt: serverTimestamp(), updatedBy: u, updatedByName: USERS[u].name });
+  b.update(rpsUsage(db), { bytes: increment(size), lastSop: id });
+  return b.commit();
+}
+const counters = async () => {
+  let r;
+  await seed(async (db) => (r = [(await getDoc(usage(db))).data().bytes, (await getDoc(rpsUsage(db))).data().bytes]));
+  return r;
+};
+
+describe('RPS', () => {
+  const BUD = 'bud@ub.ac.id';
+  it('membuat, menyimpan, dan riwayat memakai penghitung RPS, bukan penghitung SOP', async () => {
+    await assertSucceeds(createRps(as('ali'), 'ali', 'r'));
+    const cur = await readRps('r');
+    await assertSucceeds(saveRps(as('ali'), 'ali', 'r', cur, '{"r":22}'));
+    assert.deepEqual(await counters(), [0, bytes('{"r":1}') + bytes('{"r":22}')]);
+    await assertSucceeds(getDoc(doc(as('ali'), 'rps/r/versions/1')));
+  });
+  it('penghitung SOP tidak bisa dipakai untuk menulis RPS', async () => {
+    await assertFails(createRps(as('ali'), 'ali', 'r', '{"r":1}', {}, usage));
+  });
+  it('hak akses: pribadi secara bawaan, bisa dibagikan, admin selalu bisa membaca', async () => {
+    await createRps(as('ali'), 'ali', 'r');
+    await assertFails(getDoc(doc(as('bud'), 'rps/r')));
+    await assertSucceeds(getDoc(doc(as('adm'), 'rps/r')));
+    await assertFails(getDoc(doc(as('out'), 'rps/r')));
+    await assertSucceeds(updateDoc(doc(as('ali'), 'rps/r'), custom('ali', [], [BUD])));
+    await assertSucceeds(saveRps(as('bud'), 'bud', 'r', await readRps('r'), '{"r":3}'));
+    await assertFails(updateDoc(doc(as('bud'), 'rps/r'), custom('ali', [], [BUD, 'x@ub.ac.id'])));
+  });
+  it('folder RPS terpisah dari folder SOP', async () => {
+    const folder = (u) => ({ name: 'F', parent: null, custom: false, readers: [USERS[u].email], editors: [USERS[u].email], createdBy: u, createdByName: USERS[u].name, createdByEmail: USERS[u].email, createdAt: serverTimestamp() });
+    await assertSucceeds(setDoc(doc(as('ali'), 'rpsFolders/f'), folder('ali')));
+    await assertSucceeds(createRps(as('ali'), 'ali', 'r', '{"r":1}', { folder: 'f' }));
+    // Folder SOP dengan id yang sama tidak berlaku untuk RPS.
+    await seed((db) => setDoc(doc(db, 'folders/g'), folder('ali')));
+    await assertFails(createRps(as('bud'), 'bud', 'r2', '{"r":1}', { folder: 'g' }));
+    await assertFails(getDoc(doc(as('bud'), 'rpsFolders/f')));
+  });
+  it('tanda "sedang diedit" hanya untuk RPS yang boleh diedit', async () => {
+    await createRps(as('ali'), 'ali', 'r');
+    const mark = (u, id, coll = 'rpsEditing') => setDoc(doc(as(u), coll, `${id}_${u}`), { sopId: id, uid: u, name: USERS[u].name, at: serverTimestamp() });
+    await assertSucceeds(mark('ali', 'r'));
+    await assertFails(mark('bud', 'r'));
+    // Koleksi editing milik SOP tidak menerima id RPS.
+    await assertFails(mark('ali', 'r', 'editing'));
+  });
+  it('kapasitas, recycle bin, dan hapus permanen', async () => {
+    await assertSucceeds(getDoc(doc(as('ali'), 'stats/rpsCapacity')));
+    await assertFails(getDoc(doc(as('ali'), 'stats/rpsUsage')));
+    await createRps(as('ali'), 'ali', 'r');
+    const cur = await readRps('r');
+    await assertSucceeds(updateDoc(doc(as('ali'), 'rps/r'), { deletedAt: serverTimestamp(), deletedBy: 'ali' }));
+    const db = as('ali');
+    const b = writeBatch(db);
+    b.delete(doc(db, 'rps', 'r'));
+    b.update(rpsUsage(db), { bytes: increment(-cur.totalBytes), lastSop: 'r' });
+    await assertSucceeds(b.commit());
+    assert.deepEqual(await counters(), [0, 0]);
+  });
+});
+
+describe('katalog kurikulum', () => {
+  const cat = (u, patch = {}) => ({
+    nama: 'Teknik Informatika', departemen: 'Teknik Informatika', managers: ['bud@ub.ac.id'], cpl: [], cpmk: [],
+    updatedAt: serverTimestamp(), updatedBy: u, updatedByName: USERS[u].name, ...patch
+  });
+  it('hanya admin yang membuat dan menghapus prodi', async () => {
+    await assertFails(setDoc(doc(as('ali'), 'curricula/tif'), cat('ali')));
+    await assertSucceeds(setDoc(doc(as('adm'), 'curricula/tif'), cat('adm')));
+    await assertFails(deleteDoc(doc(as('bud'), 'curricula/tif')));
+    await assertSucceeds(deleteDoc(doc(as('adm'), 'curricula/tif')));
+  });
+  it('semua anggota membaca; bukan anggota tidak', async () => {
+    await setDoc(doc(as('adm'), 'curricula/tif'), cat('adm'));
+    await assertSucceeds(getDoc(doc(as('ali'), 'curricula/tif')));
+    await assertFails(getDoc(doc(as('out'), 'curricula/tif')));
+  });
+  it('pengelola prodi mengedit isi, tetapi tidak daftar pengelola; anggota lain tidak bisa mengedit', async () => {
+    await setDoc(doc(as('adm'), 'curricula/tif'), cat('adm'));
+    const cpl = [{ id: 'c1', kode: 'CPL01', teks: 'Lulusan …' }];
+    await assertSucceeds(setDoc(doc(as('bud'), 'curricula/tif'), cat('bud', { cpl })));
+    await assertFails(setDoc(doc(as('bud'), 'curricula/tif'), cat('bud', { cpl, managers: ['bud@ub.ac.id', 'ali@ub.ac.id'] })));
+    await assertFails(setDoc(doc(as('ali'), 'curricula/tif'), cat('ali', { cpl })));
+    await assertSucceeds(setDoc(doc(as('adm'), 'curricula/tif'), cat('adm', { managers: ['ali@ub.ac.id'] })));
+    await assertSucceeds(setDoc(doc(as('ali'), 'curricula/tif'), cat('ali', { cpl, managers: ['ali@ub.ac.id'] })));
+    await assertFails(setDoc(doc(as('bud'), 'curricula/tif'), cat('bud', { managers: ['ali@ub.ac.id'] })));
+  });
+  it('isi katalog divalidasi', async () => {
+    await assertFails(setDoc(doc(as('adm'), 'curricula/tif'), cat('adm', { nama: '' })));
+    await assertFails(setDoc(doc(as('adm'), 'curricula/tif'), cat('adm', { lain: 1 })));
+    await assertFails(setDoc(doc(as('adm'), 'curricula/tif'), cat('adm', { updatedBy: 'ali' })));
   });
 });

@@ -12,6 +12,12 @@ rules_version = '2';
 //
 //   groups/{id}                { name }: hanya admin yang mengelola; anggotanya tercatat di members/{email}.groups
 //
+// RPS Editor (repositori rps-editor) memakai proyek yang sama dengan koleksi sendiri, diatur fungsi yang sama:
+//   rps/{id} (+ versions), rpsFolders/{id}, rpsEditing/{rpsId_uid}, stats/rpsUsage, stats/rpsCapacity
+//   curricula/{prodi}          { nama, departemen, managers: [email], cpl, cpmk, updated* }: katalog CPL/CPMK per prodi;
+//                              dibaca semua anggota, diedit pengelola prodi (managers) dan admin.
+// Fungsi di bawah menerima `k` = jenis dokumen: 'sops' atau 'rps'.
+//
 // Hak akses: `readers` (view atau edit) dan `editors` (edit) berisi email, id grup, atau '*' untuk semua anggota. Pemilik
 // selalu tercantum. `custom` false berarti mengikuti folder induk: daftarnya harus sama persis dengan milik induk
 // ditambah pemiliknya. Daftar disalin ke tiap dokumen karena kueri Firestore tidak bisa menelusuri rantai folder.
@@ -41,20 +47,28 @@ service cloud.firestore {
       return isMember() && get(memberPath()).data.role == 'admin';
     }
 
-    // ---- Penghitung ruang ----
-    function usagePath() {
-      return /databases/$(database)/documents/stats/usage;
+    // ---- Jenis dokumen: SOP atau RPS ----
+    function folderColl(k) {
+      return k == 'sops' ? 'folders' : 'rpsFolders';
     }
-    function usageChangedBy(n) {
-      return getAfter(usagePath()).data.bytes == get(usagePath()).data.bytes + n;
-    }
-    function withinLimit() {
-      return getAfter(usagePath()).data.bytes <= get(usagePath()).data.limit;
+    function usageName(k) {
+      return k == 'sops' ? 'usage' : 'rpsUsage';
     }
 
-    // ---- SOP ----
-    function sopPath(id) {
-      return /databases/$(database)/documents/sops/$(id);
+    // ---- Penghitung ruang ----
+    function usagePath(k) {
+      return /databases/$(database)/documents/stats/$(usageName(k));
+    }
+    function usageChangedBy(k, n) {
+      return getAfter(usagePath(k)).data.bytes == get(usagePath(k)).data.bytes + n;
+    }
+    function withinLimit(k) {
+      return getAfter(usagePath(k)).data.bytes <= get(usagePath(k)).data.limit;
+    }
+
+    // ---- SOP / RPS ----
+    function sopPath(k, id) {
+      return /databases/$(database)/documents/$(k)/$(id);
     }
     function isOwnerOrAdmin(sop) {
       return sop.createdBy == uid() || isAdmin();
@@ -98,8 +112,8 @@ service cloud.firestore {
     }
 
     // ---- Hak akses ----
-    function folderPath(id) {
-      return /databases/$(database)/documents/folders/$(id);
+    function folderPath(k, id) {
+      return /databases/$(database)/documents/$(folderColl(k))/$(id);
     }
     function ownerSet(owner) {
       return (owner == null ? [] : [owner]).toSet();
@@ -112,34 +126,34 @@ service cloud.firestore {
     }
     // Daftar sama persis dengan milik folder induk ditambah pemiliknya. Tanpa induk (tingkat utama, atau foldernya
     // sudah terhapus), hanya pemiliknya. Karena isinya sudah ditentukan, siapa pun boleh menyalinnya.
-    function mirrors(d, owner, folder) {
-      return folder == null || !existsAfter(folderPath(folder))
+    function mirrors(k, d, owner, folder) {
+      return folder == null || !existsAfter(folderPath(k, folder))
         ? d.readers.toSet() == ownerSet(owner) && d.editors.toSet() == ownerSet(owner)
-        : d.readers.toSet() == getAfter(folderPath(folder)).data.readers.toSet().union(ownerSet(owner))
-          && d.editors.toSet() == getAfter(folderPath(folder)).data.editors.toSet().union(ownerSet(owner));
+        : d.readers.toSet() == getAfter(folderPath(k, folder)).data.readers.toSet().union(ownerSet(owner))
+          && d.editors.toSet() == getAfter(folderPath(k, folder)).data.editors.toSet().union(ownerSet(owner));
     }
-    function accessOk(d, owner, folder) {
+    function accessOk(k, d, owner, folder) {
       return validAccess(d)
         && d.editors.toSet().hasAll(ownerSet(owner))
-        && (d.custom == true || mirrors(d, owner, folder));
+        && (d.custom == true || mirrors(k, d, owner, folder));
     }
     // Isi folder (SOP, subfolder, atau yang dipindahkan ke dalamnya) hanya boleh ditambah pemilik folder dan admin.
     // Hak edit atas folder hanya untuk mengubah namanya dan isi SOP yang mengikutinya.
-    function canAddTo(folder) {
+    function canAddTo(k, folder) {
       return folder == null
         || isAdmin()
-        || get(folderPath(folder)).data.createdBy == uid();
+        || get(folderPath(k, folder)).data.createdBy == uid();
     }
 
-    function isValidCreate(d) {
+    function isValidCreate(k, d) {
       return isMember()
         && d.keys().hasOnly(['title', 'nomor', 'json', 'size', 'totalBytes', 'rev', 'folder', 'custom', 'readers', 'editors', 'createdBy', 'createdByName', 'createdByEmail', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName', 'deletedAt', 'deletedBy'])
         && validContent(d)
         && validFolderRef(d.get('folder', null))
-        && canAddTo(d.get('folder', null))
+        && canAddTo(k, d.get('folder', null))
         && validAccess(d)
         && d.custom == false
-        && mirrors(d, email(), d.get('folder', null))
+        && mirrors(k, d, email(), d.get('folder', null))
         && d.rev == 1
         && d.totalBytes == d.size
         && d.createdBy == uid()
@@ -148,48 +162,48 @@ service cloud.firestore {
         && d.createdAt == request.time
         && d.deletedAt == null
         && d.deletedBy == null
-        && usageChangedBy(d.size)
-        && withinLimit();
+        && usageChangedBy(k, d.size)
+        && withinLimit(k);
     }
 
     // Simpan isi: isi lama wajib berpindah ke riwayat dalam penulisan yang sama, dan `rev` yang
     // harus tepat +1 membuat simpanan dari salinan yang sudah usang ditolak server.
-    function isContentSave(id, d, r) {
+    function isContentSave(k, id, d, r) {
       return changed().hasOnly(['title', 'nomor', 'json', 'size', 'totalBytes', 'rev', 'updatedAt', 'updatedBy', 'updatedByName'])
         && canEdit(r)
         && validContent(d)
         && d.rev == r.rev + 1
         && d.totalBytes == r.totalBytes + d.size
-        && existsAfter(/databases/$(database)/documents/sops/$(id)/versions/$(string(r.rev)))
-        && usageChangedBy(d.size)
-        && withinLimit();
+        && existsAfter(/databases/$(database)/documents/$(k)/$(id)/versions/$(string(r.rev)))
+        && usageChangedBy(k, d.size)
+        && withinLimit(k);
     }
     // `visibility` hanya ada pada SOP dari sebelum hak akses per pengguna; perubahan ini sekaligus membuangnya.
-    function isAccessChange(d, r) {
+    function isAccessChange(k, d, r) {
       return changed().hasOnly(['custom', 'readers', 'editors', 'visibility'])
         && !d.keys().hasAny(['visibility'])
         && (r.deletedBy == null || isAdmin())
         && isMember()
         && isOwnerOrAdmin(r)
-        && accessOk(d, r.createdByEmail, r.get('folder', null));
+        && accessOk(k, d, r.createdByEmail, r.get('folder', null));
     }
-    function isAccessSync(d, r) {
+    function isAccessSync(k, d, r) {
       return changed().hasOnly(['readers', 'editors'])
         && r.custom == false
         && r.deletedBy == null
         && isMember()
         && validAccess(d)
-        && mirrors(d, r.createdByEmail, r.get('folder', null));
+        && mirrors(k, d, r.createdByEmail, r.get('folder', null));
     }
-    function isFolderMove(d, r) {
+    function isFolderMove(k, d, r) {
       return changed().hasOnly(['folder', 'readers', 'editors'])
         && validFolderRef(d.folder)
         && r.deletedBy == null
         && isMember()
         && isOwnerOrAdmin(r)
-        && canAddTo(d.folder)
+        && canAddTo(k, d.folder)
         && validAccess(d)
-        && (r.custom == true ? (d.readers == r.readers && d.editors == r.editors) : mirrors(d, r.createdByEmail, d.folder));
+        && (r.custom == true ? (d.readers == r.readers && d.editors == r.editors) : mirrors(k, d, r.createdByEmail, d.folder));
     }
     function isMoveToBin(d, r) {
       return changed().hasOnly(['deletedAt', 'deletedBy'])
@@ -208,43 +222,68 @@ service cloud.firestore {
         && (r.deletedBy == uid() || isAdmin());
     }
 
-    match /sops/{id} {
-      allow read: if canRead(resource.data);
-      allow create: if isValidCreate(request.resource.data);
-      allow update: if isContentSave(id, request.resource.data, resource.data)
-        || isAccessChange(request.resource.data, resource.data)
-        || isAccessSync(request.resource.data, resource.data)
-        || isFolderMove(request.resource.data, resource.data)
+    function canUpdateDoc(k, id) {
+      return isContentSave(k, id, request.resource.data, resource.data)
+        || isAccessChange(k, request.resource.data, resource.data)
+        || isAccessSync(k, request.resource.data, resource.data)
+        || isFolderMove(k, request.resource.data, resource.data)
         || isMoveToBin(request.resource.data, resource.data)
         || isRestore(request.resource.data, resource.data);
-      allow delete: if isMember()
+    }
+    function canDeleteDoc(k) {
+      return isMember()
         && resource.data.deletedBy != null
         && (resource.data.deletedBy == uid() || isAdmin())
-        && usageChangedBy(-resource.data.totalBytes);
+        && usageChangedBy(k, -resource.data.totalBytes);
+    }
+    // Riwayat hanya bisa berisi salinan persis dari isi yang sedang ditimpa.
+    function canCreateVersion(k, id, rev) {
+      let parent = get(sopPath(k, id)).data;
+      return canEdit(parent)
+        && rev == string(parent.rev)
+        && getAfter(sopPath(k, id)).data.rev == parent.rev + 1
+        && request.resource.data.keys().hasOnly(['rev', 'title', 'nomor', 'json', 'size', 'savedAt', 'savedBy', 'savedByName'])
+        && request.resource.data.rev == parent.rev
+        && request.resource.data.title == parent.title
+        && request.resource.data.nomor == parent.nomor
+        && request.resource.data.json == parent.json
+        && request.resource.data.size == parent.size
+        && request.resource.data.savedAt == parent.updatedAt
+        && request.resource.data.savedBy == parent.updatedBy
+        && request.resource.data.savedByName == parent.updatedByName;
+    }
+    // Riwayat hanya terhapus bersama dokumennya.
+    function canDeleteVersion(k, id) {
+      let parent = get(sopPath(k, id)).data;
+      return isMember()
+        && parent.deletedBy != null
+        && (parent.deletedBy == uid() || isAdmin())
+        && !existsAfter(sopPath(k, id));
+    }
+
+    match /sops/{id} {
+      allow read: if canRead(resource.data);
+      allow create: if isValidCreate('sops', request.resource.data);
+      allow update: if canUpdateDoc('sops', id);
+      allow delete: if canDeleteDoc('sops');
 
       match /versions/{rev} {
-        function parent() {
-          return get(sopPath(id)).data;
-        }
-        allow read: if canRead(parent());
-        // Riwayat hanya bisa berisi salinan persis dari isi yang sedang ditimpa.
-        allow create: if canEdit(parent())
-          && rev == string(parent().rev)
-          && getAfter(sopPath(id)).data.rev == parent().rev + 1
-          && request.resource.data.keys().hasOnly(['rev', 'title', 'nomor', 'json', 'size', 'savedAt', 'savedBy', 'savedByName'])
-          && request.resource.data.rev == parent().rev
-          && request.resource.data.title == parent().title
-          && request.resource.data.nomor == parent().nomor
-          && request.resource.data.json == parent().json
-          && request.resource.data.size == parent().size
-          && request.resource.data.savedAt == parent().updatedAt
-          && request.resource.data.savedBy == parent().updatedBy
-          && request.resource.data.savedByName == parent().updatedByName;
-        // Riwayat hanya terhapus bersama SOP-nya.
-        allow delete: if isMember()
-          && parent().deletedBy != null
-          && (parent().deletedBy == uid() || isAdmin())
-          && !existsAfter(sopPath(id));
+        allow read: if canRead(get(sopPath('sops', id)).data);
+        allow create: if canCreateVersion('sops', id, rev);
+        allow delete: if canDeleteVersion('sops', id);
+      }
+    }
+
+    match /rps/{id} {
+      allow read: if canRead(resource.data);
+      allow create: if isValidCreate('rps', request.resource.data);
+      allow update: if canUpdateDoc('rps', id);
+      allow delete: if canDeleteDoc('rps');
+
+      match /versions/{rev} {
+        allow read: if canRead(get(sopPath('rps', id)).data);
+        allow create: if canCreateVersion('rps', id, rev);
+        allow delete: if canDeleteVersion('rps', id);
       }
     }
 
@@ -257,20 +296,24 @@ service cloud.firestore {
         && d.name == d.name.trim()
         && validFolderRef(d.parent);
     }
-    match /folders/{id} {
-      allow read: if isMember() && (isOwnerOrAdmin(resource.data) || granted(resource.data.readers));
-      allow create: if isMember()
+    function canReadFolder() {
+      return isMember() && (isOwnerOrAdmin(resource.data) || granted(resource.data.readers));
+    }
+    function canCreateFolder(k) {
+      return isMember()
         && request.resource.data.keys().hasOnly(['name', 'parent', 'custom', 'readers', 'editors', 'createdBy', 'createdByName', 'createdByEmail', 'createdAt'])
         && validFolder(request.resource.data)
-        && canAddTo(request.resource.data.parent)
+        && canAddTo(k, request.resource.data.parent)
         && validAccess(request.resource.data)
         && request.resource.data.custom == false
-        && mirrors(request.resource.data, email(), request.resource.data.parent)
+        && mirrors(k, request.resource.data, email(), request.resource.data.parent)
         && request.resource.data.createdBy == uid()
         && request.resource.data.createdByEmail == email()
         && request.resource.data.createdByName is string && request.resource.data.createdByName.size() <= 120
         && request.resource.data.createdAt == request.time;
-      allow update: if isMember() && (
+    }
+    function canUpdateFolder(k, id) {
+      return isMember() && (
         // Ubah nama
         ((isOwnerOrAdmin(resource.data) || granted(resource.data.editors)) && changed().hasOnly(['name']) && validFolder(request.resource.data))
         // Pindah; folder yang mengikuti induk langsung memakai daftar induk barunya
@@ -278,62 +321,126 @@ service cloud.firestore {
           && changed().hasOnly(['parent', 'readers', 'editors'])
           && validFolder(request.resource.data)
           && request.resource.data.parent != id
-          && canAddTo(request.resource.data.parent)
+          && canAddTo(k, request.resource.data.parent)
           && validAccess(request.resource.data)
           && (resource.data.custom == true
             ? (request.resource.data.readers == resource.data.readers && request.resource.data.editors == resource.data.editors)
-            : mirrors(request.resource.data, resource.data.get('createdByEmail', null), request.resource.data.parent)))
+            : mirrors(k, request.resource.data, resource.data.get('createdByEmail', null), request.resource.data.parent)))
         // Hak akses
         || (isOwnerOrAdmin(resource.data)
           && changed().hasOnly(['custom', 'readers', 'editors'])
-          && accessOk(request.resource.data, resource.data.get('createdByEmail', null), resource.data.parent))
+          && accessOk(k, request.resource.data, resource.data.get('createdByEmail', null), resource.data.parent))
         // Menyalin daftar dari induk
         || (changed().hasOnly(['readers', 'editors'])
           && resource.data.custom == false
           && validAccess(request.resource.data)
-          && mirrors(request.resource.data, resource.data.get('createdByEmail', null), resource.data.parent))
+          && mirrors(k, request.resource.data, resource.data.get('createdByEmail', null), resource.data.parent))
         // Folder dari sebelum hak akses per pengguna belum mencatat email pemiliknya
         || (changed().hasOnly(['createdByEmail'])
           && !resource.data.keys().hasAny(['createdByEmail'])
           && resource.data.createdBy == uid()
           && request.resource.data.createdByEmail == email())
       );
+    }
+    match /folders/{id} {
+      allow read: if canReadFolder();
+      allow create: if canCreateFolder('sops');
+      allow update: if canUpdateFolder('sops', id);
+      allow delete: if isMember() && isOwnerOrAdmin(resource.data);
+    }
+    match /rpsFolders/{id} {
+      allow read: if canReadFolder();
+      allow create: if canCreateFolder('rps');
+      allow update: if canUpdateFolder('rps', id);
       allow delete: if isMember() && isOwnerOrAdmin(resource.data);
     }
 
     // ---- "Sedang diedit" ----
-    match /editing/{key} {
-      allow read: if isMember();
-      allow create, update: if isMember()
+    // Kolom `sopId` berisi id dokumen (SOP atau RPS, sesuai koleksinya).
+    function canMarkEditing(k, key) {
+      return isMember()
         && request.resource.data.keys().hasOnly(['sopId', 'uid', 'name', 'at'])
         && request.resource.data.uid == uid()
         && key == request.resource.data.sopId + '_' + uid()
         && request.resource.data.at == request.time
         && request.resource.data.name is string && request.resource.data.name.size() <= 120
-        && canEdit(get(sopPath(request.resource.data.sopId)).data);
-      // Keterangan yang sudah kedaluwarsa boleh dibersihkan siapa saja (browser pemiliknya mungkin sudah tertutup).
-      allow delete: if isMember() && (resource.data.uid == uid() || isAdmin() || resource.data.at < request.time - duration.value(5, 'm'));
+        && canEdit(get(sopPath(k, request.resource.data.sopId)).data);
+    }
+    // Keterangan yang sudah kedaluwarsa boleh dibersihkan siapa saja (browser pemiliknya mungkin sudah tertutup).
+    function canClearEditing() {
+      return isMember() && (resource.data.uid == uid() || isAdmin() || resource.data.at < request.time - duration.value(5, 'm'));
+    }
+    match /editing/{key} {
+      allow read: if isMember();
+      allow create, update: if canMarkEditing('sops', key);
+      allow delete: if canClearEditing();
+    }
+    match /rpsEditing/{key} {
+      allow read: if isMember();
+      allow create, update: if canMarkEditing('rps', key);
+      allow delete: if canClearEditing();
     }
 
     // ---- Ruang penyimpanan ----
-    match /stats/usage {
-      allow get: if isAdmin();
-      allow create, update: if isAdmin()
+    // stats/usage (SOP) dan stats/rpsUsage (RPS): { bytes, limit, lastSop }; lastSop = id dokumen yang terakhir ditulis.
+    function canSetUsage() {
+      return isAdmin()
         && request.resource.data.keys().hasOnly(['bytes', 'limit', 'lastSop'])
         && request.resource.data.bytes is int
         && request.resource.data.limit is int;
-      // Anggota memperbarui penghitung tanpa bisa membacanya, dan hanya bersama penulisan SOP
-      // yang aturannya memeriksa selisih ukurannya. Berdiri sendiri, penulisan ini ditolak.
-      allow update: if isMember()
+    }
+    // Anggota memperbarui penghitung tanpa bisa membacanya, dan hanya bersama penulisan dokumen
+    // yang aturannya memeriksa selisih ukurannya. Berdiri sendiri, penulisan ini ditolak.
+    function canBumpUsage(k) {
+      return isMember()
         && changed().hasOnly(['bytes', 'lastSop'])
         && (
-          existsAfter(sopPath(request.resource.data.lastSop))
-            ? getAfter(sopPath(request.resource.data.lastSop)).data.updatedAt == request.time
-            : exists(sopPath(request.resource.data.lastSop))
+          existsAfter(sopPath(k, request.resource.data.lastSop))
+            ? getAfter(sopPath(k, request.resource.data.lastSop)).data.updatedAt == request.time
+            : exists(sopPath(k, request.resource.data.lastSop))
         );
     }
+    function hasCapacity(k) {
+      return isMember() && get(usagePath(k)).data.bytes < get(usagePath(k)).data.limit;
+    }
+    match /stats/usage {
+      allow get: if isAdmin();
+      allow create, update: if canSetUsage();
+      allow update: if canBumpUsage('sops');
+    }
     match /stats/capacity {
-      allow get: if isMember() && get(usagePath()).data.bytes < get(usagePath()).data.limit;
+      allow get: if hasCapacity('sops');
+    }
+    match /stats/rpsUsage {
+      allow get: if isAdmin();
+      allow create, update: if canSetUsage();
+      allow update: if canBumpUsage('rps');
+    }
+    match /stats/rpsCapacity {
+      allow get: if hasCapacity('rps');
+    }
+
+    // ---- Katalog kurikulum (RPS) ----
+    // Satu dokumen per prodi. Admin membuat/menghapus prodi dan menunjuk pengelolanya (managers); pengelola prodi
+    // mengedit isi katalog prodinya tanpa bisa mengubah daftar pengelola.
+    function validCurriculum(d) {
+      return d.keys().hasOnly(['nama', 'departemen', 'managers', 'cpl', 'cpmk', 'updatedAt', 'updatedBy', 'updatedByName'])
+        && d.nama is string && d.nama.size() > 0 && d.nama.size() <= 120
+        && d.departemen is string && d.departemen.size() <= 120
+        && d.managers is list && d.managers.size() <= 50
+        && d.cpl is list && d.cpl.size() <= 100
+        && d.cpmk is list && d.cpmk.size() <= 300
+        && d.updatedAt == request.time
+        && d.updatedBy == uid()
+        && d.updatedByName is string && d.updatedByName.size() <= 120;
+    }
+    match /curricula/{id} {
+      allow read: if isMember();
+      allow create: if isAdmin() && !id.matches('.*[/*].*') && validCurriculum(request.resource.data);
+      allow update: if isMember()
+        && validCurriculum(request.resource.data)
+        && (isAdmin() || (email() in resource.data.managers && request.resource.data.managers == resource.data.managers));
+      allow delete: if isAdmin();
     }
 
     // ---- Anggota ----
