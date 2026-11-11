@@ -1223,6 +1223,13 @@
     onupload={async (folder) => {
       if (await saveToFaculty(folder)) facultyOpen = false;
     }}
+    oncreate={async (name, folder) => {
+      const doc = emptyDocument();
+      doc.header.namaSop = name;
+      const remote = await Faculty.uploadSop(doc, name, folder);
+      openInTab(doc);
+      activeTab.remote = remote;
+    }}
     onloaded={onFacultyLoaded}
     onrenamed={onFacultyRenamed}
     onbinned={onFacultyBinned}

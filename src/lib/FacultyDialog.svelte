@@ -14,7 +14,7 @@
    * onloaded(live): daftar baru dimuat, tab yang terbuka mengikuti hak akses terbaru. onrenamed(id, hasil renameSop): tab mengikuti.
    * onbinned(id): tab SOP yang dihapus ditutup; hasilnya true bila tab dipertahankan karena ada perubahan belum tersimpan.
    */
-  let { open = $bindable(false), openIds = [], cansave = true, onopen, onupload, onloaded, onrenamed, onbinned, onnotify } = $props();
+  let { open = $bindable(false), openIds = [], cansave = true, onopen, onupload, oncreate, onloaded, onrenamed, onbinned, onnotify } = $props();
 
   let dialog = $state();
   let moveDialog;
@@ -318,6 +318,19 @@
   const titleOf = (s) => s.title || 'SOP tanpa judul';
   const isOpen = (s) => openIds.includes(s.id);
 
+  /** SOP kosong dibuat di `folder` lalu langsung dibuka di tab baru. */
+  async function newSop(folder = here) {
+    const name = (await ui.prompt('Nama SOP', '', { title: 'SOP baru', ok: 'Buat', maxlength: 300 }))?.trim();
+    if (!name) return;
+    try {
+      await oncreate(name, folder);
+      open = false;
+      onnotify('SOP baru dibuat');
+    } catch (e) {
+      ui.alert(e.message);
+    }
+  }
+
   function openSop(s) {
     open = false;
     onopen(s);
@@ -393,6 +406,7 @@
   function hereItems(id) {
     const add = canAdd(id);
     return [
+      { label: 'SOP baru di sini', run: () => newSop(id), disabled: !add },
       { label: 'Folder baru di sini', run: () => newFolder(id), disabled: !add },
       { label: 'Unggah dokumen ini ke sini', run: () => onupload(id), disabled: !add || !cansave }
     ];
@@ -552,6 +566,11 @@
     {:else}
       <span class="grow"></span>
     {/if}
+    {#if admin}
+      <button type="button" class="adm" class:on={view === 'admin'} aria-pressed={view === 'admin'} data-tip={view === 'admin' ? 'Kembali ke daftar SOP' : 'Anggota, grup, dan penyimpanan'} onclick={() => (view = view === 'admin' ? 'sops' : 'admin')}>
+        <Icon name="settings" size={15} /><span>Admin</span>
+      </button>
+    {/if}
     {#if faculty.user}
       <small class="who" title={faculty.user.email}>{faculty.user.name}{admin ? ' · Admin' : ''}</small>
       {@render ib('logout', 'Keluar', () => F.signOut())}
@@ -584,11 +603,6 @@
           <button type="button" class="tname nav" class:sel={view === 'bin'} onclick={() => (view = 'bin')}>
             <Icon name="trash" size={15} /><span>Recycle bin</span>{#if bin.length}<small>{bin.length}</small>{/if}
           </button>
-          {#if admin}
-            <button type="button" class="tname nav" class:sel={view === 'admin'} onclick={() => (view = 'admin')}>
-              <Icon name="settings" size={15} /><span>Admin</span>
-            </button>
-          {/if}
         </nav>
       </aside>
 
@@ -609,6 +623,7 @@
             {#if here && !searching}
               {@render ib('users', accessTip(byId.get(here)), () => openAccess('folders', byId.get(here)))}
             {/if}
+            {@render ib('filePlus', canAdd(here) ? 'SOP baru di sini' : noAddTip, () => newSop(), { disabled: !canAdd(here) })}
             {@render ib('folderPlus', canAdd(here) ? 'Folder baru di sini' : noAddTip, () => newFolder(), { disabled: !canAdd(here) })}
             {@render ib('upload', uploadTip, () => onupload(here), { disabled: !!uploadBlocked })}
             {@render ib('refresh', 'Muat ulang daftar', refresh)}
@@ -865,6 +880,29 @@
     flex: 1;
     min-width: 0;
     margin: 0 0.5rem;
+  }
+  .adm {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    height: 1.95rem;
+    padding: 0 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .adm:hover:not(.on) {
+    background: var(--surface-2);
+  }
+  .adm.on {
+    border-color: transparent;
+    background: var(--accent-soft);
+    color: var(--accent);
   }
   .who {
     flex: none;
