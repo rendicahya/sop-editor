@@ -661,6 +661,10 @@ button:disabled {
 .signin-gate p.error {
   color: var(--danger);
 }
+.signin-gate .gate-actions {
+  display: flex;
+  gap: 8px;
+}
 
 .mobile-block {
   display: none;

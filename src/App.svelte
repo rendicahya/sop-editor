@@ -850,8 +850,8 @@
     await saveDoc(newTabId(), JSON.stringify(doc), name);
   }
 
-  // Aplikasi hanya bisa dipakai setelah masuk dengan akun Google (lihat .signin-gate).
-  const signedIn = $derived(!!faculty.user);
+  // Aplikasi hanya untuk akun yang didaftarkan admin (lihat .signin-gate dan Faculty.canUseApp).
+  const signedIn = $derived(Faculty.canUseApp());
   $effect(() => {
     if (!signedIn) untrack(() => (facultyOpen = libraryOpen = false));
   });
@@ -1238,11 +1238,23 @@
     <img src="./favicon.svg" alt="" width="56" height="56" />
     <strong>SOP Editor</strong>
     {#if faculty.status === 'out'}
-      <p>Masuk dengan akun Google Anda untuk memakai aplikasi ini.</p>
+      <p>Aplikasi ini hanya untuk akun yang sudah didaftarkan admin. Masuk dengan akun Google Anda.</p>
       <button class="btn primary" onclick={() => Faculty.signIn().catch((e) => alert(e.message))}>Masuk dengan Google</button>
+    {:else if faculty.status === 'domain' || faculty.status === 'notMember'}
+      <p>
+        Akun <b>{faculty.user?.email}</b> belum terdaftar.
+        {faculty.status === 'domain' ? 'Hanya akun @ub.ac.id atau @gmail.com yang bisa didaftarkan.' : 'Hubungi admin untuk didaftarkan.'}
+      </p>
+      <div class="gate-actions">
+        <button class="btn primary" onclick={() => Faculty.signOut().then(() => Faculty.signIn()).catch((e) => alert(e.message))}>Ganti akun</button>
+        <button class="btn" onclick={() => Faculty.signOut()}>Keluar</button>
+      </div>
     {:else if faculty.status === 'error'}
       <p class="error">{faculty.error}</p>
-      <button class="btn" onclick={() => Faculty.start()}>Coba lagi</button>
+      <div class="gate-actions">
+        <button class="btn primary" onclick={() => (faculty.user ? Faculty.recheck() : Faculty.start())}>Coba lagi</button>
+        {#if faculty.user}<button class="btn" onclick={() => Faculty.signOut()}>Keluar</button>{/if}
+      </div>
     {:else}
       <p>Memuat…</p>
     {/if}

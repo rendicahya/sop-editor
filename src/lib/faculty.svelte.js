@@ -24,6 +24,26 @@ const EDITING_EXPIRY = 5 * 60 * 1000;
  */
 export const faculty = $state({ status: 'idle', user: null, role: null, error: '', editing: {} });
 
+// Email anggota yang terakhir lolos pemeriksaan di server, agar aplikasi tetap bisa dipakai saat luring.
+const MEMBER_KEY = 'sop-member';
+function rememberMember(email) {
+  try {
+    if (email) localStorage.setItem(MEMBER_KEY, email);
+    else localStorage.removeItem(MEMBER_KEY);
+  } catch {}
+}
+function rememberedMember() {
+  try {
+    return localStorage.getItem(MEMBER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Aplikasi hanya untuk anggota terdaftar; saat server tak terjangkau, keanggotaan terakhir yang diingat dipakai. */
+export const canUseApp = () =>
+  faculty.status === 'in' || (['loading', 'error'].includes(faculty.status) && !!faculty.user && faculty.user.email === rememberedMember());
+
 export const isAdmin = () => faculty.status === 'in' && faculty.role === 'admin';
 export const canManage = (sop) => isAdmin() || sop.createdBy === faculty.user?.uid;
 export const EVERYONE = '*';
@@ -83,15 +103,22 @@ function readable(e) {
 async function applyUser(u) {
   if (!u) return Object.assign(faculty, { status: 'out', user: null, role: null, error: '' });
   const user = { uid: u.uid, email: u.email.toLowerCase(), name: (u.displayName || u.email).slice(0, 120) };
-  if (!u.emailVerified || !DOMAIN.test(user.email)) return Object.assign(faculty, { status: 'domain', user, role: null, error: '' });
-  // `user` langsung diisi: aplikasi sudah boleh dipakai selagi keanggotaan pustaka diperiksa (juga saat luring).
+  if (!u.emailVerified || !DOMAIN.test(user.email)) {
+    rememberMember(null);
+    return Object.assign(faculty, { status: 'domain', user, role: null, error: '' });
+  }
+  // `user` langsung diisi: anggota yang diingat sudah boleh memakai aplikasi selagi keanggotaan diperiksa.
   Object.assign(faculty, { status: 'loading', user, role: null, error: '' });
   try {
     const { F, db } = await load();
     const m = await F.getDocFromServer(F.doc(db, 'members', user.email));
-    if (!m.exists()) return Object.assign(faculty, { status: 'notMember', user, role: null, error: '' });
+    if (!m.exists()) {
+      rememberMember(null);
+      return Object.assign(faculty, { status: 'notMember', user, role: null, error: '' });
+    }
     const role = m.data().role;
     if (role === 'admin') await ensureUsage();
+    rememberMember(user.email);
     Object.assign(faculty, { status: 'in', user, role, error: '' });
   } catch (e) {
     Object.assign(faculty, { status: 'error', user, role: null, error: readable(e) });
@@ -126,6 +153,7 @@ export async function signIn() {
 
 export async function signOut() {
   releaseEditing();
+  rememberMember(null);
   const { A, auth } = await load();
   await A.signOut(auth);
 }
