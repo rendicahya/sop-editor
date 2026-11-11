@@ -18,7 +18,6 @@
   import { connectHistory } from './lib/history.js';
   import LibraryDialog from './lib/LibraryDialog.svelte';
   import { saveDoc, isBlank, getEntry } from './lib/library.js';
-  import FacultyDialog from './lib/FacultyDialog.svelte';
   import FacultyConflict from './lib/FacultyConflict.svelte';
   import CloseConfirm from './lib/CloseConfirm.svelte';
   import AskDialog from './lib/AskDialog.svelte';
@@ -473,8 +472,23 @@
     toastTimer = setTimeout(() => (toast = ''), 3000);
   }
 
-  // Pustaka dokumen.
+  // Dialog Pustaka, bertab Lokal dan Daring. Tab terakhir diingat di browser ini.
   let libraryOpen = $state(false);
+  let libraryTab = $state(
+    (() => {
+      try {
+        return localStorage.getItem('sop-editor.libraryTab') === 'faculty' ? 'faculty' : 'local';
+      } catch {
+        return 'local';
+      }
+    })()
+  );
+  /** Membuka dialog Pustaka di tab `t` (bawaan: tab terakhir). */
+  function openLibrary(t = libraryTab) {
+    exportOpen = saveOpen = false;
+    libraryTab = t;
+    libraryOpen = true;
+  }
   const openIds = $derived(tabs.list.map((t) => t.id));
 
   function openEntry(entry) {
@@ -566,19 +580,11 @@
     }
   }
 
-  // Menu Pustaka ada di toolbar dan di layar kosong, yang tampil bersamaan: dicatat menu mana yang terbuka.
-  let libraryMenu = $state(null); // null | 'toolbar' | 'empty'
-  function toggleLibraryMenu(where) {
-    exportOpen = saveOpen = false;
-    libraryMenu = libraryMenu === where ? null : where;
-  }
-
   // Menu Simpan: ke Pustaka (browser ini) atau ke berkas .sop.
   let saveOpen = $state(false);
   let inLibrary = $state(false);
   async function toggleSaveMenu() {
     exportOpen = false;
-    libraryMenu = null;
     if (saveOpen) return (saveOpen = false);
     inLibrary = !!(await getEntry(tabs.active).catch(() => null));
     saveOpen = true;
@@ -613,7 +619,7 @@
   }
 
   // Pustaka Daring. Tab yang tertaut menyimpan tab.remote: lihat Faculty.remoteOf.
-  let facultyOpen = $state(false);
+  const facultyOpen = $derived(libraryOpen && libraryTab === 'faculty');
   let conflict = $state(null);
   let conflictChosen;
   const openRemoteIds = $derived(tabs.list.filter((t) => t.remote).map((t) => t.remote.id));
@@ -722,7 +728,7 @@
   async function saveToFaculty(folder = null) {
     await Faculty.start();
     if (faculty.status !== 'in') {
-      facultyOpen = true;
+      openLibrary('faculty');
       return false;
     }
     checkpoint();
@@ -855,7 +861,7 @@
   // Aplikasi hanya untuk akun yang didaftarkan admin (lihat .signin-gate dan Faculty.canUseApp).
   const signedIn = $derived(Faculty.canUseApp());
   $effect(() => {
-    if (!signedIn) untrack(() => (facultyOpen = libraryOpen = false));
+    if (!signedIn) untrack(() => (libraryOpen = false));
   });
 
   onMount(() => {
@@ -906,7 +912,6 @@
     if (!signedIn) return;
     if (e.key === 'Escape') {
       exportOpen = saveOpen = false;
-      libraryMenu = null;
     }
     onKey(e);
   }}
@@ -914,27 +919,11 @@
     if (e.target.closest?.('.export')) return;
     exportOpen = false;
     saveOpen = false;
-    libraryMenu = null;
   }}
 />
 
-{#snippet libraryButton(where, cls)}
-  <div class="export">
-    <button class={cls} onclick={() => toggleLibraryMenu(where)} aria-haspopup="menu" aria-expanded={libraryMenu === where} title="Buka SOP dari Pustaka Lokal atau Pustaka Daring">
-      Pustaka
-      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-    </button>
-    {#if libraryMenu === where}
-      <div class="export-menu left" role="menu">
-        <button role="menuitem" onclick={() => ((libraryMenu = null), (libraryOpen = true))}>
-          <strong>Lokal</strong><small>SOP yang disimpan di browser ini</small>
-        </button>
-        <button role="menuitem" onclick={() => ((libraryMenu = null), (facultyOpen = true))}>
-          <strong>Daring</strong><small>SOP bersama secara daring, untuk anggota fakultas</small>
-        </button>
-      </div>
-    {/if}
-  </div>
+{#snippet libraryButton(cls)}
+  <button class={cls} onclick={() => openLibrary()} aria-haspopup="dialog" title="Buka SOP dari Pustaka Lokal atau Pustaka Daring">Pustaka</button>
 {/snippet}
 
 <div
@@ -964,7 +953,7 @@
     <nav class="toolbar">
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)">Buka</button>
-      {@render libraryButton('toolbar', 'btn ghost')}
+      {@render libraryButton('btn ghost')}
       <div class="export">
         <button class="btn ghost" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka Lokal, Pustaka Daring, atau sebagai berkas .sop">
           Simpan
@@ -1022,7 +1011,7 @@
         {/if}
       </button>
       <div class="export">
-        <button class="btn primary" onclick={() => ((saveOpen = false), (libraryMenu = null), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
+        <button class="btn primary" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
           {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
         </button>
@@ -1168,7 +1157,7 @@
           <span class="actions">
             <button class="btn primary" onclick={newDoc}>Baru</button>
             <button class="btn" onclick={open}>Buka</button>
-            {@render libraryButton('empty', 'btn')}
+            {@render libraryButton('btn')}
           </span>
         </div>
       {:else}
@@ -1208,32 +1197,34 @@
   <CheckPanel bind:open={checkOpen} {issues} {duration} steps={app.doc.steps} onjump={jumpTo} />
   <LibraryDialog
     bind:open={libraryOpen}
-    {openIds}
-    active={tabs.active}
-    onopen={openEntry}
-    onsave={saveToLibrary}
-    cansave={!empty}
-    onnotify={notify}
-  />
-  <FacultyDialog
-    bind:open={facultyOpen}
-    openIds={openRemoteIds}
-    cansave={!empty && !activeTab?.remote}
-    onopen={openFacultySop}
-    onupload={async (folder) => {
-      if (await saveToFaculty(folder)) facultyOpen = false;
+    bind:tab={libraryTab}
+    local={{
+      openIds,
+      current: tabs.active,
+      onopen: openEntry,
+      onsave: saveToLibrary,
+      cansave: !empty,
+      onnotify: notify
     }}
-    oncreate={async (name, folder) => {
-      const doc = emptyDocument();
-      doc.header.namaSop = name;
-      const remote = await Faculty.uploadSop(doc, name, folder);
-      openInTab(doc);
-      activeTab.remote = remote;
+    faculty={{
+      openIds: openRemoteIds,
+      cansave: !empty && !activeTab?.remote,
+      onopen: openFacultySop,
+      onupload: async (folder) => {
+        if (await saveToFaculty(folder)) libraryOpen = false;
+      },
+      oncreate: async (name, folder) => {
+        const doc = emptyDocument();
+        doc.header.namaSop = name;
+        const remote = await Faculty.uploadSop(doc, name, folder);
+        openInTab(doc);
+        activeTab.remote = remote;
+      },
+      onloaded: onFacultyLoaded,
+      onrenamed: onFacultyRenamed,
+      onbinned: onFacultyBinned,
+      onnotify: notify
     }}
-    onloaded={onFacultyLoaded}
-    onrenamed={onFacultyRenamed}
-    onbinned={onFacultyBinned}
-    onnotify={notify}
   />
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />

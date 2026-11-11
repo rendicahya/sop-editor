@@ -6,17 +6,17 @@
   import AccessDialog from './AccessDialog.svelte';
   import ContextMenu from './ContextMenu.svelte';
   import Icon from './Icon.svelte';
-  import { tips } from './tips.js';
   import * as ui from './ask.svelte.js';
 
   /**
    * openIds: id SOP yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
    * onloaded(live): daftar baru dimuat, tab yang terbuka mengikuti hak akses terbaru. onrenamed(id, hasil renameSop): tab mengikuti.
    * onbinned(id): tab SOP yang dihapus ditutup; hasilnya true bila tab dipertahankan karena ada perubahan belum tersimpan.
+   * Panel di dialog Pustaka: open = dialognya terbuka, active = tab Daring yang tampil, host = elemen <dialog>,
+   * tabs = pemilih tab di kepala panel, onclose() menutup dialog.
    */
-  let { open = $bindable(false), openIds = [], cansave = true, onopen, onupload, oncreate, onloaded, onrenamed, onbinned, onnotify } = $props();
+  let { open = false, active = false, host, tabs, onclose, openIds = [], cansave = true, onopen, onupload, oncreate, onloaded, onrenamed, onbinned, onnotify } = $props();
 
-  let dialog = $state();
   let moveDialog;
   let view = $state('sops'); // sops | bin | admin
   let live = $state([]);
@@ -42,23 +42,34 @@
 
   const admin = $derived(faculty.status === 'in' && faculty.role === 'admin');
 
+  // Tiap kali dialog dibuka, panel ini mulai dari daftar SOP lagi.
+  let wasOpen = false;
+  let loaded = $state(false);
   $effect(() => {
-    if (open && !dialog.open) {
+    if (open && !wasOpen) {
       query = '';
       history = null;
       view = 'sops';
-      dialog.showModal();
-      F.start();
-    } else if (!open && dialog.open) dialog.close();
+      loaded = false;
+    }
+    wasOpen = open;
   });
 
-  // Daftar dibaca sekali saat dialog dibuka atau akun berubah; tidak terus-menerus, agar hemat kuota baca.
+  // Daftar dibaca sekali per pembukaan dialog (atau saat akun berubah), baru ketika tab Daring tampil,
+  // tidak terus-menerus dan tidak tiap kali berpindah tab, agar hemat kuota baca.
   $effect(() => {
-    if (open && faculty.status === 'in') refresh();
+    if (open && active) F.start();
+  });
+  $effect(() => {
+    if (faculty.status !== 'in') loaded = false;
+    else if (open && active && !loaded) {
+      loaded = true;
+      refresh();
+    }
   });
 
   $effect(() => {
-    if (open && faculty.status === 'in' && view === 'admin') refreshAdmin();
+    if (open && active && faculty.status === 'in' && view === 'admin') refreshAdmin();
   });
 
   $effect(() => {
@@ -324,7 +335,7 @@
     if (!name) return;
     try {
       await oncreate(name, folder);
-      open = false;
+      onclose();
       onnotify('SOP baru dibuat');
     } catch (e) {
       ui.alert(e.message);
@@ -332,7 +343,7 @@
   }
 
   function openSop(s) {
-    open = false;
+    onclose();
     onopen(s);
   }
 
@@ -558,9 +569,8 @@
   </li>
 {/snippet}
 
-<dialog bind:this={dialog} class="dialog" use:tips onclose={() => (open = false)}>
   <header>
-    <h2>Pustaka Daring</h2>
+    {@render tabs()}
     {#if faculty.status === 'in' && view !== 'admin'}
       <input class="search" type="search" bind:value={query} placeholder="Cari nama, nomor, pembuat, pelaksana, atau kegiatan…" />
     {:else}
@@ -575,7 +585,7 @@
       <small class="who" title={faculty.user.email}>{faculty.user.name}{admin ? ' · Admin' : ''}</small>
       {@render ib('logout', 'Keluar', () => F.signOut())}
     {/if}
-    <button class="ib x" onclick={() => (open = false)} aria-label="Tutup" data-tip="Tutup"><Icon name="x" /></button>
+    <button class="ib x" onclick={onclose} aria-label="Tutup" data-tip="Tutup"><Icon name="x" /></button>
   </header>
 
   {#if faculty.status === 'in'}
@@ -808,8 +818,7 @@
       {/if}
     </div>
   {/if}
-  {#if menu}<ContextMenu x={menu.x} y={menu.y} items={menu.items} host={dialog} onclose={() => (menu = null)} />{/if}
-</dialog>
+  {#if menu}<ContextMenu x={menu.x} y={menu.y} items={menu.items} {host} onclose={() => (menu = null)} />{/if}
 
 <dialog bind:this={moveDialog} class="dialog small-dialog" onclose={() => (moving = null)}>
   {#if moving}
@@ -948,9 +957,8 @@
     cursor: default;
   }
   .panes {
-    flex: 0 1 auto;
+    flex: 1;
     min-height: 0;
-    height: min(660px, calc(100vh - 8rem));
     display: grid;
     border: 1px solid var(--line);
     border-radius: 10px;
