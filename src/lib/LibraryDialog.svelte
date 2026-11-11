@@ -3,6 +3,7 @@
   import LocalPane from './LocalPane.svelte';
   import FacultyPane from './FacultyPane.svelte';
   import { tips } from './tips.js';
+  import Icon from './Icon.svelte';
 
   /**
    * Dialog Pustaka: tab Lokal (browser ini) dan Daring (SOP bersama). Kedua panel tetap terpasang, jadi folder dan
@@ -11,8 +12,8 @@
   let { open = $bindable(false), tab = $bindable('local'), local, faculty } = $props();
 
   const TABS = [
-    ['local', 'Lokal', 'SOP yang disimpan di browser ini'],
-    ['faculty', 'Daring', 'SOP bersama secara daring, untuk anggota fakultas']
+    ['local', 'Lokal', 'SOP yang disimpan di browser ini', 'laptop'],
+    ['faculty', 'Daring', 'SOP bersama secara daring, untuk anggota fakultas', 'cloud']
   ];
 
   let dialog = $state();
@@ -54,7 +55,7 @@
 {#snippet tabs()}
   <div class="libtabs" role="tablist" aria-label="Pustaka" tabindex="-1" onkeydown={tabKey}>
     <span class="label">Pustaka</span>
-    {#each TABS as [t, name, desc] (t)}
+    {#each TABS as [t, name, desc, icon] (t)}
       <button
         type="button"
         role="tab"
@@ -62,7 +63,7 @@
         aria-controls="libpane-{t}"
         tabindex={tab === t ? 0 : -1}
         data-tip={desc}
-        onclick={() => choose(t)}>{name}</button
+        onclick={() => choose(t)}><Icon name={icon} size={15} /><span>{name}</span></button
       >
     {/each}
   </div>
@@ -119,6 +120,9 @@
     padding: 0 0.6rem 0 0.4rem;
   }
   [role='tab'] {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     border: 0;
     border-radius: 7px;
     background: none;
