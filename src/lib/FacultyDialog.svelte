@@ -7,6 +7,7 @@
   import ContextMenu from './ContextMenu.svelte';
   import Icon from './Icon.svelte';
   import { tips } from './tips.js';
+  import * as ui from './ask.svelte.js';
 
   /**
    * openIds: id SOP yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
@@ -144,34 +145,35 @@
 
   const nameTaken = (name, parent, except) =>
     folders.some((f) => f.id !== except && parents.get(f.id) === parent && f.name.toLowerCase() === name.toLowerCase());
-  const askName = (label, current = '') => prompt(label, current)?.trim().slice(0, 120).trim();
+  const askName = async (title, current = '', ok = 'Simpan') =>
+    (await ui.prompt('Nama folder', current, { title, ok, maxlength: 120 }))?.trim().slice(0, 120).trim();
   const takenMessage = (name) => `Sudah ada folder bernama "${name}" di lokasi ini.`;
 
-  function newFolder(parent = here) {
-    const name = askName('Nama folder baru:');
+  async function newFolder(parent = here) {
+    const name = await askName('Folder baru', '', 'Buat');
     if (!name) return;
-    if (nameTaken(name, parent)) return alert(takenMessage(name));
+    if (nameTaken(name, parent)) return ui.alert(takenMessage(name));
     if (parent) expanded.add(parent);
     act(() => F.createFolder(name, parent), 'Folder dibuat');
   }
 
-  function renameFolder(f) {
-    const name = askName('Nama folder:', f.name);
+  async function renameFolder(f) {
+    const name = await askName('Ubah nama folder', f.name);
     if (!name || name === f.name) return;
-    if (nameTaken(name, parents.get(f.id), f.id)) return alert(takenMessage(name));
+    if (nameTaken(name, parents.get(f.id), f.id)) return ui.alert(takenMessage(name));
     act(() => F.renameFolder(f.id, name), 'Nama folder diubah');
   }
 
   // Yang dihitung hanya isi yang terlihat. Isi dengan hak khusus milik orang lain akan tampil di tingkat utama
   // bagi pemiliknya setelah foldernya dihapus, jadi tidak hilang.
-  function removeFolder(f) {
+  async function removeFolder(f) {
     const subs = childrenOf(f.id).length;
     const sops = live.filter((s) => folderOf(s) === f.id).length;
     if (subs || sops) {
       const isi = [subs && `${subs} subfolder`, sops && `${sops} SOP`].filter(Boolean).join(' dan ');
-      return alert(`Folder "${f.name}" masih berisi ${isi}. Pindahkan isinya dulu. SOP milik orang lain hanya bisa dipindahkan oleh pemiliknya atau admin.`);
+      return ui.alert(`Folder "${f.name}" masih berisi ${isi}. Pindahkan isinya dulu. SOP milik orang lain hanya bisa dipindahkan oleh pemiliknya atau admin.`, { title: 'Folder belum kosong' });
     }
-    if (!confirm(`Hapus folder "${f.name}"?`)) return;
+    if (!(await ui.confirm(`Hapus folder "${f.name}"?`, { ok: 'Hapus', danger: true }))) return;
     if (folderId === f.id) folderId = parents.get(f.id) ?? null;
     act(() => F.deleteFolder(f.id), 'Folder dihapus');
   }
@@ -186,7 +188,7 @@
     const dest = byId.get(target) ?? null;
     if (isFolder) {
       if (target === parents.get(item.id)) return;
-      if (nameTaken(item.name, target, item.id)) return alert(takenMessage(item.name));
+      if (nameTaken(item.name, target, item.id)) return ui.alert(takenMessage(item.name));
       if (target) expanded.add(target);
       act(() => F.moveFolder(item, dest), 'Folder dipindahkan');
     } else if (target !== folderOf(item)) {
@@ -259,7 +261,7 @@
       await fn();
       if (done) onnotify(done);
     } catch (e) {
-      alert(e.message);
+      ui.alert(e.message);
     }
     await refresh();
   }
@@ -272,8 +274,8 @@
     onopen(s);
   }
 
-  function rename(s) {
-    const name = prompt('Nama SOP:', s.title)?.trim();
+  async function rename(s) {
+    const name = (await ui.prompt('Nama SOP', s.title, { title: 'Ubah nama SOP', ok: 'Simpan' }))?.trim();
     if (!name || name === s.title) return;
     act(async () => onrenamed(s.id, await F.renameSop(s.id, name)), 'Nama SOP diubah');
   }
@@ -291,9 +293,9 @@
   const moveFolder = (f) => (moving = { item: f, isFolder: true, target: parents.get(f.id) ?? null });
   const restoreFromBin = (s) => act(() => F.restoreFromBin(s.id), 'SOP dipulihkan');
 
-  function purge(s) {
+  async function purge(s) {
     const msg = `Hapus "${titleOf(s)}" secara permanen?\n\nSeluruh riwayat versinya, termasuk suntingan orang lain, ikut terhapus. Tindakan ini tidak bisa dibatalkan.`;
-    if (confirm(msg)) act(() => F.purgeSop(s), 'Dihapus permanen');
+    if (await ui.confirm(msg, { title: 'Hapus permanen', ok: 'Hapus permanen', danger: true })) act(() => F.purgeSop(s), 'Dihapus permanen');
   }
 
   async function toggleHistory(s) {
@@ -301,12 +303,13 @@
     try {
       history = { id: s.id, versions: await F.listVersions(s.id) };
     } catch (e) {
-      alert(e.message);
+      ui.alert(e.message);
     }
   }
 
-  function restoreVersion(s, v) {
-    if (!confirm(`Kembalikan isi "${titleOf(s)}" ke versi ${when(v.savedAt)}? Isi saat ini tetap tersimpan di Riwayat.`)) return;
+  async function restoreVersion(s, v) {
+    const msg = `Kembalikan isi "${titleOf(s)}" ke versi ${when(v.savedAt)}? Isi saat ini tetap tersimpan di Riwayat.`;
+    if (!(await ui.confirm(msg, { ok: 'Kembalikan' }))) return;
     history = null;
     act(() => F.restoreVersion(s.id, v), 'Versi lama dikembalikan');
   }
@@ -396,15 +399,15 @@
     try {
       [usage, members, groups] = await Promise.all([F.getUsage(), F.listMembers(), F.listGroups()]);
     } catch (e) {
-      alert(e.message);
+      ui.alert(e.message);
     }
   }
-  const adminAct = (fn) => fn().catch((e) => alert(e.message)).finally(refreshAdmin);
+  const adminAct = (fn) => fn().catch((e) => ui.alert(e.message)).finally(refreshAdmin);
 
   function addMember(e) {
     e.preventDefault();
     const email = newEmail.trim().toLowerCase();
-    if (!/^[^@\s/]+@(ub\.ac\.id|gmail\.com)$/.test(email)) return alert('Masukkan alamat email @ub.ac.id atau @gmail.com.');
+    if (!/^[^@\s/]+@(ub\.ac\.id|gmail\.com)$/.test(email)) return ui.alert('Masukkan alamat email @ub.ac.id atau @gmail.com.');
     newEmail = '';
     const existing = members.find((m) => m.email === email);
     const kept = existing?.groups ?? [];
@@ -418,29 +421,31 @@
     e.preventDefault();
     const name = cleanName(groupName);
     if (!name) return;
-    if (groups.some((g) => g.name.toLowerCase() === name.toLowerCase())) return alert(`Grup ${name} sudah ada.`);
+    if (groups.some((g) => g.name.toLowerCase() === name.toLowerCase())) return ui.alert(`Grup ${name} sudah ada.`);
     groupName = '';
     adminAct(async () => (openGroup = await F.createGroup(name)));
   }
-  function renameGroup(g) {
-    const name = cleanName(prompt('Nama grup:', g.name) ?? '');
-    if (name && name !== g.name) adminAct(() => F.renameGroup(g.id, name));
+  async function renameGroup(g) {
+    const name = cleanName((await ui.prompt('Nama grup', g.name, { title: 'Ubah nama grup', ok: 'Simpan', maxlength: 80 })) ?? '');
+    if (!name || name === g.name) return;
+    if (groups.some((x) => x.id !== g.id && x.name.toLowerCase() === name.toLowerCase())) return ui.alert(`Grup ${name} sudah ada.`);
+    adminAct(() => F.renameGroup(g.id, name));
   }
-  function deleteGroup(g) {
-    if (confirm(`Hapus grup ${g.name}? Anggotanya tetap terdaftar, tetapi hak akses yang diberikan lewat grup ini tidak berlaku lagi.`)) {
-      adminAct(() => F.deleteGroup(g.id, members));
-    }
+  async function deleteGroup(g) {
+    const msg = `Hapus grup ${g.name}? Anggotanya tetap terdaftar, tetapi hak akses yang diberikan lewat grup ini tidak berlaku lagi.`;
+    if (await ui.confirm(msg, { ok: 'Hapus', danger: true })) adminAct(() => F.deleteGroup(g.id, members));
   }
   function toggleInGroup(g, m, on) {
     const emails = inGroup(g).map((x) => x.email).filter((x) => x !== m.email);
     adminAct(() => F.setGroupMembers(g.id, on ? [...emails, m.email] : emails, members));
   }
-  function removeMember(m) {
-    if (confirm(`Cabut akses ${m.email}? SOP buatannya tetap ada.`)) adminAct(() => F.removeMember(m.email));
+  async function removeMember(m) {
+    if (await ui.confirm(`Cabut akses ${m.email}? SOP buatannya tetap ada.`, { ok: 'Cabut akses', danger: true })) adminAct(() => F.removeMember(m.email));
   }
-  function changeLimit() {
-    const v = Number(prompt('Batas penyimpanan (MB):', String(Math.round(usage.limit / 1e6))));
-    if (v > 0) adminAct(() => F.setLimit(Math.round(v * 1e6)));
+  async function changeLimit() {
+    const raw = await ui.prompt('Batas penyimpanan (MB)', String(Math.round(usage.limit / 1e6)), { title: 'Ubah batas penyimpanan', ok: 'Simpan', type: 'number' });
+    const v = Number(raw);
+    if (raw && v > 0) adminAct(() => F.setLimit(Math.round(v * 1e6)));
   }
   const recount = () => adminAct(() => F.recountUsage());
 
@@ -722,10 +727,10 @@
     <div class="gate">
       {#if faculty.status === 'out'}
         <p>Pustaka Daring menyimpan SOP bersama secara daring. Masuk dengan akun Google <strong>@ub.ac.id</strong> atau <strong>@gmail.com</strong> yang sudah didaftarkan admin.</p>
-        <button class="btn primary" onclick={() => F.signIn().catch((e) => alert(e.message))}>Masuk dengan Google</button>
+        <button class="btn primary" onclick={() => F.signIn().catch((e) => ui.alert(e.message))}>Masuk dengan Google</button>
       {:else if faculty.status === 'domain'}
         <p><strong>{faculty.user.email}</strong> tidak bisa dipakai. Pustaka Daring hanya untuk akun @ub.ac.id atau @gmail.com.</p>
-        <button class="btn" onclick={() => F.signOut().then(() => F.signIn()).catch((e) => alert(e.message))}>Ganti akun</button>
+        <button class="btn" onclick={() => F.signOut().then(() => F.signIn()).catch((e) => ui.alert(e.message))}>Ganti akun</button>
       {:else if faculty.status === 'notMember'}
         <p><strong>{faculty.user.email}</strong> belum terdaftar sebagai anggota. Minta admin Pustaka Daring mendaftarkan akun ini.</p>
         <button class="btn" onclick={() => F.recheck()}>Periksa lagi</button>

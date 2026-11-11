@@ -1,5 +1,6 @@
 <script>
   import { newTabId } from './store.svelte.js';
+  import * as ui from './ask.svelte.js';
   import { listEntries, putEntry, patchEntry, deleteEntry, cleanTags, haystack } from './library.js';
 
   /** openIds: id tab yang sedang terbuka (= id entri pustaka). */
@@ -28,7 +29,7 @@
       entries = (await listEntries()).map((e) => ({ ...e, tags: e.tags ?? [], text: haystack(e) }));
     } catch {
       entries = [];
-      alert('Pustaka Lokal tidak bisa dibaca di browser ini (mode privat atau penyimpanan diblokir).');
+      ui.alert('Pustaka Lokal tidak bisa dibaca di browser ini (mode privat atau penyimpanan diblokir).');
     }
   }
 
@@ -50,7 +51,7 @@
   }
   async function removePicked() {
     const n = chosen.length;
-    if (!n || !confirm(`Hapus ${n} dokumen terpilih dari pustaka? Tindakan ini tidak bisa dibatalkan.`)) return;
+    if (!n || !(await ui.confirm(`Hapus ${n} dokumen terpilih dari pustaka? Tindakan ini tidak bisa dibatalkan.`, { ok: 'Hapus', danger: true }))) return;
     for (const e of chosen) await deleteEntry(e.id);
     picked = [];
     await refresh();
@@ -112,14 +113,14 @@
     await refresh();
   }
   async function renameTag(old) {
-    const name = prompt('Nama label:', old)?.trim().replace(/\s+/g, ' ');
+    const name = (await ui.prompt('Nama label', old, { title: 'Ubah nama label', ok: 'Simpan' }))?.trim().replace(/\s+/g, ' ');
     if (!name || name === old) return;
     await mapTag(old, () => name);
     tag = allTags.find((t) => t.toLowerCase() === name.toLowerCase()) ?? null;
   }
   async function removeTag(old) {
     const n = entries.filter((e) => e.tags.includes(old)).length;
-    if (!confirm(`Hapus label "${old}" dari ${n} entri? Dokumennya tidak ikut terhapus.`)) return;
+    if (!(await ui.confirm(`Hapus label "${old}" dari ${n} entri? Dokumennya tidak ikut terhapus.`, { ok: 'Hapus label', danger: true }))) return;
     await mapTag(old, () => null);
     tag = null;
   }
@@ -133,7 +134,7 @@
   }
 
   async function remove(e) {
-    if (!confirm(`Hapus "${titleOf(e)}" dari pustaka? Tindakan ini tidak bisa dibatalkan.`)) return;
+    if (!(await ui.confirm(`Hapus "${titleOf(e)}" dari pustaka? Tindakan ini tidak bisa dibatalkan.`, { ok: 'Hapus', danger: true }))) return;
     await deleteEntry(e.id);
     await refresh();
   }

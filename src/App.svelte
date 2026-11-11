@@ -21,6 +21,8 @@
   import FacultyDialog from './lib/FacultyDialog.svelte';
   import FacultyConflict from './lib/FacultyConflict.svelte';
   import CloseConfirm from './lib/CloseConfirm.svelte';
+  import AskDialog from './lib/AskDialog.svelte';
+  import * as ui from './lib/ask.svelte.js';
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
 
@@ -94,7 +96,7 @@
   let fullscreen = $state(false);
   function toggleFullscreen() {
     if (document.fullscreenElement) document.exitFullscreen();
-    else document.documentElement.requestFullscreen?.().catch(() => alert('Browser ini tidak mengizinkan layar penuh.'));
+    else document.documentElement.requestFullscreen?.().catch(() => ui.alert('Browser ini tidak mengizinkan layar penuh.'));
   }
 
   let findOpen = $state(false);
@@ -130,7 +132,7 @@
       docFont = fontSource();
       notify('Dokumen sekarang memakai Calibri.');
     } catch (e) {
-      alert('Gagal memakai Calibri: ' + e.message);
+      ui.alert('Gagal memakai Calibri: ' + e.message);
     }
   }
 
@@ -420,7 +422,7 @@
           await saveDoc(id, json, tab.fileName);
         } catch (e) {
           // Tab tetap terbuka agar isinya tidak hilang.
-          return alert('Gagal menyimpan ke Pustaka Lokal: ' + e.message);
+          return ui.alert('Gagal menyimpan ke Pustaka Lokal: ' + e.message);
         }
         notify(`"${tabTitle(tab)}" ditutup — buka lagi dari Pustaka Lokal`);
       }
@@ -480,7 +482,7 @@
     try {
       openInTab(parseDocumentText(entry.json), entry.fileName, null, entry.id);
     } catch {
-      alert('Entri pustaka ini rusak dan tidak bisa dibuka.');
+      ui.alert('Entri pustaka ini rusak dan tidak bisa dibuka.');
     }
   }
 
@@ -492,7 +494,7 @@
   async function loadFile(file, handle) {
     if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
       const text = sopFromPdf(new Uint8Array(await file.arrayBuffer()));
-      if (!text) return alert('PDF ini tidak berisi data SOP (bukan hasil ekspor SOP Editor).'), false;
+      if (!text) return ui.alert('PDF ini tidak berisi data SOP (bukan hasil ekspor SOP Editor).'), false;
       return loadText(text, sopName(file.name.replace(/\.pdf$/i, '')), null);
     }
     return loadText(await file.text(), file.name, handle);
@@ -504,7 +506,7 @@
       notify(`Dibuka: ${name}`);
       return true;
     } catch (e) {
-      alert(e instanceof SyntaxError ? 'Berkas bukan dokumen SOP yang valid.' : e.message);
+      ui.alert(e instanceof SyntaxError ? 'Berkas bukan dokumen SOP yang valid.' : e.message);
       return false;
     }
   }
@@ -528,7 +530,7 @@
       notify('Dokumen dari AI dibuka — periksa kembali isinya sebelum diekspor');
       return true;
     } catch (e) {
-      alert(
+      ui.alert(
         e instanceof SyntaxError
           ? 'Jawaban AI bukan JSON yang valid (mungkin terpotong). Minta AI mengulang dan menampilkan JSON secara lengkap.'
           : e.message
@@ -542,7 +544,7 @@
       const f = await openJsonFile();
       if (f) await loadFile(f.file, f.handle);
     } catch (e) {
-      alert('Gagal membuka berkas: ' + e.message);
+      ui.alert('Gagal membuka berkas: ' + e.message);
     }
   }
 
@@ -560,7 +562,7 @@
       }
       notify('Tersimpan sebagai berkas ' + (handle?.name ?? name));
     } catch (e) {
-      alert('Gagal menyimpan: ' + e.message);
+      ui.alert('Gagal menyimpan: ' + e.message);
     }
   }
 
@@ -592,7 +594,7 @@
       if (!remote) saved(); // SOP daring: perubahannya tetap belum masuk ke Pustaka Daring
       notify('Tersimpan di Pustaka Lokal');
     } catch (e) {
-      alert('Gagal menyimpan ke Pustaka Lokal: ' + e.message);
+      ui.alert('Gagal menyimpan ke Pustaka Lokal: ' + e.message);
     }
   }
 
@@ -642,7 +644,7 @@
     try {
       openInTab(parseDocumentText(sop.json));
     } catch {
-      return alert('SOP ini rusak dan tidak bisa dibuka.');
+      return ui.alert('SOP ini rusak dan tidak bisa dibuka.');
     }
     activeTab.remote = Faculty.remoteOf(sop);
   }
@@ -760,7 +762,7 @@
       notify(r.unchanged ? 'Tidak ada perubahan untuk disimpan.' : 'Tersimpan di Pustaka Daring.');
       return true;
     } catch (e) {
-      alert(e.message);
+      ui.alert(e.message);
       return false;
     }
   }
@@ -778,7 +780,7 @@
       pdfSaved = fileMark();
       pdfDoc = exportPdf(app.doc);
     } catch (e) {
-      alert('Gagal membuat PDF: ' + e.message);
+      ui.alert('Gagal membuat PDF: ' + e.message);
     }
   }
 
@@ -795,7 +797,7 @@
       downloadBlob(blob, `SOP-${slug(app.doc.header.namaSop)}.${kind === 'png' ? 'zip' : kind}`);
       saved();
     } catch (e) {
-      alert(`Gagal membuat ${kind.toUpperCase()}: ` + e.message);
+      ui.alert(`Gagal membuat ${kind.toUpperCase()}: ` + e.message);
     } finally {
       exportBusy = '';
     }
@@ -1239,14 +1241,14 @@
     <strong>SOP Editor</strong>
     {#if faculty.status === 'out'}
       <p>Aplikasi ini hanya untuk akun yang sudah didaftarkan admin. Masuk dengan akun Google Anda.</p>
-      <button class="btn primary" onclick={() => Faculty.signIn().catch((e) => alert(e.message))}>Masuk dengan Google</button>
+      <button class="btn primary" onclick={() => Faculty.signIn().catch((e) => ui.alert(e.message))}>Masuk dengan Google</button>
     {:else if faculty.status === 'domain' || faculty.status === 'notMember'}
       <p>
         Akun <b>{faculty.user?.email}</b> belum terdaftar.
         {faculty.status === 'domain' ? 'Hanya akun @ub.ac.id atau @gmail.com yang bisa didaftarkan.' : 'Hubungi admin untuk didaftarkan.'}
       </p>
       <div class="gate-actions">
-        <button class="btn primary" onclick={() => Faculty.signOut().then(() => Faculty.signIn()).catch((e) => alert(e.message))}>Ganti akun</button>
+        <button class="btn primary" onclick={() => Faculty.signOut().then(() => Faculty.signIn()).catch((e) => ui.alert(e.message))}>Ganti akun</button>
         <button class="btn" onclick={() => Faculty.signOut()}>Keluar</button>
       </div>
     {:else if faculty.status === 'error'}
@@ -1260,6 +1262,8 @@
     {/if}
   </div>
 {/if}
+
+<AskDialog />
 
 <!-- Ditampilkan (lewat CSS) menggantikan aplikasi di layar HP. -->
 <div class="mobile-block">

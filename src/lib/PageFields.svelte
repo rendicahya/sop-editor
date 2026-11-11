@@ -8,6 +8,7 @@
 
 <script>
   import { tick } from 'svelte';
+  import * as ui from './ask.svelte.js';
   import { asStep } from './history.js';
   import { app } from './store.svelte.js';
   import { PT } from './layout.js';
@@ -448,7 +449,7 @@
       try {
         t = await navigator.clipboard.readText();
       } catch {
-        alert('Browser tidak mengizinkan membaca clipboard dari menu. Gunakan Ctrl+V.');
+        ui.alert('Browser tidak mengizinkan membaca clipboard dari menu. Gunakan Ctrl+V.');
         return;
       }
       el.focus();

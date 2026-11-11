@@ -1,5 +1,6 @@
 <script>
   import { aiPrompt, aiImportPrompt, aiRevisePrompt } from './aiPrompt.js';
+  import * as ui from './ask.svelte.js';
   import { DEFAULT_PENGESAH } from './model.js';
   import { app } from './store.svelte.js';
 
@@ -44,7 +45,7 @@
       copied = true;
       setTimeout(() => (copied = false), 2000);
     } catch {
-      alert('Gagal menyalin otomatis. Buka "Lihat prompt" lalu salin secara manual.');
+      ui.alert('Gagal menyalin otomatis. Buka "Lihat prompt" lalu salin secara manual.');
     }
   }
 
@@ -53,11 +54,11 @@
     try {
       text = await navigator.clipboard.readText();
     } catch {
-      alert('Browser tidak mengizinkan membaca clipboard. Klik kolom jawaban lalu tekan Ctrl+V.');
+      ui.alert('Browser tidak mengizinkan membaca clipboard. Klik kolom jawaban lalu tekan Ctrl+V.');
       return;
     }
     if (text.trim()) draft.answer = text;
-    else alert('Clipboard kosong. Salin dulu jawaban dari asisten AI.');
+    else ui.alert('Clipboard kosong. Salin dulu jawaban dari asisten AI.');
   }
 
   function load() {
