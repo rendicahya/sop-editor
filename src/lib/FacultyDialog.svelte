@@ -548,10 +548,10 @@
               <span class="muted grow">Hasil pencarian di semua folder</span>
             {:else}
               <nav class="grow" aria-label="Lokasi folder">
-                <button class="crumb" class:drop={dropAt === null} aria-current={here ? undefined : 'location'} onclick={() => select(null)} {...dropzone(null)}>Utama</button>
+                <button class="crumb" class:drop={dropAt === null} aria-current={here ? undefined : 'location'} onclick={() => select(null)} {...dropzone(null)} oncontextmenu={(e) => openMenu(e, hereItems(null))}>Utama</button>
                 {#each crumbs as c (c.id)}
                   <span class="sep" aria-hidden="true">/</span>
-                  <button class="crumb" class:drop={dropAt === c.id} aria-current={c.id === here ? 'location' : undefined} onclick={() => select(c.id)} {...dropzone(c.id)}>{c.name}</button>
+                  <button class="crumb" class:drop={dropAt === c.id} aria-current={c.id === here ? 'location' : undefined} onclick={() => select(c.id)} {...dropzone(c.id)} oncontextmenu={(e) => openMenu(e, folderMenu(c))}>{c.name}</button>
                 {/each}
               </nav>
             {/if}
