@@ -109,7 +109,56 @@
   const pathText = (id) => pathOf(id).map((f) => f.name).join(' / ');
   const crumbs = $derived(pathOf(here));
 
-  const shownFolders = $derived(searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))).sort(byName) : []);
+  const shownFolders = $derived(searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))).sort(byName) : childrenOf(here));
+  /** Ringkasan isi folder untuk baris folder di panel kanan. */
+  function folderInfo(f) {
+    const subs = childrenOf(f.id).length;
+    const n = counts.get(f.id) ?? 0;
+    return [subs && `${subs} folder`, n && `${n} SOP`].filter(Boolean).join(', ') || 'Kosong';
+  }
+
+  // ---- Lebar pohon folder (bisa digeser, diingat per browser) ----
+  const TREE_KEY = 'sop-editor.treeWidth';
+  const TREE_MIN = 160;
+  const TREE_DEFAULT = 250;
+  let panes = $state();
+  let treeW = $state(TREE_DEFAULT);
+  try {
+    const saved = Number(localStorage.getItem(TREE_KEY));
+    if (saved >= TREE_MIN) treeW = saved;
+  } catch {}
+  const treeMax = () => Math.max(TREE_MIN, Math.min(600, (panes?.clientWidth ?? 900) - 360));
+  function setTree(w) {
+    treeW = Math.round(Math.min(treeMax(), Math.max(TREE_MIN, w)));
+    try {
+      localStorage.setItem(TREE_KEY, String(treeW));
+    } catch {}
+  }
+  function splitDown(e) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    const left = panes.getBoundingClientRect().left;
+    el.setPointerCapture(e.pointerId);
+    const move = (ev) => setTree(ev.clientX - left);
+    const up = () => {
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  }
+  function splitKey(e) {
+    const step = e.shiftKey ? 50 : 16;
+    if (e.key === 'ArrowLeft') setTree(treeW - step);
+    else if (e.key === 'ArrowRight') setTree(treeW + step);
+    else if (e.key === 'Home') setTree(TREE_MIN);
+    else if (e.key === 'End') setTree(treeMax());
+    else return;
+    e.preventDefault();
+  }
   const shownLive = $derived(live.filter((s) => (searching ? matches(s) : folderOf(s) === here)));
   const counts = $derived.by(() => {
     const out = new Map();
@@ -512,8 +561,10 @@
 
   {#if faculty.status === 'in'}
     {#if loadError}<p class="error">{loadError} <button class="link" onclick={refresh}>Coba lagi</button></p>{/if}
-    <div class="panes">
+    <div class="panes" bind:this={panes} style:grid-template-columns="{treeW}px minmax(0, 1fr)">
       <aside>
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+        <div class="split" role="separator" aria-orientation="vertical" aria-label="Lebar daftar folder" aria-valuenow={treeW} aria-valuemin={TREE_MIN} tabindex="0" title="Geser untuk mengubah lebar (klik dua kali: lebar awal)" onpointerdown={splitDown} onkeydown={splitKey} ondblclick={() => setTree(TREE_DEFAULT)}></div>
         <div class="tree" role="presentation" oncontextmenu={(e) => openMenu(e, hereItems(null))}>
           <ul role="tree" aria-label="Folder">
             <li role="treeitem" aria-selected={view === 'sops' && !here}>
@@ -569,7 +620,7 @@
               <li class:drop={dropAt === f.id} class:dragging={drag?.item === f} draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
                 <button class="main" onclick={() => select(f.id)}>
                   <strong><Icon name="folder" size={15} /> {f.name} <em class:shared={F.isShared(f)}>{accessLabel(f)}</em></strong>
-                  <small>{[parent && `di ${pathText(parent)}`, `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}</small>
+                  <small>{[searching && parent && `di ${pathText(parent)}`, folderInfo(f), `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}</small>
                 </button>
               </li>
             {/each}
@@ -618,7 +669,7 @@
               </li>
             {/each}
             {#if !shownFolders.length && !shownLive.length}
-              <li class="empty">{busy ? 'Memuat…' : searching ? 'Tidak ada yang cocok.' : here ? 'Belum ada SOP di folder ini.' : 'Belum ada SOP di sini.'}</li>
+              <li class="empty">{busy ? 'Memuat…' : searching ? 'Tidak ada yang cocok.' : here ? 'Folder ini masih kosong.' : 'Belum ada folder atau SOP di sini.'}</li>
             {/if}
           </ul>
         {:else if view === 'bin'}
@@ -863,17 +914,44 @@
     min-height: 0;
     height: min(660px, calc(100vh - 8rem));
     display: grid;
-    grid-template-columns: minmax(200px, 270px) minmax(0, 1fr);
     border: 1px solid var(--line);
     border-radius: 10px;
     overflow: hidden;
   }
   aside {
+    position: relative;
     display: flex;
     flex-direction: column;
+    min-width: 0;
     min-height: 0;
     border-right: 1px solid var(--line);
     background: var(--surface-2);
+  }
+  .split {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    bottom: 0;
+    right: -4px;
+    width: 7px;
+    cursor: col-resize;
+    touch-action: none;
+    outline: none;
+  }
+  .split::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 2px;
+    width: 3px;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .split:hover::after,
+  .split:active::after,
+  .split:focus-visible::after {
+    background: var(--accent);
   }
   .tree {
     flex: 1;
@@ -965,12 +1043,15 @@
   }
   aside nav {
     flex: none;
-    padding: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.5rem 0.6rem 0.75rem;
     border-top: 1px solid var(--line);
   }
   .tname.nav {
     width: 100%;
-    padding-left: 0.5rem;
+    padding: 0.4rem 0.6rem;
     border-radius: 6px;
   }
   .tname.nav:hover:not(.sel) {
