@@ -429,6 +429,95 @@ describe('membersihkan riwayat lama', () => {
   });
 });
 
+describe('komentar', () => {
+  const cdoc = (db, cid) => doc(db, 'sops', 's', 'comments', cid);
+  const comment = (u, patch = {}) => ({
+    parent: null, anchor: 'st:x:kegiatan', label: 'Langkah 1 · Kegiatan', quote: 'Mulai', text: 'Mohon diperjelas',
+    by: u, byName: USERS[u].name, byEmail: USERS[u].email, at: serverTimestamp(), editedAt: null,
+    resolved: false, resolvedBy: null, resolvedByName: null, resolvedAt: null, ...patch
+  });
+  const reply = (u, parent, patch = {}) => comment(u, { parent, anchor: null, label: '', quote: '', text: 'Baik', ...patch });
+  const resolve = (db, u, cid) => updateDoc(cdoc(db, cid), { resolved: true, resolvedBy: u, resolvedByName: USERS[u].name, resolvedAt: serverTimestamp() });
+  const reopen = (db, cid) => updateDoc(cdoc(db, cid), { resolved: false, resolvedBy: null, resolvedByName: null, resolvedAt: null });
+  /** SOP milik ali yang hanya bisa dilihat bud (gml tidak punya hak). */
+  async function viewable() {
+    await given('ali', 's');
+    await updateDoc(doc(as('ali'), 'sops/s'), custom('ali', [USERS.bud.email]));
+  }
+
+  it('pemegang hak lihat bisa berkomentar, membalas, dan membaca; tanpa hak tidak bisa', async () => {
+    await viewable();
+    await assertSucceeds(setDoc(cdoc(as('bud'), 'c1'), comment('bud')));
+    await assertSucceeds(setDoc(cdoc(as('ali'), 'r1'), reply('ali', 'c1')));
+    await assertSucceeds(getDocs(collection(as('bud'), 'sops', 's', 'comments')));
+    await assertFails(getDocs(collection(as('gml'), 'sops', 's', 'comments')));
+    await assertFails(setDoc(cdoc(as('gml'), 'c2'), comment('gml')));
+    await assertFails(setDoc(cdoc(as('out'), 'c3'), comment('out')));
+  });
+  it('tidak bisa mengaku orang lain, langsung selesai, atau memakai isian tidak sah', async () => {
+    await viewable();
+    await assertFails(setDoc(cdoc(as('bud'), 'c1'), comment('ali')));
+    await assertFails(setDoc(cdoc(as('bud'), 'c1'), comment('bud', { byEmail: 'ali@ub.ac.id' })));
+    await assertFails(setDoc(cdoc(as('bud'), 'c1'), comment('bud', { resolved: true })));
+    await assertFails(setDoc(cdoc(as('bud'), 'c1'), comment('bud', { text: '' })));
+    await assertFails(setDoc(cdoc(as('bud'), 'c1'), comment('bud', { text: 'x'.repeat(4001) })));
+    await assertFails(setDoc(cdoc(as('bud'), 'c1'), comment('bud', { extra: 1 })));
+  });
+  it('balasan hanya untuk komentar utama yang ada, tanpa bersarang', async () => {
+    await viewable();
+    await setDoc(cdoc(as('bud'), 'c1'), comment('bud'));
+    await setDoc(cdoc(as('ali'), 'r1'), reply('ali', 'c1'));
+    await assertFails(setDoc(cdoc(as('bud'), 'r2'), reply('bud', 'r1')));
+    await assertFails(setDoc(cdoc(as('bud'), 'r3'), reply('bud', 'nope')));
+    await assertFails(setDoc(cdoc(as('bud'), 'r4'), reply('bud', 'c1', { anchor: 'h:nomor' })));
+  });
+  it('siapa pun yang bisa melihat bisa menandai selesai dan membukanya lagi; balasan tidak bisa', async () => {
+    await viewable();
+    await setDoc(cdoc(as('ali'), 'c1'), comment('ali'));
+    await setDoc(cdoc(as('ali'), 'r1'), reply('ali', 'c1'));
+    await assertFails(resolve(as('bud'), 'ali', 'c1'));
+    await assertSucceeds(resolve(as('bud'), 'bud', 'c1'));
+    await assertFails(resolve(as('ali'), 'ali', 'c1')); // sudah selesai
+    await assertFails(resolve(as('gml'), 'gml', 'c1'));
+    await assertSucceeds(reopen(as('bud'), 'c1'));
+    await assertFails(resolve(as('bud'), 'bud', 'r1'));
+    await assertFails(updateDoc(cdoc(as('bud'), 'c1'), { resolved: true, resolvedBy: 'bud', resolvedByName: 'Bud', resolvedAt: serverTimestamp(), text: 'ubah' }));
+  });
+  it('teks hanya bisa diubah penulisnya', async () => {
+    await viewable();
+    await setDoc(cdoc(as('bud'), 'c1'), comment('bud'));
+    await assertSucceeds(updateDoc(cdoc(as('bud'), 'c1'), { text: 'Diperbaiki', editedAt: serverTimestamp() }));
+    await assertFails(updateDoc(cdoc(as('ali'), 'c1'), { text: 'Bukan milikku', editedAt: serverTimestamp() }));
+    await assertFails(updateDoc(cdoc(as('bud'), 'c1'), { anchor: 'h:nomor' }));
+  });
+  it('dihapus oleh penulisnya, pemilik SOP, atau admin; balasan ikut terhapus', async () => {
+    await viewable();
+    await updateDoc(doc(as('ali'), 'sops/s'), custom('ali', [USERS.bud.email, USERS.gml.email]));
+    await setDoc(cdoc(as('bud'), 'c1'), comment('bud'));
+    await setDoc(cdoc(as('gml'), 'r1'), reply('gml', 'c1'));
+    await setDoc(cdoc(as('gml'), 'c2'), comment('gml'));
+    await setDoc(cdoc(as('gml'), 'c3'), comment('gml'));
+    await assertFails(deleteDoc(cdoc(as('bud'), 'c2')));
+    await assertFails(deleteDoc(cdoc(as('bud'), 'r1')));
+    await assertSucceeds(deleteDoc(cdoc(as('ali'), 'c2')));
+    await assertSucceeds(deleteDoc(cdoc(as('adm'), 'c3')));
+    const db = as('bud');
+    const b = writeBatch(db);
+    b.delete(cdoc(db, 'c1'));
+    b.delete(cdoc(db, 'r1'));
+    await assertSucceeds(b.commit());
+  });
+  it('SOP di recycle bin tidak bisa dikomentari; penghapusnya bisa membersihkan komentarnya', async () => {
+    await viewable();
+    await setDoc(cdoc(as('bud'), 'c1'), comment('bud'));
+    await toBin(as('ali'), 'ali', 's');
+    await assertFails(setDoc(cdoc(as('ali'), 'c2'), comment('ali')));
+    await assertFails(resolve(as('ali'), 'ali', 'c1'));
+    await assertFails(deleteDoc(cdoc(as('bud'), 'c1')));
+    await assertSucceeds(deleteDoc(cdoc(as('ali'), 'c1')));
+  });
+});
+
 describe('ruang penyimpanan', () => {
   it('anggota tidak bisa membaca penghitung, admin bisa', async () => {
     await assertFails(getDoc(usage(as('ali'))));

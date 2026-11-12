@@ -6,6 +6,7 @@ rules_version = '2';
 //   folders/{id}               { name, parent, custom, readers, editors, createdBy, createdByName, createdByEmail, createdAt }
 //   sops/{id}                  isi terkini beserta metadata; `folder` berisi id folder (tidak ada/null = tingkat utama)
 //   sops/{id}/versions/{rev}   isi yang tertimpa, tidak bisa diubah
+//   sops/{id}/comments/{cid}   komentar peninjauan dan balasannya (lihat bagian Komentar)
 //   editing/{sopId_uid}        keterangan "sedang diedit" (hanya info, bukan kunci)
 //   stats/usage                { bytes, limit, lastSop }: hanya admin yang bisa membaca
 //   stats/capacity             tanpa isi: boleh dibaca selama pustaka belum penuh
@@ -285,6 +286,66 @@ service cloud.firestore {
         && usageChangedBy(k, -get(versionPath(k, id, d.prunedRev)).data.size);
     }
 
+    // ---- Komentar ----
+    //   sops/{id}/comments/{cid}  { parent, anchor, label, quote, text, by, byName, byEmail, at, editedAt,
+    //                               resolved, resolvedBy, resolvedByName, resolvedAt }
+    // Catatan peninjauan, terpisah dari isi SOP: tidak ikut riwayat, berkas, maupun PDF. `parent` null = komentar
+    // utama (boleh menunjuk isian lewat `anchor`), selain itu id komentar utama yang dibalas (balasan tidak bersarang).
+    // Siapa pun yang bisa melihat SOP-nya boleh berkomentar, membalas, menandai selesai, dan membukanya lagi.
+    // Mengubah teks hanya penulisnya; menghapus: penulisnya, pemilik SOP, dan admin.
+    function commentPath(k, id, cid) {
+      return /databases/$(database)/documents/$(k)/$(id)/comments/$(cid);
+    }
+    function canSeeLive(sop) {
+      return canRead(sop) && sop.deletedBy == null;
+    }
+    function validCommentText(t) {
+      return t is string && t.size() > 0 && t.size() <= 4000;
+    }
+    function canCreateComment(k, id) {
+      let d = request.resource.data;
+      return canSeeLive(get(sopPath(k, id)).data)
+        && d.keys().hasOnly(['parent', 'anchor', 'label', 'quote', 'text', 'by', 'byName', 'byEmail', 'at', 'editedAt', 'resolved', 'resolvedBy', 'resolvedByName', 'resolvedAt'])
+        && validCommentText(d.text)
+        && d.by == uid()
+        && d.byEmail == email()
+        && d.byName is string && d.byName.size() <= 120
+        && d.at == request.time
+        && d.editedAt == null
+        && d.resolved == false && d.resolvedBy == null && d.resolvedByName == null && d.resolvedAt == null
+        && (d.parent == null
+          ? (d.anchor == null || (d.anchor is string && d.anchor.size() <= 200))
+            && d.label is string && d.label.size() <= 200
+            && d.quote is string && d.quote.size() <= 300
+          : d.parent is string
+            && get(commentPath(k, id, d.parent)).data.parent == null
+            && d.anchor == null && d.label == '' && d.quote == '');
+    }
+    function canUpdateComment(k, id) {
+      let d = request.resource.data;
+      let r = resource.data;
+      return canSeeLive(get(sopPath(k, id)).data) && (
+        // Mengubah teks sendiri
+        (r.by == uid() && changed().hasOnly(['text', 'editedAt']) && validCommentText(d.text) && d.editedAt == request.time)
+        // Selesai / buka lagi (komentar utama saja)
+        || (r.parent == null
+          && changed().hasOnly(['resolved', 'resolvedBy', 'resolvedByName', 'resolvedAt'])
+          && (d.resolved == true
+            ? r.resolved == false && d.resolvedBy == uid() && d.resolvedByName is string && d.resolvedByName.size() <= 120 && d.resolvedAt == request.time
+            : d.resolved == false && d.resolvedBy == null && d.resolvedByName == null && d.resolvedAt == null))
+      );
+    }
+    function canDeleteComment(k, id) {
+      let sop = get(sopPath(k, id)).data;
+      return isAdmin() || (isMember() && (
+        (canSeeLive(sop) && (resource.data.by == uid() || sop.createdBy == uid()))
+        // Balasan ikut terhapus bersama komentar utamanya
+        || (canRead(sop) && resource.data.parent != null && !existsAfter(commentPath(k, id, resource.data.parent)))
+        // Dibersihkan sebelum SOP-nya dihapus permanen
+        || (sop.deletedBy == uid())
+      ));
+    }
+
     match /sops/{id} {
       allow read: if canRead(resource.data);
       allow create: if isValidCreate('sops', request.resource.data);
@@ -295,6 +356,13 @@ service cloud.firestore {
         allow read: if canRead(get(sopPath('sops', id)).data);
         allow create: if canCreateVersion('sops', id, rev);
         allow delete: if canDeleteVersion('sops', id, rev);
+      }
+
+      match /comments/{cid} {
+        allow read: if canRead(get(sopPath('sops', id)).data);
+        allow create: if canCreateComment('sops', id);
+        allow update: if canUpdateComment('sops', id);
+        allow delete: if canDeleteComment('sops', id);
       }
     }
 

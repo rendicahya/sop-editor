@@ -15,6 +15,7 @@
   import { newStep, removeStep, uid, SHAPES, SECTION_DEFS, linkOf, setLink } from './model.js';
   import { openLinkedSop, pickSop } from './sopLinks.js';
   import { faculty } from './faculty.svelte.js';
+  import { notes, commentOn } from './comments.svelte.js';
   import { plainText, sliceRich, getSelection, setSelection } from './richtext.js';
   import RichField from './RichField.svelte';
   import ContextMenu from './ContextMenu.svelte';
@@ -585,6 +586,17 @@
     ];
   }
 
+  /** Isian (data-field) yang dikomentari bila komentar dibuat dari `f`. */
+  function noteRef(f) {
+    if (f.kind === 'section' || f.kind === 'empty') return 'sh:' + f.key;
+    if (f.kind === 'actor-tools') return 'a:' + f.actor;
+    if (f.kind === 'lane' || f.kind === 'step-tools') return `st:${f.step}:kegiatan`;
+    if (f.kind === 'edge') return 'sy:' + f.step;
+    return f.kind === 'add-step' ? null : f.id;
+  }
+  /** Penanda isian yang punya komentar terbuka (tidak tampil di pratinjau PDF). */
+  const noted = (id) => (editable && notes.marked.has(id) ? '' : undefined);
+
   function ctxItems(f, e) {
     const out = [];
     const el = e.target.closest?.('textarea, .f-rich');
@@ -601,6 +613,8 @@
     else if (f.kind === 'item') out.push(...itemItems(f));
     else if (f.kind === 'section' || f.kind === 'empty') out.push(...sectionItems(f.key));
     else if (f.kind === 'add-step') out.push({ label: 'Tambah kegiatan', icon: 'plus', run: () => addStep(-1) });
+    const ref = noteRef(f);
+    if (ref && notes.sopId) out.push(SEP, { label: 'Komentari…', icon: 'comment', run: () => commentOn(ref) });
     // Rapikan pemisah di awal, di akhir, dan yang berurutan.
     return out.filter((it, i, a) => !it.sep || (i > 0 && i < a.length - 1 && !a[i - 1].sep));
   }
@@ -644,6 +658,7 @@
         class="f-text"
         style={box(f)}
         data-field={f.id}
+        data-note={noted(f.id)}
         data-fid={f.id}
         data-hot={f.hot}
         aria-label={f.label}
@@ -659,6 +674,7 @@
         class:center={f.align === 'center'}
         style={box(f)}
         data-field={f.id}
+        data-note={noted(f.id)}
         data-fid={f.id}
         data-hot={f.hot}
         aria-label={f.label}
@@ -678,6 +694,7 @@
           class="f-text"
           style="position:absolute;inset:0;font-size:calc({f.size * PT} * var(--mm))"
           data-field={f.id}
+        data-note={noted(f.id)}
           aria-label="Butir {f.index + 1}"
           placeholder="Ketik butir…"
           value={value(f)}
@@ -701,13 +718,14 @@
         <input
           type="date"
           data-field={f.id}
+        data-note={noted(f.id)}
           aria-label={f.label}
           bind:value={h[f.key]}
           onclick={(e) => e.currentTarget.showPicker?.()}
         />
       </span>
     {:else if f.kind === 'section'}
-      <div class="f-head" style={box(f)} data-fid={f.id}>
+      <div class="f-head" style={box(f)} data-fid={f.id} data-field="sh:{f.key}" data-note={noted('sh:' + f.key)}>
         <span class="tools">
           <label title="Butir bernomor">
             <input type="checkbox" bind:checked={app.doc.sections[f.key].numbered} /> Bernomor
@@ -723,6 +741,7 @@
         class="f-lane"
         style={box(f)}
         data-field={f.id}
+        data-note={noted(f.id)}
         data-fid={f.id}
         data-hot={f.hot}
         tabindex="-1"
@@ -777,6 +796,7 @@
           class="f-shape-btn"
           tabindex="-1"
           data-field={f.id}
+        data-note={noted(f.id)}
           title="Ubah simbol"
           aria-label="Ubah simbol langkah {f.index + 1}"
           aria-expanded={!!open}
@@ -1087,6 +1107,12 @@
     box-shadow: inset 0 0 0 1.5px rgb(var(--edit));
   }
 
+  /* Isian yang punya komentar terbuka (hanya di layar, tidak ikut ekspor). */
+  .fields :global([data-note]),
+  .f-date:has([data-note]) {
+    background-color: rgb(250 204 21 / 0.2);
+    box-shadow: inset 0 -2px 0 rgb(217 142 4 / 0.85);
+  }
   .f-head {
     display: flex;
     align-items: center;

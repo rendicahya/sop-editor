@@ -180,6 +180,7 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
 | Tindakan | Lihat | Edit | Pemilik dan admin |
 | --- | --- | --- | --- |
 | Membuka, menduplikat, melihat riwayat dan daftar hak akses | Ya | Ya | Ya |
+| Berkomentar, membalas, menandai komentar selesai | Ya | Ya | Ya |
 | Mengedit isi SOP, mengubah nama SOP dan folder | | Ya | Ya |
 | Menambah SOP dan subfolder ke dalam folder, memindahkan, menghapus, mengatur hak akses | | | Ya |
 
@@ -203,6 +204,13 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
   dan baru menjadi isi terkini setelah disimpan. Bila SOP tidak terbuka, versi lama langsung menjadi isi terkini.
 - **Peta keterkaitan** (di bawah pohon folder): diagram SOP yang saling tertaut lewat butir Keterkaitan. Arahkan ke
   SOP untuk menyorot tautannya, klik untuk melihat yang dirujuk dan merujuknya, klik dua kali untuk membuka.
+- **Komentar peninjauan** (tombol **Komentar** di toolbar): siapa pun yang bisa melihat SOP, termasuk pemegang hak
+  Lihat, bisa berkomentar, membalas, menandai **Selesai**, dan membukanya lagi. Klik isian di halaman lalu tulis
+  komentar, atau klik kanan isian › **Komentari…**; komentar juga bisa untuk seluruh SOP. Isian yang punya komentar
+  terbuka diberi penanda kuning, komentar yang isiannya sudah berubah sejak dikomentari diberi tanda "diubah", dan
+  komentar baru dari orang lain langsung muncul. Teks komentar hanya bisa diubah penulisnya; komentar bisa dihapus
+  penulisnya, pemilik SOP, dan admin (balasannya ikut terhapus). Komentar terpisah dari isi SOP: tidak masuk riwayat,
+  berkas .sop, maupun hasil ekspor, dan ekspor mengingatkan bila masih ada komentar yang belum selesai.
 - **Sedang diedit** hanya pemberitahuan, bukan kunci. Keterangan dari browser yang tertutup hilang sendiri setelah sekitar 5 menit.
 - Pemakaian dan batas penyimpanan hanya tampil untuk admin. Angkanya perkiraan dari ukuran JSON, belum termasuk indeks Firestore.
 
