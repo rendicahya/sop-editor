@@ -287,4 +287,4 @@ tetap apa adanya. Kolom lain selalu teks polos.
 
 ## Lisensi
 
-Kode aplikasi: lihat [LICENSE](LICENSE). Font Carlito: SIL Open Font License 1.1 (`public/fonts/Carlito-OFL.txt`). Inter: SIL Open Font License 1.1.
+Kode aplikasi: © 2026 Randy Cahya Wihandika, hak cipta dilindungi (lihat [LICENSE](LICENSE)). Kode boleh dilihat, tetapi tidak boleh disalin, diubah atau disebarkan tanpa izin tertulis. Font Carlito: SIL Open Font License 1.1 (`public/fonts/Carlito-OFL.txt`). Inter: SIL Open Font License 1.1.
