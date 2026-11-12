@@ -3,7 +3,7 @@
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
   import { emptyDocument, parseDocumentText, normalizeDocument, setMeta } from './lib/model.js';
-  import { layoutDocument } from './lib/layout.js';
+  import { layoutDocument, pagesOf, PDF_PARTS } from './lib/layout.js';
   import { exportPdf, exportPdfBook, sopFromPdf, PDF_PROTECT } from './lib/pdf.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
   import { saveJson, openJsonFile, slug, sopName, downloadBlob } from './lib/files.js';
@@ -1025,6 +1025,8 @@
   let pdfProtect = $state(PDF_PROTECT.includes(getPref('pdfProtect')) ? getPref('pdfProtect') : 'none');
   // Teks watermark (kosong: tanpa watermark), juga diingat per browser.
   let pdfWatermark = $state(getPref('pdfWatermark') ?? '');
+  // Halaman yang diekspor (lihat PDF_PARTS): keduanya, bagian depan saja, atau diagram saja; diingat per browser.
+  let pdfPart = $state(PDF_PARTS.includes(getPref('pdfPart')) ? getPref('pdfPart') : 'all');
   let pdfBusy = $state(false);
   let pdfRun = 0;
   // PDF gabungan beberapa SOP: { docs, title }; null = PDF dari dokumen aktif.
@@ -1033,7 +1035,7 @@
     const run = ++pdfRun;
     pdfBusy = true;
     try {
-      const opts = { protect: pdfProtect, watermark: pdfWatermark };
+      const opts = { protect: pdfProtect, watermark: pdfWatermark, part: pdfPart };
       const out = pdfBook ? await exportPdfBook(pdfBook.docs, pdfBook.title, opts) : await exportPdf(app.doc, opts);
       if (run === pdfRun) pdfDoc = out; // pilihan diganti lagi selagi dibuat: hasil lama dibuang
     } catch (e) {
@@ -1092,8 +1094,10 @@
     if (title) makeBook(items, title);
   }
   /** Pilihan di dialog pratinjau berubah: diingat, lalu PDF dibuat ulang. */
-  function setPdfOptions({ protect = pdfProtect, watermark = pdfWatermark }) {
+  function setPdfOptions({ protect = pdfProtect, watermark = pdfWatermark, part = pdfPart }) {
     pdfProtect = protect;
+    pdfPart = part;
+    setPref('pdfPart', pdfPart);
     pdfWatermark = watermark.trim().slice(0, 60);
     setPref('pdfProtect', pdfProtect);
     setPref('pdfWatermark', pdfWatermark);
@@ -1549,11 +1553,12 @@
     ondownload={() => !pdfBook && pdfSaved?.()}
     protect={pdfProtect}
     watermark={pdfWatermark}
+    part={pdfPart}
     busy={pdfBusy}
     onoptions={setPdfOptions}
     onmeta={pdfBook ? null : () => (metaOpen = true)}
     title={pdfBook ? `Pratinjau PDF gabungan · ${pdfBook.docs.length} SOP` : 'Pratinjau PDF'}
-    pages={pdfBook ? [] : pages}
+    pages={pdfBook ? [] : pagesOf(pages, pdfPart)}
     filename={pdfBook ? `${slug(pdfBook.title) || 'Kumpulan-SOP'}.pdf` : `SOP-${slug(app.doc.header.namaSop)}.pdf`}
     fontNote={docFont === 'calibri' ? '' : 'Calibri belum tersedia, PDF memakai Carlito (ukuran identik)'}
   />

@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { layoutDocument, baseline, PAGE, PT } from './layout.js';
+import { layoutDocument, pagesOf, baseline, PAGE, PT } from './layout.js';
 import { pdfFont, registerFonts } from './fonts.js';
 import { zlibSync, unzlibSync, strToU8, strFromU8 } from 'fflate';
 import { slug } from './files.js';
@@ -117,11 +117,14 @@ function paintWatermark(canvas, page, text, font) {
   g.restore();
 }
 
-/** opts: { protect: lihat PDF_PROTECT, watermark: teks (kosong = tanpa watermark) }. */
-export async function exportPdf(doc, { protect = 'none', watermark = '' } = {}) {
+/**
+ * opts: { protect: lihat PDF_PROTECT, watermark: teks (kosong = tanpa watermark), part: lihat PDF_PARTS }.
+ * Data SOP yang disisipkan selalu utuh, juga saat hanya sebagian halaman yang diekspor.
+ */
+export async function exportPdf(doc, { protect = 'none', watermark = '', part = 'all' } = {}) {
   const pdf = newPdf(docMeta(doc), protect);
   const w = await pageWriter(pdf, protect, cleanWatermark(watermark), false);
-  for (const page of layoutDocument(doc)) await w.page(page);
+  for (const page of pagesOf(layoutDocument(doc), part)) await w.page(page);
   if (protect === 'none') attachSop(pdf, doc);
   return pdf;
 }
@@ -133,12 +136,12 @@ const TOC = { x: 20, right: 277, top: 18, bottom: 192, cols: [12, 70], size: 10 
  * Menggabungkan `docs` (dokumen SOP, berurutan) menjadi satu PDF dengan halaman daftar isi yang bisa diklik dan
  * bookmark per SOP. `title`: judul buku. opts sama dengan exportPdf; data SOP tidak disisipkan.
  */
-export async function exportPdfBook(docs, title, { protect = 'none', watermark = '' } = {}) {
+export async function exportPdfBook(docs, title, { protect = 'none', watermark = '', part = 'all' } = {}) {
   const first = docs[0] ? docMeta(docs[0]) : {};
   const pdf = newPdf({ title, author: first.author ?? '', subject: `Kumpulan ${docs.length} Standar Operasional Prosedur`, keywords: '' }, protect);
   const wm = cleanWatermark(watermark);
   const w = await pageWriter(pdf, protect, wm, true);
-  const layouts = docs.map((d) => layoutDocument(d));
+  const layouts = docs.map((d) => pagesOf(layoutDocument(d), part));
   const font = pdfFont();
 
   // Baris daftar isi: tinggi tiap baris mengikuti jumlah baris nama SOP.

@@ -71,9 +71,16 @@ function fit(img, maxW, maxH) {
 export function layoutDocument(doc) {
   const pages = [];
   layoutIdentity(doc, pages);
+  const front = pages.length;
   layoutFlow(doc, pages);
+  // part: 'front' (identitas dan ketentuan) atau 'flow' (diagram alir), untuk ekspor sebagian.
+  pages.forEach((p, i) => (p.part = i < front ? 'front' : 'flow'));
   return pages;
 }
+
+/** Bagian halaman yang bisa diekspor: 'all', 'front' (bagian depan), 'flow' (diagram). */
+export const PDF_PARTS = ['all', 'front', 'flow'];
+export const pagesOf = (pages, part = 'all') => (part === 'all' ? pages : pages.filter((p) => p.part === part));
 
 function newPage(pages) {
   // fields: area yang bisa diedit langsung di pratinjau (tidak ikut dicetak).

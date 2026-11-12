@@ -86,10 +86,13 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   Pilihan **Watermark** menambahkan teks miring dan samar di tengah setiap halaman: DRAFT, SALINAN TERKENDALI,
   SALINAN TIDAK TERKENDALI, RAHASIA, CONTOH, atau teks lain (maks. 60 karakter). Watermark hanya ada di PDF,
   tidak di pratinjau editor maupun ekspor lain.
+  Pilihan **Halaman** menentukan isi PDF: bagian depan dan diagram (bawaan), **bagian depan saja** (identitas,
+  pengesahan, dan ketentuan), atau **diagram saja**. Pilihan ini diingat per browser; PDF sebagian tetap membawa data
+  SOP yang utuh sehingga bisa dibuka lagi di editor.
 - **PDF gabungan (buku SOP)**: beberapa SOP digabung menjadi satu PDF, diawali halaman daftar isi (nomor, nama, dan
   halaman tiap SOP; klik untuk melompat) dan bookmark per SOP. Dari Pustaka Daring: pilih SOP atau folder lalu
   **Gabung PDF** (isi folder dan subfoldernya ikut), atau klik kanan folder › **Gabung isinya jadi satu PDF…**. Dari
-  editor: menu Ekspor › **PDF gabungan semua tab…**. Pilihan Isi PDF dan Watermark berlaku juga di sini.
+  editor: menu Ekspor › **PDF gabungan semua tab…**. Pilihan Halaman, Isi PDF, dan Watermark berlaku juga di sini.
 - **Properti dokumen** (menu Ekspor › Properti dokumen…, atau tombol di pratinjau PDF): judul, penulis, subjek, dan
   kata kunci yang dimasukkan ke metadata berkas PDF, DOCX, dan XLSX. Disimpan di dalam berkas `.sop` (ikut Undo dan
   Pustaka Daring). Kolom yang dikosongkan memakai bawaan: judul "SOP <nama>", penulis dari kepala institusi (tanpa
