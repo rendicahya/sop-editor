@@ -134,6 +134,7 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
 | Ctrl+O | Buka berkas |
 | Alt+W | Tutup tab dokumen (Ctrl+W juga bisa di aplikasi terpasang) |
 | Ctrl+Shift+P | Pratinjau & ekspor PDF |
+| Ctrl+P | Cetak (lewat PDF, hasilnya sama dengan ekspor; tombol **Cetak** juga ada di pratinjau PDF) |
 | Ctrl+F / Ctrl+H | Cari & ganti (Esc untuk menutup) |
 | Ctrl+Z / Ctrl+Y | Urungkan / Ulangi per langkah (format dan ubah huruf menjadi langkah tersendiri) |
 | Ctrl+B / Ctrl+I / Ctrl+U | Tebal / miring / garis bawah (di butir ketentuan dan sel langkah) |
