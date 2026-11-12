@@ -1065,6 +1065,22 @@ describe('RPS', () => {
     await assertSucceeds(b.commit());
     assert.deepEqual(await counters(), [0, 0]);
   });
+  it('komentar RPS: pemegang hak lihat bisa berkomentar dan menyelesaikan; tanpa hak tidak bisa', async () => {
+    await createRps(as('ali'), 'ali', 'r');
+    await updateDoc(doc(as('ali'), 'rps/r'), custom('ali', [BUD]));
+    const c = (u, patch = {}) => ({
+      parent: null, anchor: null, label: 'Identitas', quote: '', text: 'Mohon dicek', by: u, byName: USERS[u].name, byEmail: USERS[u].email,
+      at: serverTimestamp(), editedAt: null, resolved: false, resolvedBy: null, resolvedByName: null, resolvedAt: null, ...patch
+    });
+    const cd = (u, cid) => doc(as(u), 'rps', 'r', 'comments', cid);
+    await assertSucceeds(setDoc(cd('bud', 'c1'), c('bud')));
+    await assertSucceeds(setDoc(cd('ali', 'r1'), c('ali', { parent: 'c1', label: '', text: 'Baik' })));
+    await assertSucceeds(getDocs(collection(as('bud'), 'rps', 'r', 'comments')));
+    await assertSucceeds(updateDoc(cd('ali', 'c1'), { resolved: true, resolvedBy: 'ali', resolvedByName: USERS.ali.name, resolvedAt: serverTimestamp() }));
+    await assertFails(setDoc(cd('gml', 'c2'), c('gml')));
+    await assertFails(getDocs(collection(as('gml'), 'rps', 'r', 'comments')));
+    await assertSucceeds(deleteDoc(cd('ali', 'r1')));
+  });
 });
 
 describe('katalog kurikulum', () => {

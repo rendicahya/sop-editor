@@ -405,6 +405,13 @@ service cloud.firestore {
         allow create: if canCreateVersion('rps', id, rev);
         allow delete: if canDeleteVersion('rps', id, rev);
       }
+
+      match /comments/{cid} {
+        allow read: if canRead(get(sopPath('rps', id)).data);
+        allow create: if canCreateComment('rps', id);
+        allow update: if canUpdateComment('rps', id);
+        allow delete: if canDeleteComment('rps', id);
+      }
     }
 
     // ---- Folder ----
