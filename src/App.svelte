@@ -26,7 +26,7 @@
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
 
-  let toast = $state('');
+  let toast = $state(null); // { msg, action, n }
   let toastTimer;
 
   const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW();
@@ -516,10 +516,25 @@
     persist(current);
   }
 
-  function notify(msg) {
-    toast = msg;
+  /** Pesan singkat di bawah layar. `action` ({ label, run }) memberi tombol, mis. Urungkan; pesannya bertahan lebih lama. */
+  function notify(msg, action = null) {
+    toast = msg ? { msg, action, n: (toast?.n ?? 0) + 1 } : null;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (toast = ''), 3000);
+    toastTimer = setTimeout(() => (toast = null), action ? 8000 : 3000);
+  }
+  function toastAct() {
+    const run = toast?.action?.run;
+    notify('');
+    run?.();
+  }
+  /** Saat dialog modal terbuka, isi di luarnya tidak bisa diklik: pesan ditempel di dialog teratas, kembali ke <body> bila dialog itu ditutup. */
+  function overTop(node) {
+    const host = [...document.querySelectorAll('dialog[open]')].filter((d) => d.matches(':modal')).at(-1);
+    if (!host) return;
+    const back = () => document.body.appendChild(node);
+    host.appendChild(node);
+    host.addEventListener('close', back);
+    return { destroy: () => (host.removeEventListener('close', back), node.remove()) };
   }
 
   // Dialog Pustaka, bertab Lokal dan Daring. Tab terakhir diingat di browser ini.
@@ -752,9 +767,16 @@
       closeTab(t.id);
       return false;
     }
+    const remote = t.remote;
     Faculty.setEditing(id, false);
     t.remote = null;
-    return true;
+    // Urungkan: tab yang dipertahankan tertaut lagi ke SOP-nya.
+    return () => {
+      if (tabs.list.includes(t) && !t.remote) {
+        t.remote = remote;
+        syncEditing();
+      }
+    };
   }
 
   /** Tab tertaut ke `remote`, dan isi yang baru tersimpan tidak lagi dianggap perubahan. */
@@ -1281,7 +1303,14 @@
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />
 
-  {#if toast}<div class="toast" role="status">{toast}</div>{/if}
+  {#if toast}
+    {#key toast.n}
+      <div class="toast" role="status" use:overTop>
+        {toast.msg}
+        {#if toast.action}<button class="toast-act" onclick={toastAct}>{toast.action.label}</button>{/if}
+      </div>
+    {/key}
+  {/if}
   {#if dragging}<div class="dropzone">Lepaskan berkas .sop untuk membuka</div>{/if}
 </div>
 

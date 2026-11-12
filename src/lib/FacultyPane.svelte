@@ -15,7 +15,8 @@
   /**
    * openIds: id SOP yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
    * onloaded(live): daftar baru dimuat, tab yang terbuka mengikuti hak akses terbaru. onrenamed(id, hasil renameSop): tab mengikuti.
-   * onbinned(id): tab SOP yang dihapus ditutup; hasilnya true bila tab dipertahankan karena ada perubahan belum tersimpan.
+   * onbinned(id): tab SOP yang dihapus ditutup. Bila tab dipertahankan karena ada perubahan belum tersimpan, hasilnya
+   * fungsi untuk menautkannya lagi (dipakai Urungkan); selain itu false.
    * Panel di dialog Pustaka: open = dialognya terbuka, active = tab Daring yang tampil, host = elemen <dialog>,
    * tabs = pemilih tab di kepala panel, onclose() menutup dialog.
    */
@@ -454,9 +455,17 @@
   function moveToBin(s) {
     act(async () => {
       await F.moveToBin(s.id);
-      const kept = onbinned(s.id);
-      onnotify(kept ? 'Dipindahkan ke Recycle bin. Perubahan yang belum tersimpan masih ada di tabnya.' : 'Dipindahkan ke Recycle bin');
+      const relink = onbinned(s.id);
+      const msg = relink ? `"${titleOf(s)}" dipindahkan ke Recycle bin. Perubahan yang belum tersimpan masih ada di tabnya.` : `"${titleOf(s)}" dipindahkan ke Recycle bin`;
+      onnotify(msg, { label: 'Urungkan', run: () => undoBin(s, relink) });
     });
+  }
+  // Hapus tidak meminta konfirmasi; yang terhapus bisa dikembalikan dari pesan yang muncul.
+  function undoBin(s, relink) {
+    act(async () => {
+      await F.restoreFromBin(s.id);
+      if (relink) relink();
+    }, `"${titleOf(s)}" dikembalikan`);
   }
 
   const duplicate = (s) => act(() => F.duplicateSop(s), 'Salinan dibuat');
