@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, increment, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { collection, collectionGroup, deleteDoc, deleteField, doc, getCountFromServer, getDoc, getDocs, increment, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 
 const USERS = {
   ali: { email: 'ali@ub.ac.id', name: 'Ali' },
@@ -506,6 +506,37 @@ describe('komentar', () => {
     b.delete(cdoc(db, 'c1'));
     b.delete(cdoc(db, 'r1'));
     await assertSucceeds(b.commit());
+  });
+  it('jumlah komentar terbuka bisa dihitung oleh yang bisa melihat SOP', async () => {
+    await viewable();
+    await setDoc(cdoc(as('bud'), 'c1'), comment('bud'));
+    await setDoc(cdoc(as('ali'), 'r1'), reply('ali', 'c1'));
+    const q = (db) => query(collection(db, 'sops', 's', 'comments'), where('parent', '==', null), where('resolved', '==', false));
+    const n = await getCountFromServer(q(as('bud')));
+    assert.equal(n.data().count, 1);
+    await assertFails(getCountFromServer(q(as('gml'))));
+  });
+  it('yang disebut bisa menemukan komentarnya lintas SOP, yang lain tidak', async () => {
+    await viewable();
+    await updateDoc(doc(as('ali'), 'sops/s'), custom('ali', [USERS.bud.email, USERS.gml.email]));
+    await assertSucceeds(setDoc(cdoc(as('bud'), 'c1'), comment('bud', { mentions: ['gml@gmail.com'] })));
+    await assertSucceeds(setDoc(cdoc(as('bud'), 'c2'), comment('bud')));
+    await assertSucceeds(setDoc(cdoc(as('ali'), 'r1'), reply('ali', 'c2', { mentions: ['gml@gmail.com', 'bud@ub.ac.id'] })));
+    const mine = (u) => query(collectionGroup(as(u), 'comments'), where('mentions', 'array-contains', USERS[u].email));
+    const got = await assertSucceeds(getDocs(mine('gml')));
+    assert.deepEqual(got.docs.map((d) => d.id).sort(), ['c1', 'r1']);
+    assert.equal((await getDocs(mine('bud'))).size, 1);
+    await assertFails(getDocs(query(collectionGroup(as('gml'), 'comments'), where('mentions', 'array-contains', 'bud@ub.ac.id'))));
+    await assertFails(getDocs(collectionGroup(as('gml'), 'comments')));
+  });
+  it('daftar sebutan dibatasi dan hanya penulis yang bisa mengubahnya', async () => {
+    await viewable();
+    const many = Array.from({ length: 21 }, (_, i) => `x${i}@ub.ac.id`);
+    await assertFails(setDoc(cdoc(as('bud'), 'c1'), comment('bud', { mentions: many })));
+    await assertFails(setDoc(cdoc(as('bud'), 'c1'), comment('bud', { mentions: 'ali@ub.ac.id' })));
+    await setDoc(cdoc(as('bud'), 'c1'), comment('bud'));
+    await assertSucceeds(updateDoc(cdoc(as('bud'), 'c1'), { text: '@ali@ub.ac.id cek', mentions: ['ali@ub.ac.id'], editedAt: serverTimestamp() }));
+    await assertFails(updateDoc(cdoc(as('ali'), 'c1'), { mentions: ['ali@ub.ac.id', 'gml@gmail.com'], text: 'x', editedAt: serverTimestamp() }));
   });
   it('SOP di recycle bin tidak bisa dikomentari; penghapusnya bisa membersihkan komentarnya', async () => {
     await viewable();

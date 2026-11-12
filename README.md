@@ -211,6 +211,14 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
   komentar baru dari orang lain langsung muncul. Teks komentar hanya bisa diubah penulisnya; komentar bisa dihapus
   penulisnya, pemilik SOP, dan admin (balasannya ikut terhapus). Komentar terpisah dari isi SOP: tidak masuk riwayat,
   berkas .sop, maupun hasil ekspor, dan ekspor mengingatkan bila masih ada komentar yang belum selesai.
+- **Sebut orang di komentar**: ketik `@` lalu pilih dari saran (hanya anggota yang bisa melihat SOP itu). Orang yang
+  disebut melihat angka di tombol **Pustaka** dan daftar **Menyebut saya** (di bawah pohon folder) berisi komentar dari
+  SOP mana pun yang menyebutnya; klik untuk membuka SOP dan komentarnya.
+- **Ada komentar**: tiap SOP di daftar menampilkan jumlah komentar yang belum selesai, dan menu **Ada komentar** di
+  bawah pohon folder mendaftar semua SOP yang masih punya komentar terbuka.
+- **Tautan langsung**: klik kanan SOP (atau tab SOP daring) › **Salin tautan**, atau **Salin tautan** pada komentar.
+  Tautan `…/sop-editor/?sop=ID` membuka SOP itu setelah penerimanya masuk (perlu hak lihat), dan tautan komentar
+  sekaligus menyorot komentarnya.
 - **Sedang diedit** hanya pemberitahuan, bukan kunci. Keterangan dari browser yang tertutup hilang sendiri setelah sekitar 5 menit.
 - Pemakaian dan batas penyimpanan hanya tampil untuk admin. Angkanya perkiraan dari ukuran JSON, belum termasuk indeks Firestore.
 
@@ -220,8 +228,11 @@ Menyiapkan proyek Firebase (cukup sekali):
 cd firebase
 npm install
 npx firebase login
-npx firebase deploy --only firestore:rules
+npx firebase deploy --only firestore:rules,firestore:indexes
 ```
+
+Indeks di `firebase/firestore.indexes.json` dibutuhkan daftar **Menyebut saya** (kueri `mentions` lintas SOP);
+pasang ulang dengan `npm run deploy:indexes` bila berubah.
 
 Lalu di Firebase Console, buat dokumen `members/<email-admin>` berisi kolom `role` = `admin`. Anggota lain didaftarkan dari tab **Admin** di aplikasi; banyak email bisa ditempel sekaligus, dipisah koma, spasi,
 titik koma, atau baris baru (format "Nama &lt;email&gt;" juga diterima). Email yang sudah terdaftar tidak diubah perannya,

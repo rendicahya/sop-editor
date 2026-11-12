@@ -302,11 +302,16 @@ service cloud.firestore {
     function validCommentText(t) {
       return t is string && t.size() > 0 && t.size() <= 4000;
     }
+    // Email anggota yang disebut (@email) di komentar; mereka bisa menemukannya lewat kueri `mentions` lintas SOP.
+    function validMentions(d) {
+      return d.get('mentions', []) is list && d.get('mentions', []).size() <= 20;
+    }
     function canCreateComment(k, id) {
       let d = request.resource.data;
       return canSeeLive(get(sopPath(k, id)).data)
-        && d.keys().hasOnly(['parent', 'anchor', 'label', 'quote', 'text', 'by', 'byName', 'byEmail', 'at', 'editedAt', 'resolved', 'resolvedBy', 'resolvedByName', 'resolvedAt'])
+        && d.keys().hasOnly(['parent', 'anchor', 'label', 'quote', 'text', 'mentions', 'by', 'byName', 'byEmail', 'at', 'editedAt', 'resolved', 'resolvedBy', 'resolvedByName', 'resolvedAt'])
         && validCommentText(d.text)
+        && validMentions(d)
         && d.by == uid()
         && d.byEmail == email()
         && d.byName is string && d.byName.size() <= 120
@@ -326,7 +331,7 @@ service cloud.firestore {
       let r = resource.data;
       return canSeeLive(get(sopPath(k, id)).data) && (
         // Mengubah teks sendiri
-        (r.by == uid() && changed().hasOnly(['text', 'editedAt']) && validCommentText(d.text) && d.editedAt == request.time)
+        (r.by == uid() && changed().hasOnly(['text', 'mentions', 'editedAt']) && validCommentText(d.text) && validMentions(d) && d.editedAt == request.time)
         // Selesai / buka lagi (komentar utama saja)
         || (r.parent == null
           && changed().hasOnly(['resolved', 'resolvedBy', 'resolvedByName', 'resolvedAt'])
@@ -364,6 +369,11 @@ service cloud.firestore {
         allow update: if canUpdateComment('sops', id);
         allow delete: if canDeleteComment('sops', id);
       }
+    }
+
+    // Komentar yang menyebut akun ini, dari SOP mana pun (kueri collection group `mentions` array-contains email).
+    match /{path=**}/comments/{cid} {
+      allow read: if isMember() && email() in resource.data.mentions;
     }
 
     match /rps/{id} {
