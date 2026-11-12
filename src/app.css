@@ -468,19 +468,7 @@ textarea:focus {
 .export {
   position: relative;
 }
-/* Hak cipta di bagian bawah layar awal, layar masuk, dan layar HP. */
-.copyright {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 14px;
-  padding: 0 1rem;
-  text-align: center;
-  font-size: 11.5px;
-  color: var(--muted);
-}
 .no-doc {
-  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
