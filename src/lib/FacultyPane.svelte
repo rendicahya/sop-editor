@@ -524,26 +524,26 @@
   function hereItems(id) {
     const add = canAdd(id);
     return [
-      { label: 'SOP baru di sini', run: () => newSop(id), disabled: !add },
-      { label: 'Folder baru di sini', run: () => newFolder(id), disabled: !add },
-      { label: 'Unggah dokumen ini ke sini', run: () => onupload(id), disabled: !add || !cansave },
-      { label: 'Unggah berkas .sop atau .zip ke sini…', run: () => pickFiles(id), disabled: !add || !!importing }
+      { label: 'SOP baru di sini', icon: 'filePlus', run: () => newSop(id), disabled: !add },
+      { label: 'Folder baru di sini', icon: 'folderPlus', run: () => newFolder(id), disabled: !add },
+      { label: 'Unggah dokumen ini ke sini', icon: 'cloud', run: () => onupload(id), disabled: !add || !cansave },
+      { label: 'Unggah berkas .sop atau .zip ke sini…', icon: 'upload', run: () => pickFiles(id), disabled: !add || !!importing }
     ];
   }
   function folderMenu(f) {
     const manage = canManage(f);
     return [
-      { label: 'Buka', run: () => select(f.id) },
+      { label: 'Buka', icon: 'folder', run: () => select(f.id) },
       { sep: true },
       ...hereItems(f.id),
       { sep: true },
-      { label: accessTip(f), run: () => openAccess('folders', f) },
-      ...(canEdit(f) ? [{ label: 'Ubah nama', run: () => renameFolder(f) }] : []),
+      { label: accessTip(f), icon: 'users', run: () => openAccess('folders', f) },
+      ...(canEdit(f) ? [{ label: 'Ubah nama', icon: 'pencil', run: () => renameFolder(f) }] : []),
       ...(manage
         ? [
-            { label: 'Pindahkan', run: () => moveFolder(f) },
+            { label: 'Pindahkan', icon: 'move', run: () => moveFolder(f) },
             { sep: true },
-            { label: 'Hapus', run: () => removeFolder(f), danger: true }
+            { label: 'Hapus', icon: 'trash', run: () => removeFolder(f), danger: true }
           ]
         : [])
     ];
@@ -551,25 +551,25 @@
   function sopMenu(s) {
     const manage = canManage(s);
     return [
-      { label: 'Buka', run: () => openSop(s) },
+      { label: 'Buka', icon: 'open', run: () => openSop(s) },
       { sep: true },
-      { label: 'Duplikat', run: () => duplicate(s) },
-      { label: 'Riwayat', run: () => toggleHistory(s) },
-      { label: accessTip(s), run: () => openAccess('sops', s) },
-      ...(canEdit(s) ? [{ label: 'Ubah nama', run: () => rename(s) }] : []),
+      { label: 'Duplikat', icon: 'copy', run: () => duplicate(s) },
+      { label: 'Riwayat', icon: 'history', run: () => toggleHistory(s) },
+      { label: accessTip(s), icon: 'users', run: () => openAccess('sops', s) },
+      ...(canEdit(s) ? [{ label: 'Ubah nama', icon: 'pencil', run: () => rename(s) }] : []),
       ...(manage
         ? [
-            { label: 'Pindahkan', run: () => moveSop(s) },
+            { label: 'Pindahkan', icon: 'move', run: () => moveSop(s) },
             { sep: true },
-            { label: 'Hapus', run: () => moveToBin(s), danger: true }
+            { label: 'Hapus', icon: 'trash', run: () => moveToBin(s), danger: true }
           ]
         : [])
     ];
   }
   const binMenu = (s) => [
-    { label: 'Pulihkan', run: () => restoreFromBin(s) },
+    { label: 'Pulihkan', icon: 'restore', run: () => restoreFromBin(s) },
     { sep: true },
-    { label: 'Hapus permanen', run: () => purge(s), danger: true }
+    { label: 'Hapus permanen', icon: 'trash', run: () => purge(s), danger: true }
   ];
 
   const noAddTip = 'Hanya pemilik folder ini yang bisa menambah isinya';

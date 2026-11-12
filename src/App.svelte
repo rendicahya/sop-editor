@@ -485,12 +485,12 @@
       y: e.clientY,
       items: [
         { head: tabTitle(t) },
-        { label: 'Simpan', hint: 'Ctrl+S', run: inActive(quickSave) },
-        { label: 'Simpan sebagai berkas…', hint: 'Ctrl+Shift+S', run: inActive(() => save(true)) },
-        { label: 'Duplikat tab', run: () => duplicateTab(t.id) },
-        { label: 'Tab baru', run: () => addTab(emptyDocument()) },
+        { label: 'Simpan', icon: 'save', hint: 'Ctrl+S', run: inActive(quickSave) },
+        { label: 'Simpan sebagai berkas…', icon: 'download', hint: 'Ctrl+Shift+S', run: inActive(() => save(true)) },
+        { label: 'Duplikat tab', icon: 'copy', run: () => duplicateTab(t.id) },
+        { label: 'Tab baru', icon: 'filePlus', run: () => addTab(emptyDocument()) },
         { sep: true },
-        { label: 'Tutup', hint: 'Alt+W', run: () => closeTab(t.id) },
+        { label: 'Tutup', icon: 'x', hint: 'Alt+W', run: () => closeTab(t.id) },
         { label: 'Tutup tab lain', disabled: !others.length, run: () => closeTabs(others) },
         { label: 'Tutup tab di sebelah kanan', disabled: !right.length, run: () => closeTabs(right) },
         { label: 'Tutup semua tab', run: () => closeTabs([...others, t.id]) }

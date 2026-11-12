@@ -462,17 +462,17 @@
       });
     }
     const out = [
-      { label: 'Potong', hint: 'Ctrl+X', disabled: !hasSel, run: exec('cut') },
-      { label: 'Salin', hint: 'Ctrl+C', disabled: !hasSel, run: exec('copy') },
-      { label: 'Tempel', hint: 'Ctrl+V', disabled: !navigator.clipboard?.readText, run: paste },
-      { label: 'Pilih semua', hint: 'Ctrl+A', run: () => (el.focus(), rich ? document.execCommand('selectAll') : el.select()) }
+      { label: 'Potong', icon: 'cut', hint: 'Ctrl+X', disabled: !hasSel, run: exec('cut') },
+      { label: 'Salin', icon: 'copy', hint: 'Ctrl+C', disabled: !hasSel, run: exec('copy') },
+      { label: 'Tempel', icon: 'paste', hint: 'Ctrl+V', disabled: !navigator.clipboard?.readText, run: paste },
+      { label: 'Pilih semua', icon: 'selectAll', hint: 'Ctrl+A', run: () => (el.focus(), rich ? document.execCommand('selectAll') : el.select()) }
     ];
     if (rich) {
       out.push(
         SEP,
-        { label: 'Tebal', hint: 'Ctrl+B', checked: document.queryCommandState('bold'), run: exec('bold') },
-        { label: 'Miring', hint: 'Ctrl+I', checked: document.queryCommandState('italic'), run: exec('italic') },
-        { label: 'Garis bawah', hint: 'Ctrl+U', checked: document.queryCommandState('underline'), run: exec('underline') }
+        { label: 'Tebal', icon: 'bold', hint: 'Ctrl+B', checked: document.queryCommandState('bold'), run: exec('bold') },
+        { label: 'Miring', icon: 'italic', hint: 'Ctrl+I', checked: document.queryCommandState('italic'), run: exec('italic') },
+        { label: 'Garis bawah', icon: 'underline', hint: 'Ctrl+U', checked: document.queryCommandState('underline'), run: exec('underline') }
       );
     }
     return out;
@@ -483,25 +483,25 @@
     const s = steps[i];
     if (!s) return [];
     const out = [{ head: short(s, i) }];
-    if (f.kind === 'lane') out.push({ label: `Pindahkan ke ${f.name || 'pelaksana ini'}`, run: () => asStep(() => moveStep(f)) }, SEP);
+    if (f.kind === 'lane') out.push({ label: `Pindahkan ke ${f.name || 'pelaksana ini'}`, icon: 'arrowRight', run: () => asStep(() => moveStep(f)) }, SEP);
     out.push(
-      ...SHAPES.map((sh) => ({ label: sh.label, checked: s.shape === sh.value, run: () => asStep(() => (s.shape = sh.value)) })),
-      { label: 'Atur alur & kegiatan bersama…', run: () => ((edgeSel = null), (menu = s.id)) }
+      ...SHAPES.map((sh) => ({ label: sh.label, icon: sh.value, checked: s.shape === sh.value, run: () => asStep(() => (s.shape = sh.value)) })),
+      { label: 'Atur alur & kegiatan bersama…', icon: 'flow', run: () => ((edgeSel = null), (menu = s.id)) }
     );
     const others = actors.map((a, j) => [a, j]).filter(([a]) => a.id !== s.actor);
     if (others.length && f.kind !== 'lane') {
       out.push(SEP, { head: 'Pindahkan ke pelaksana' },
-        ...others.map(([a, j]) => ({ label: a.name || `Pelaksana ${j + 1}`, run: () => asStep(() => moveStep({ step: s.id, actor: a.id })) })));
+        ...others.map(([a, j]) => ({ label: a.name || `Pelaksana ${j + 1}`, icon: 'arrowRight', run: () => asStep(() => moveStep({ step: s.id, actor: a.id })) })));
     }
     out.push(
       SEP,
-      { label: 'Tambah kegiatan di atas', run: () => insertStep(i, s.actor) },
-      { label: 'Tambah kegiatan di bawah', run: () => insertStep(i + 1, s.actor) },
-      { label: 'Duplikat', run: () => asStep(() => duplicateStep(i)) },
-      { label: 'Naikkan', disabled: i === 0, run: () => asStep(() => moveStepRow(i, -1)) },
-      { label: 'Turunkan', disabled: i === steps.length - 1, run: () => asStep(() => moveStepRow(i, 1)) },
+      { label: 'Tambah kegiatan di atas', icon: 'addAbove', run: () => insertStep(i, s.actor) },
+      { label: 'Tambah kegiatan di bawah', icon: 'addBelow', run: () => insertStep(i + 1, s.actor) },
+      { label: 'Duplikat', icon: 'copy', run: () => asStep(() => duplicateStep(i)) },
+      { label: 'Naikkan', icon: 'arrowUp', disabled: i === 0, run: () => asStep(() => moveStepRow(i, -1)) },
+      { label: 'Turunkan', icon: 'arrowDown', disabled: i === steps.length - 1, run: () => asStep(() => moveStepRow(i, 1)) },
       SEP,
-      { label: 'Hapus kegiatan', danger: true, run: () => asStep(() => removeStep(steps, i)) }
+      { label: 'Hapus kegiatan', icon: 'trash', danger: true, run: () => asStep(() => removeStep(steps, i)) }
     );
     return out;
   }
@@ -513,12 +513,12 @@
     const lock = actorLock(a);
     return [
       { head: a.name || `Pelaksana ${i + 1}` },
-      { label: 'Tambah pelaksana di kiri', run: () => addActor(i - 1) },
-      { label: 'Tambah pelaksana di kanan', run: () => addActor(i) },
-      { label: 'Geser ke kiri', disabled: i === 0, run: () => asStep(() => moveActor(i, -1)) },
-      { label: 'Geser ke kanan', disabled: i === actors.length - 1, run: () => asStep(() => moveActor(i, 1)) },
+      { label: 'Tambah pelaksana di kiri', icon: 'addLeft', run: () => addActor(i - 1) },
+      { label: 'Tambah pelaksana di kanan', icon: 'addRight', run: () => addActor(i) },
+      { label: 'Geser ke kiri', icon: 'arrowLeft', disabled: i === 0, run: () => asStep(() => moveActor(i, -1)) },
+      { label: 'Geser ke kanan', icon: 'arrowRight', disabled: i === actors.length - 1, run: () => asStep(() => moveActor(i, 1)) },
       SEP,
-      { label: 'Hapus pelaksana', danger: true, disabled: !!lock, title: lock, run: () => removeActor(i) }
+      { label: 'Hapus pelaksana', icon: 'trash', danger: true, disabled: !!lock, title: lock, run: () => removeActor(i) }
     ];
   }
 
@@ -526,9 +526,9 @@
     const sec = app.doc.sections[key];
     return [
       { head: SECTION_DEFS.find((d) => d.key === key)?.title ?? '' },
-      { label: 'Bernomor', checked: sec.numbered, run: () => asStep(() => (sec.numbered = !sec.numbered)) },
-      ...(key === 'kualifikasi' ? [{ label: 'Isi dari daftar pelaksana', run: () => asStep(fromActors) }] : []),
-      ...(add ? [{ label: 'Tambah butir', run: () => addItem(key) }] : [])
+      { label: 'Bernomor', icon: 'numbered', checked: sec.numbered, run: () => asStep(() => (sec.numbered = !sec.numbered)) },
+      ...(key === 'kualifikasi' ? [{ label: 'Isi dari daftar pelaksana', icon: 'users', run: () => asStep(fromActors) }] : []),
+      ...(add ? [{ label: 'Tambah butir', icon: 'plus', run: () => addItem(key) }] : [])
     ];
   }
 
@@ -538,12 +538,12 @@
     return [
       ...sectionItems(f.key, false),
       SEP,
-      { label: 'Tambah butir di atas', run: () => insertItem(f.key, i) },
-      { label: 'Tambah butir di bawah', run: () => insertItem(f.key, i + 1) },
-      { label: 'Naikkan', hint: 'Alt+↑', disabled: i === 0, run: () => asStep(() => moveItem(f.key, i, -1)) },
-      { label: 'Turunkan', hint: 'Alt+↓', disabled: i === n - 1, run: () => asStep(() => moveItem(f.key, i, 1)) },
+      { label: 'Tambah butir di atas', icon: 'addAbove', run: () => insertItem(f.key, i) },
+      { label: 'Tambah butir di bawah', icon: 'addBelow', run: () => insertItem(f.key, i + 1) },
+      { label: 'Naikkan', icon: 'arrowUp', hint: 'Alt+↑', disabled: i === 0, run: () => asStep(() => moveItem(f.key, i, -1)) },
+      { label: 'Turunkan', icon: 'arrowDown', hint: 'Alt+↓', disabled: i === n - 1, run: () => asStep(() => moveItem(f.key, i, 1)) },
       SEP,
-      { label: 'Hapus butir', danger: true, run: () => asStep(() => removeItem(f)) }
+      { label: 'Hapus butir', icon: 'trash', danger: true, run: () => asStep(() => removeItem(f)) }
     ];
   }
 
@@ -555,14 +555,14 @@
       const [mx, my] = toMm(e);
       out.push(
         { head: 'Garis alur' },
-        { label: 'Atur jalur garis…', run: () => ((menu = null), (edgeSel = { step: f.step, branch: f.branch, fid: f.id, mx, my })) },
-        { label: 'Kembalikan jalur otomatis', disabled: !routeOf(f), run: () => setRoute(f, { from: null, to: null, x: null, y: null }) }
+        { label: 'Atur jalur garis…', icon: 'flow', run: () => ((menu = null), (edgeSel = { step: f.step, branch: f.branch, fid: f.id, mx, my })) },
+        { label: 'Kembalikan jalur otomatis', icon: 'restore', disabled: !routeOf(f), run: () => setRoute(f, { from: null, to: null, x: null, y: null }) }
       );
     } else if (f.step) out.push(...stepItems(f));
     else if (f.actor) out.push(...actorItems(f.actor));
     else if (f.kind === 'item') out.push(...itemItems(f));
     else if (f.kind === 'section' || f.kind === 'empty') out.push(...sectionItems(f.key));
-    else if (f.kind === 'add-step') out.push({ label: 'Tambah kegiatan', run: () => addStep(-1) });
+    else if (f.kind === 'add-step') out.push({ label: 'Tambah kegiatan', icon: 'plus', run: () => addStep(-1) });
     // Rapikan pemisah di awal, di akhir, dan yang berurutan.
     return out.filter((it, i, a) => !it.sep || (i > 0 && i < a.length - 1 && !a[i - 1].sep));
   }
