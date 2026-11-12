@@ -99,11 +99,11 @@
     <h3><span class="num">1</span><span>{#if draft.mode === 'import'}Lampirkan SOP lama ke AI{:else if draft.mode === 'revise'}Tulis instruksi revisi{:else}Tulis nama dan deskripsi SOP{/if}</span></h3>
     {#if draft.mode === 'revise'}
       <label class="field">
-        <textarea rows="4" aria-label="Instruksi revisi" bind:value={draft.instruction} placeholder="Contoh: pecah langkah 3 menjadi verifikasi berkas dan verifikasi pembayaran; tulis ulang kolom keterangan agar lebih ringkas; ganti “Kasubbag” dengan “Kepala Subbagian Akademik”."></textarea>
+        <textarea class="big" rows="10" aria-label="Instruksi revisi" bind:value={draft.instruction} placeholder="Contoh: pecah langkah 3 menjadi verifikasi berkas dan verifikasi pembayaran; tulis ulang kolom keterangan agar lebih ringkas; ganti “Kasubbag” dengan “Kepala Subbagian Akademik”."></textarea>
       </label>
     {:else if draft.mode === 'new'}
       <label class="field">
-        <textarea rows="4" aria-label="Nama dan deskripsi SOP" bind:value={draft.description} placeholder="Contoh: SOP pengajuan cuti akademik di Fakultas Ilmu Komputer. Mahasiswa mengisi formulir, operator memverifikasi berkas, Kaprodi menyetujui, lalu dekan menerbitkan surat."></textarea>
+        <textarea class="big" rows="10" aria-label="Nama dan deskripsi SOP" bind:value={draft.description} placeholder="Contoh: SOP pengajuan cuti akademik di Fakultas Ilmu Komputer. Mahasiswa mengisi formulir, operator memverifikasi berkas, Kaprodi menyetujui, lalu dekan menerbitkan surat."></textarea>
       </label>
     {:else}
       <p>Buka chat baru di asisten AI, lalu lampirkan berkas SOP lama (unggah PDF/DOCX atau foto setiap halaman).</p>
@@ -112,7 +112,7 @@
         <span>Perbarui kop instansi dan pengesah ke bawaan saat ini ({DEFAULT_PENGESAH.disahkanNama})</span>
       </label>
       <label class="field">
-        <textarea rows="2" aria-label="Catatan untuk AI (opsional)" bind:value={draft.note} placeholder="Catatan untuk AI (opsional). Contoh: tanggal pembuatan diganti hari ini; pelaksana “Kasubbag” diganti “Kepala Subbagian Akademik”."></textarea>
+        <textarea rows="4" aria-label="Catatan untuk AI (opsional)" bind:value={draft.note} placeholder="Catatan untuk AI (opsional). Contoh: tanggal pembuatan diganti hari ini; pelaksana “Kasubbag” diganti “Kepala Subbagian Akademik”."></textarea>
       </label>
     {/if}
   </section>
@@ -161,7 +161,7 @@
 
 <style>
   .dialog {
-    width: min(560px, calc(100vw - 2rem));
+    width: min(820px, calc(100vw - 2rem));
     border: 0;
     border-radius: 14px;
     padding: 1.1rem 1.2rem;
@@ -270,6 +270,12 @@
     width: 100%;
     font-family: ui-monospace, Consolas, monospace;
     font-size: 0.78rem;
+  }
+  .big {
+    width: 100%;
+    min-height: min(14rem, 35dvh);
+    resize: vertical;
+    line-height: 1.5;
   }
   .paste {
     display: block;
