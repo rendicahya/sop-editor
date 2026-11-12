@@ -224,6 +224,7 @@ service cloud.firestore {
 
     function canUpdateDoc(k, id) {
       return isContentSave(k, id, request.resource.data, resource.data)
+        || isHistoryPrune(k, id, request.resource.data, resource.data)
         || isAccessChange(k, request.resource.data, resource.data)
         || isAccessSync(k, request.resource.data, resource.data)
         || isFolderMove(k, request.resource.data, resource.data)
@@ -253,12 +254,35 @@ service cloud.firestore {
         && request.resource.data.savedByName == parent.updatedByName;
     }
     // Riwayat hanya terhapus bersama dokumennya.
-    function canDeleteVersion(k, id) {
+    function canDeleteVersion(k, id, rev) {
       let parent = get(sopPath(k, id)).data;
-      return isMember()
-        && parent.deletedBy != null
-        && (parent.deletedBy == uid() || isAdmin())
-        && !existsAfter(sopPath(k, id));
+      return isMember() && (
+        // Ikut terhapus bersama SOP-nya (hapus permanen dari recycle bin).
+        (parent.deletedBy != null && (parent.deletedBy == uid() || isAdmin()) && !existsAfter(sopPath(k, id)))
+        // Membersihkan riwayat lama: lihat isHistoryPrune.
+        || (parent.deletedBy == null
+          && isOwnerOrAdmin(parent)
+          && existsAfter(sopPath(k, id))
+          && getAfter(sopPath(k, id)).data.get('prunedRev', null) == rev
+          && getAfter(sopPath(k, id)).data.get('prunedAt', null) == request.time)
+      );
+    }
+    function versionPath(k, id, rev) {
+      return /databases/$(database)/documents/$(k)/$(id)/versions/$(rev);
+    }
+    // Membersihkan riwayat lama (pemilik dan admin): satu versi per penulisan. Ruang yang dipakainya dikembalikan ke
+    // totalBytes SOP dan penghitung pustaka, dan `prunedRev` menunjuk versi yang dihapus dalam penulisan yang sama.
+    function isHistoryPrune(k, id, d, r) {
+      return changed().hasOnly(['totalBytes', 'prunedRev', 'prunedAt'])
+        && isMember()
+        && r.deletedBy == null
+        && isOwnerOrAdmin(r)
+        && d.prunedRev is string
+        && d.prunedAt == request.time
+        && exists(versionPath(k, id, d.prunedRev))
+        && !existsAfter(versionPath(k, id, d.prunedRev))
+        && d.totalBytes == r.totalBytes - get(versionPath(k, id, d.prunedRev)).data.size
+        && usageChangedBy(k, -get(versionPath(k, id, d.prunedRev)).data.size);
     }
 
     match /sops/{id} {
@@ -270,7 +294,7 @@ service cloud.firestore {
       match /versions/{rev} {
         allow read: if canRead(get(sopPath('sops', id)).data);
         allow create: if canCreateVersion('sops', id, rev);
-        allow delete: if canDeleteVersion('sops', id);
+        allow delete: if canDeleteVersion('sops', id, rev);
       }
     }
 
@@ -283,7 +307,7 @@ service cloud.firestore {
       match /versions/{rev} {
         allow read: if canRead(get(sopPath('rps', id)).data);
         allow create: if canCreateVersion('rps', id, rev);
-        allow delete: if canDeleteVersion('rps', id);
+        allow delete: if canDeleteVersion('rps', id, rev);
       }
     }
 
@@ -396,7 +420,8 @@ service cloud.firestore {
         && changed().hasOnly(['bytes', 'lastSop'])
         && (
           existsAfter(sopPath(k, request.resource.data.lastSop))
-            ? getAfter(sopPath(k, request.resource.data.lastSop)).data.updatedAt == request.time
+            ? (getAfter(sopPath(k, request.resource.data.lastSop)).data.updatedAt == request.time
+              || getAfter(sopPath(k, request.resource.data.lastSop)).data.get('prunedAt', null) == request.time)
             : exists(sopPath(k, request.resource.data.lastSop))
         );
     }

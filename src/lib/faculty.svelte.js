@@ -524,6 +524,25 @@ export async function restoreVersion(id, version) {
   }).catch(failed);
 }
 
+/**
+ * Menghapus satu versi riwayat (pemilik dan admin). Ruang yang dipakainya dikembalikan ke penghitung; `prunedRev`
+ * menandai versi yang dihapus agar aturan server bisa memeriksa ukurannya (lihat isHistoryPrune).
+ */
+export async function pruneVersion(id, rev) {
+  const { F, db } = await load();
+  const ref = F.doc(db, 'sops', id);
+  const vref = F.doc(ref, 'versions', String(rev));
+  await F.runTransaction(db, async (tx) => {
+    const cur = await readForWrite(tx, ref);
+    const v = await tx.get(vref);
+    if (!v.exists()) return; // sudah dihapus orang lain
+    const size = v.data().size;
+    tx.delete(vref);
+    tx.update(ref, { totalBytes: cur.totalBytes - size, prunedRev: String(rev), prunedAt: F.serverTimestamp() });
+    tx.update(F.doc(db, 'stats/usage'), { bytes: F.increment(-size), lastSop: id });
+  }).catch(failed);
+}
+
 /** Hasil duplikat berdiri sendiri: pemiliknya akun ini, dan hak aksesnya mengikuti folder tempatnya. */
 export const duplicateSop = (sop) => uploadSop(JSON.parse(sop.json), `Salinan dari ${sop.title || 'SOP tanpa judul'}`.slice(0, 300), sop.folder);
 

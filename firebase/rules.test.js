@@ -368,6 +368,67 @@ describe('recycle bin', () => {
   });
 });
 
+/** Menghapus satu versi riwayat beserta ruangnya (lihat isHistoryPrune). */
+function prune(db, id, cur, rev, size, patch = {}) {
+  const b = writeBatch(db);
+  b.delete(doc(db, 'sops', id, 'versions', String(rev)));
+  b.update(doc(db, 'sops', id), { totalBytes: cur.totalBytes - size, prunedRev: String(rev), prunedAt: serverTimestamp(), ...patch });
+  b.update(usage(db), { bytes: increment(-size), lastSop: id });
+  return b.commit();
+}
+
+describe('membersihkan riwayat lama', () => {
+  /** SOP milik ali yang bisa diedit semua anggota, dengan dua versi lama (rev 1 dan 2). */
+  async function withHistory() {
+    let cur = await given('ali', 's', 'public');
+    await save(as('bud'), 'bud', 's', cur, '{"a":22}');
+    cur = await read('s');
+    await save(as('ali'), 'ali', 's', cur, '{"a":333}');
+    return read('s');
+  }
+  const v1 = bytes('{"a":1}');
+
+  it('pemilik dan admin bisa; ruangnya dikembalikan ke SOP dan penghitung', async () => {
+    let cur = await withHistory();
+    const before = await usedBytes();
+    await assertSucceeds(prune(as('ali'), 's', cur, 1, v1));
+    assert.equal(await usedBytes(), before - v1);
+    cur = await read('s');
+    assert.equal(cur.totalBytes, cur.size + bytes('{"a":22}'));
+    await assertSucceeds(prune(as('adm'), 's', cur, 2, bytes('{"a":22}')));
+    assert.equal((await read('s')).totalBytes, cur.size);
+  });
+  it('pemegang hak edit atau lihat tidak bisa', async () => {
+    const cur = await withHistory();
+    await assertFails(prune(as('bud'), 's', cur, 1, v1));
+  });
+  it('ukuran yang dikembalikan harus sama dengan ukuran versinya', async () => {
+    const cur = await withHistory();
+    await assertFails(prune(as('ali'), 's', cur, 1, v1 + 5));
+    await assertFails(prune(as('ali'), 's', cur, 1, v1, { totalBytes: cur.totalBytes - v1 - 5 }));
+  });
+  it('versi tidak bisa dihapus tanpa menandai dan mengembalikan ruangnya', async () => {
+    await withHistory();
+    await assertFails(deleteDoc(doc(as('ali'), 'sops/s/versions/1')));
+  });
+  it('tidak bisa menyamar sebagai pembersihan untuk mengubah isi atau mengurangi ruang tanpa menghapus', async () => {
+    const cur = await withHistory();
+    await assertFails(updateDoc(doc(as('ali'), 'sops/s'), { totalBytes: cur.totalBytes - v1, prunedRev: '1', prunedAt: serverTimestamp() }));
+    await assertFails(prune(as('ali'), 's', cur, 1, v1, { json: '{"b":1}' }));
+  });
+  it('SOP di recycle bin tidak bisa dibersihkan', async () => {
+    const cur = await withHistory();
+    await toBin(as('ali'), 'ali', 's');
+    await assertFails(prune(as('ali'), 's', cur, 1, v1));
+  });
+  it('menyimpan tetap berjalan setelah riwayat dibersihkan', async () => {
+    let cur = await withHistory();
+    await prune(as('ali'), 's', cur, 1, v1);
+    cur = await read('s');
+    await assertSucceeds(save(as('bud'), 'bud', 's', cur, '{"a":4444}'));
+  });
+});
+
 describe('ruang penyimpanan', () => {
   it('anggota tidak bisa membaca penghitung, admin bisa', async () => {
     await assertFails(getDoc(usage(as('ali'))));

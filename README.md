@@ -177,6 +177,9 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
 - **Seret dan lepas** SOP atau folder ke folder di pohon, ke breadcrumb, atau ke area daftar untuk memindahkannya (di komputer; di layar sentuh pakai menu Pindahkan). Folder tertutup terbuka sendiri bila disorot sebentar.
 - Folder hanya bisa dihapus bila kosong. Isi yang tidak terlihat oleh penghapusnya, dan folder yang induknya tidak terlihat, tampil di tingkat utama.
 - SOP yang dihapus masuk **Recycle bin**. Pengguna hanya melihat, memulihkan, dan menghapus permanen yang dia hapus sendiri; admin menangani semuanya.
+- **Riwayat lama bisa dihapus** oleh pemilik SOP dan admin: per versi (ikon tempat sampah di Riwayat), atau sekaligus
+  lewat **Hapus riwayat lama…** dengan menyisakan sejumlah versi terbaru (0 = hapus seluruh riwayat; isi saat ini tetap
+  utuh). Ruang yang dipakai versi itu dikembalikan ke kuota pustaka. Tidak bisa dibatalkan.
 - Setiap penyimpanan membuat versi di **Riwayat**. Bila SOP sudah diubah orang lain, penyimpan memilih: timpa, simpan sebagai salinan, atau batal. Pemegang hak Lihat hanya bisa menyimpan sebagai salinan.
 - **Sedang diedit** hanya pemberitahuan, bukan kunci. Keterangan dari browser yang tertutup hilang sendiri setelah sekitar 5 menit.
 - Pemakaian dan batas penyimpanan hanya tampil untuk admin. Angkanya perkiraan dari ukuran JSON, belum termasuk indeks Firestore.
