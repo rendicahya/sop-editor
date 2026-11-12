@@ -8,6 +8,7 @@
   import Icon from './Icon.svelte';
   import * as ui from './ask.svelte.js';
   import { readSopFiles } from './sopFiles.js';
+  import { dismiss } from './dismiss.js';
 
   /**
    * openIds: id SOP yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
@@ -913,7 +914,7 @@
   {/if}
   {#if menu}<ContextMenu x={menu.x} y={menu.y} items={menu.items} {host} onclose={() => (menu = null)} />{/if}
 
-<dialog bind:this={moveDialog} class="dialog small-dialog" onclose={() => (moving = null)}>
+<dialog bind:this={moveDialog} class="dialog small-dialog" use:dismiss onclose={() => (moving = null)}>
   {#if moving}
     <form onsubmit={submitMove}>
       <h2>Pindahkan</h2>

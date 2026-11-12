@@ -3,6 +3,7 @@
   import LocalPane from './LocalPane.svelte';
   import FacultyPane from './FacultyPane.svelte';
   import { tips } from './tips.js';
+  import { dismiss } from './dismiss.js';
   import Icon from './Icon.svelte';
 
   /**
@@ -75,6 +76,7 @@
   bind:this={dialog}
   class="dialog"
   use:tips
+  use:dismiss
   onclose={close}
   ondragover={(e) => {
     if (!e.dataTransfer?.types.includes('Files')) return;

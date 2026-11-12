@@ -1,6 +1,7 @@
 <script>
   import Icon from './Icon.svelte';
   import { tips } from './tips.js';
+  import { dismiss } from './dismiss.js';
   import * as F from './faculty.svelte.js';
 
   /**
@@ -98,7 +99,7 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="dialog" use:tips onclose={onclose}>
+<dialog bind:this={dialog} class="dialog" use:tips use:dismiss onclose={onclose}>
   {#if target}
     <form onsubmit={save}>
       <h2>Hak akses</h2>
