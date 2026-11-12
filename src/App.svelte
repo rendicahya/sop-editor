@@ -4,7 +4,7 @@
   import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
   import { emptyDocument, parseDocumentText, normalizeDocument } from './lib/model.js';
   import { layoutDocument } from './lib/layout.js';
-  import { exportPdf, sopFromPdf } from './lib/pdf.js';
+  import { exportPdf, sopFromPdf, PDF_PROTECT } from './lib/pdf.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
   import { saveJson, openJsonFile, slug, sopName, downloadBlob } from './lib/files.js';
   import Preview from './lib/Preview.svelte';
@@ -881,12 +881,32 @@
   // Ekspor PDF selalu lewat pratinjau dulu; unduhan dilakukan dari dialog.
   let pdfDoc = $state(null);
   let pdfSaved;
-  function pdf() {
+  // Perlindungan isi PDF (lihat PDF_PROTECT), diingat per browser.
+  let pdfProtect = $state(PDF_PROTECT.includes(getPref('pdfProtect')) ? getPref('pdfProtect') : 'none');
+  let pdfBusy = $state(false);
+  async function pdf() {
+    if (pdfBusy) return;
+    pdfBusy = true;
     try {
       pdfSaved = fileMark();
-      pdfDoc = exportPdf(app.doc);
+      pdfDoc = await exportPdf(app.doc, pdfProtect);
     } catch (e) {
       ui.alert('Gagal membuat PDF: ' + e.message);
+    } finally {
+      pdfBusy = false;
+    }
+  }
+  async function setPdfProtect(mode) {
+    pdfProtect = mode;
+    setPref('pdfProtect', mode);
+    if (!pdfDoc) return;
+    pdfBusy = true;
+    try {
+      pdfDoc = await exportPdf(app.doc, mode);
+    } catch (e) {
+      ui.alert('Gagal membuat PDF: ' + e.message);
+    } finally {
+      pdfBusy = false;
     }
   }
 
@@ -1286,6 +1306,9 @@
   <PdfPreviewDialog
     bind:pdf={pdfDoc}
     ondownload={() => pdfSaved?.()}
+    protect={pdfProtect}
+    busy={pdfBusy}
+    onprotect={setPdfProtect}
     {pages}
     filename={`SOP-${slug(app.doc.header.namaSop)}.pdf`}
     fontNote={docFont === 'calibri' ? '' : 'Calibri belum tersedia, PDF memakai Carlito (ukuran identik)'}

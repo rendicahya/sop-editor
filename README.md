@@ -72,6 +72,10 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   menempel pada teks butir, jadi tetap benar saat butir diurutkan ulang, tetapi terlepas bila teksnya diubah.
   Tautan hanya berlaku di aplikasi; hasil cetak dan ekspor tetap berisi teks butirnya saja.
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
+  Pilihan **Isi PDF** di dialog itu (diingat per browser): **Bisa disalin** (bawaan), **Dikunci** (PDF terenkripsi
+  dengan izin cetak saja; salin dan ubah dilarang di Acrobat, Chrome, Edge, tetapi sebagian penampil seperti Firefox
+  mengabaikannya), atau **Gambar** (tiap halaman menjadi gambar 250 dpi sehingga teks sama sekali tidak bisa diseleksi;
+  berkas lebih besar). PDF yang dikunci atau berupa gambar tidak berisi data SOP, jadi tidak bisa dibuka lagi di editor.
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
   halaman diagram alir menjadi tabel dengan kolom/baris berukuran sama persis seperti pratinjau. Teks semua sel bisa
   diedit di Word, dan diagramnya (simbol, garis alur berpanah, label, konektor antarhalaman) berupa **shape Word yang

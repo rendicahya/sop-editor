@@ -14,9 +14,12 @@ const loadImage = (src) =>
     img.src = src;
   });
 
+/** Menunggu font dokumen siap dipakai canvas. */
+export const loadDocFonts = () => Promise.all([document.fonts.load(`400 12px SOPDoc`), document.fonts.load(`700 12px SOPDoc`)]);
+
 /** Satu halaman sebagai canvas; `images` = cache src → HTMLImageElement. */
-async function renderPage(page, images) {
-  const S = DPI / 25.4;
+export async function renderPage(page, images, dpi = DPI) {
+  const S = dpi / 25.4;
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(page.w * S);
   canvas.height = Math.round(page.h * S);
@@ -80,7 +83,7 @@ async function renderPage(page, images) {
 }
 
 export async function exportPngZip(doc, base) {
-  await Promise.all([document.fonts.load(`400 12px SOPDoc`), document.fonts.load(`700 12px SOPDoc`)]);
+  await loadDocFonts();
   const pages = layoutDocument(doc);
   const images = new Map();
   const files = {};
