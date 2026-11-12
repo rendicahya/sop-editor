@@ -249,6 +249,8 @@
         return { id: t.id, fileName: t.fileName, remote: t.remote, json: s.json, dirty: s.json !== s.clean };
       })
     });
+    // Kunci edit dilepas agar orang lain tidak menunggu kedaluwarsa; dipasang lagi bila halaman ini kembali.
+    Faculty.releaseEditing();
   }
 
   /** Mengembalikan tab setelah muat ulang. Riwayat undo dan handle berkas tidak ikut (tidak tersimpan). */
@@ -730,8 +732,6 @@
   $effect(() => {
     notes.marked = new Set(notes.list.filter((c) => !c.parent && !c.resolved).map((c) => currentRef(app.doc, c)).filter(Boolean));
   });
-  const activeEditors = $derived(activeTab?.remote ? (faculty.editing[activeTab.remote.id] ?? []).map((m) => m.name).join(', ') : '');
-
   $effect(() => {
     app.nameLocked = !!activeTab?.remote && !activeTab.remote.canRename;
   });
@@ -739,27 +739,74 @@
     if (faculty.status === 'in' && (facultyOpen || openRemoteIds.length)) return Faculty.watchEditing();
   });
   $effect(() => {
-    if (faculty.status === 'in') untrack(syncEditing);
+    if (faculty.status !== 'in') return;
+    untrack(() => {
+      syncEditing();
+      closeLockedViews();
+    });
   });
 
-  /** Tanda "sedang diedit" mengikuti tab yang punya perubahan belum tersimpan (SOP bersama yang boleh diedit saja). */
+  /**
+   * Kunci edit: setiap SOP daring yang terbuka di tab dan boleh diedit dikunci atas nama akun ini, sehingga tidak bisa
+   * dibuka orang lain sampai tabnya ditutup (atau kuncinya kedaluwarsa, lihat faculty.svelte.js).
+   */
   function syncEditing() {
-    for (const t of tabs.list) {
-      if (!t.remote) continue;
-      const dirty = t.id === tabs.active ? current !== clean : stash.get(t.id)?.json !== stash.get(t.id)?.clean;
-      Faculty.setEditing(t.remote.id, t.remote.shared && t.remote.canEdit && dirty);
+    Faculty.syncLocks(tabs.list.filter((t) => t.remote?.canEdit).map((t) => t.remote.id));
+  }
+  const tabDirty = (t) => (t.id === tabs.active ? JSON.stringify(app.doc) !== clean : stash.get(t.id)?.json !== stash.get(t.id)?.clean);
+
+  /** SOP di tab `t` sedang dipegang orang lain: tab ditutup, atau dilepas dari Pustaka Daring bila ada perubahan. */
+  function lockedOut(t, holder) {
+    const who = holder?.name || 'orang lain';
+    const title = tabTitle(t);
+    if (!tabDirty(t)) {
+      closeTab(t.id);
+      ui.alert(`SOP "${title}" sedang diedit oleh ${who}, jadi tabnya ditutup. Buka lagi setelah ${who} selesai dan menutupnya.`, { title: 'SOP terkunci' });
+    } else {
+      Faculty.setEditing(t.remote.id, false);
+      t.remote = null;
+      ui.alert(
+        `SOP "${title}" sedang diedit oleh ${who}. Perubahan Anda tetap ada di tab ini, tetapi tidak lagi tertaut ke Pustaka Daring: simpan sebagai berkas, atau unggah sebagai SOP baru.`,
+        { title: 'SOP terkunci' }
+      );
+    }
+  }
+  Faculty.onLockLost((id, holder) => {
+    const t = tabs.list.find((x) => x.remote?.id === id);
+    if (t) lockedOut(t, holder);
+  });
+
+  /** Tab hanya-lihat dari sesi sebelumnya yang SOP-nya kini sedang diedit orang lain ikut ditutup. */
+  async function closeLockedViews() {
+    for (const t of tabs.list.filter((x) => x.remote && !x.remote.canEdit)) {
+      const holder = await Faculty.lockedBy(t.remote.id);
+      if (holder && tabs.list.includes(t)) lockedOut(t, holder);
     }
   }
 
-  function openFacultySop(sop) {
+  /** Membuka SOP daring di tab; ditolak bila sedang diedit orang lain. Hasilnya true bila terbuka. */
+  async function openFacultySop(sop) {
     const opened = tabs.list.find((t) => t.remote?.id === sop.id);
-    if (opened) return switchTab(opened.id);
-    try {
-      openInTab(parseDocumentText(sop.json));
-    } catch {
-      return ui.alert('SOP ini rusak dan tidak bisa dibuka.');
+    if (opened) {
+      switchTab(opened.id);
+      return true;
     }
+    const holder = await Faculty.lockedBy(sop.id);
+    if (holder) {
+      ui.alert(`SOP "${sop.title || 'tanpa judul'}" sedang diedit oleh ${holder.name}, jadi belum bisa dibuka. Coba lagi setelah ${holder.name} selesai dan menutupnya.`, { title: 'SOP terkunci' });
+      return false;
+    }
+    let doc;
+    try {
+      doc = parseDocumentText(sop.json);
+    } catch {
+      ui.alert('SOP ini rusak dan tidak bisa dibuka.');
+      return false;
+    }
+    openInTab(doc);
     activeTab.remote = Faculty.remoteOf(sop);
+    syncEditing();
+    return true;
   }
 
   // Tautan Keterkaitan ke SOP lain di Pustaka Daring.
@@ -779,7 +826,7 @@
       return void ui.alert(e.message), false;
     }
     if (!sop) return void ui.alert('SOP yang ditautkan tidak ditemukan. Mungkin sudah dihapus, atau Anda tidak punya hak untuk melihatnya.'), false;
-    openFacultySop(sop);
+    if (!(await openFacultySop(sop))) return false;
     notify(`Dibuka: ${sop.title || 'SOP tanpa judul'}`);
     return true;
   }
@@ -1180,6 +1227,9 @@
 <svelte:window
   onbeforeunload={onBeforeUnload}
   onpagehide={onPageHide}
+  onpageshow={(e) => e.persisted && faculty.status === 'in' && syncEditing()}
+  onpointerdowncapture={Faculty.touch}
+  onkeydowncapture={Faculty.touch}
   onkeydown={(e) => {
     if (!signedIn) return;
     if (e.key === 'Escape') {
@@ -1426,11 +1476,6 @@
           <span><strong>Anda hanya punya hak lihat pada SOP ini.</strong> Perubahan hanya bisa disimpan sebagai salinan milik Anda.</span>
         </div>
       {/if}
-      {#if activeEditors && !empty}
-        <div class="waiting" role="status">
-          <span><strong>Sedang diedit juga oleh {activeEditors}.</strong> Yang menyimpan belakangan akan mendapat pilihan untuk menimpa atau membuat salinan.</span>
-        </div>
-      {/if}
       {#if docFont !== 'calibri'}
         <div class="font-warn">
           <span>
@@ -1544,6 +1589,7 @@
         const remote = await Faculty.uploadSop(doc, name, folder);
         openInTab(doc);
         activeTab.remote = remote;
+        syncEditing();
       },
       onloaded: onFacultyLoaded,
       onrenamed: onFacultyRenamed,

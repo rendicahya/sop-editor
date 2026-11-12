@@ -549,6 +549,50 @@ describe('komentar', () => {
   });
 });
 
+describe('kunci edit', () => {
+  const ldoc = (db) => doc(db, 'locks', 's');
+  const lock = (u) => setDoc(ldoc(as(u)), { uid: u, name: USERS[u].name, at: serverTimestamp() });
+  const stale = () => seed((db) => setDoc(ldoc(db), { uid: 'ali', name: 'Ali', at: Timestamp.fromMillis(Date.now() - 10 * 60 * 1000) }));
+
+  it('pemegang hak edit bisa mengunci; selama berlaku yang lain tidak bisa mengambil atau menghapusnya', async () => {
+    await given('ali', 's', 'public');
+    await assertSucceeds(lock('ali'));
+    await assertSucceeds(lock('ali')); // diperbarui berkala
+    await assertFails(lock('bud'));
+    await assertFails(deleteDoc(ldoc(as('bud'))));
+    await assertFails(deleteDoc(ldoc(as('adm'))));
+    await assertSucceeds(getDoc(ldoc(as('bud'))));
+    await assertSucceeds(deleteDoc(ldoc(as('ali'))));
+    await assertSucceeds(lock('bud'));
+  });
+  it('hak lihat dan bukan anggota tidak bisa mengunci; tidak bisa memalsukan pemegang atau waktu', async () => {
+    await given('ali', 's');
+    await updateDoc(doc(as('ali'), 'sops/s'), custom('ali', [USERS.bud.email]));
+    await assertFails(lock('bud'));
+    await assertFails(lock('out'));
+    await assertFails(setDoc(ldoc(as('ali')), { uid: 'bud', name: 'Bud', at: serverTimestamp() }));
+    await assertFails(setDoc(ldoc(as('ali')), { uid: 'ali', name: 'Ali', at: Timestamp.fromMillis(Date.now() + 3600000) }));
+  });
+  it('selama dikunci, hanya pemegang kunci yang bisa menyimpan isi', async () => {
+    let cur = await given('ali', 's', 'public');
+    await lock('bud');
+    await assertFails(save(as('ali'), 'ali', 's', cur, '{"a":2}'));
+    await assertFails(save(as('adm'), 'adm', 's', cur, '{"a":2}'));
+    await assertSucceeds(save(as('bud'), 'bud', 's', cur, '{"a":2}'));
+    cur = await read('s');
+    await deleteDoc(ldoc(as('bud')));
+    await assertSucceeds(save(as('ali'), 'ali', 's', cur, '{"a":3}'));
+  });
+  it('kunci kedaluwarsa (5 menit tanpa pembaruan) tidak lagi menghalangi, dan boleh diambil atau dibersihkan', async () => {
+    const cur = await given('ali', 's', 'public');
+    await stale();
+    await assertSucceeds(save(as('bud'), 'bud', 's', cur, '{"a":2}'));
+    await assertSucceeds(lock('bud'));
+    await stale();
+    await assertSucceeds(deleteDoc(ldoc(as('bud'))));
+  });
+});
+
 describe('ruang penyimpanan', () => {
   it('anggota tidak bisa membaca penghitung, admin bisa', async () => {
     await assertFails(getDoc(usage(as('ali'))));

@@ -7,7 +7,8 @@ rules_version = '2';
 //   sops/{id}                  isi terkini beserta metadata; `folder` berisi id folder (tidak ada/null = tingkat utama)
 //   sops/{id}/versions/{rev}   isi yang tertimpa, tidak bisa diubah
 //   sops/{id}/comments/{cid}   komentar peninjauan dan balasannya (lihat bagian Komentar)
-//   editing/{sopId_uid}        keterangan "sedang diedit" (hanya info, bukan kunci)
+//   editing/{sopId_uid}        keterangan "sedang diedit" lama (hanya info; aplikasi SOP kini memakai locks)
+//   locks/{sopId}              kunci edit: SOP yang sedang dibuka untuk diedit (lihat bagian Kunci edit)
 //   stats/usage                { bytes, limit, lastSop }: hanya admin yang bisa membaca
 //   stats/capacity             tanpa isi: boleh dibaca selama pustaka belum penuh
 //
@@ -167,11 +168,28 @@ service cloud.firestore {
         && withinLimit(k);
     }
 
+    // ---- Kunci edit ----
+    // locks/{sopId} { uid, name, at }: SOP yang sedang dibuka untuk diedit. Aplikasi memperbaruinya tiap 2 menit selama
+    // pemegangnya aktif; setelah 5 menit tanpa pembaruan kunci dianggap lepas. Selama kunci berlaku, isinya hanya bisa
+    // disimpan pemegang kunci. RPS memakai rpsLocks (belum dipakai aplikasinya, jadi tidak pernah terkunci).
+    function lockPath(k, id) {
+      return /databases/$(database)/documents/$(k == 'sops' ? 'locks' : 'rpsLocks')/$(id);
+    }
+    function lockFresh(l) {
+      return l.at > request.time - duration.value(5, 'm');
+    }
+    function unlockedFor(k, id) {
+      return !exists(lockPath(k, id))
+        || get(lockPath(k, id)).data.uid == uid()
+        || !lockFresh(get(lockPath(k, id)).data);
+    }
+
     // Simpan isi: isi lama wajib berpindah ke riwayat dalam penulisan yang sama, dan `rev` yang
     // harus tepat +1 membuat simpanan dari salinan yang sudah usang ditolak server.
     function isContentSave(k, id, d, r) {
       return changed().hasOnly(['title', 'nomor', 'json', 'size', 'totalBytes', 'rev', 'updatedAt', 'updatedBy', 'updatedByName'])
         && canEdit(r)
+        && unlockedFor(k, id)
         && validContent(d)
         && d.rev == r.rev + 1
         && d.totalBytes == r.totalBytes + d.size
@@ -481,6 +499,20 @@ service cloud.firestore {
       allow read: if isMember();
       allow create, update: if canMarkEditing('rps', key);
       allow delete: if canClearEditing();
+    }
+
+    // Kunci hanya bisa diambil pemegang hak edit, dan hanya bila belum dipegang orang lain atau sudah kedaluwarsa.
+    // Tidak ada pengambilalihan: kunci orang lain hanya bisa dihapus setelah kedaluwarsa.
+    match /locks/{id} {
+      allow read: if isMember();
+      allow create, update: if isMember()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'at'])
+        && request.resource.data.uid == uid()
+        && request.resource.data.name is string && request.resource.data.name.size() <= 120
+        && request.resource.data.at == request.time
+        && canEdit(get(sopPath('sops', id)).data)
+        && (resource == null || resource.data.uid == uid() || !lockFresh(resource.data));
+      allow delete: if isMember() && (resource.data.uid == uid() || !lockFresh(resource.data));
     }
 
     // ---- Ruang penyimpanan ----

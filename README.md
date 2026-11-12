@@ -219,7 +219,12 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
 - **Tautan langsung**: klik kanan SOP (atau tab SOP daring) › **Salin tautan**, atau **Salin tautan** pada komentar.
   Tautan `…/sop-editor/?sop=ID` membuka SOP itu setelah penerimanya masuk (perlu hak lihat), dan tautan komentar
   sekaligus menyorot komentarnya.
-- **Sedang diedit** hanya pemberitahuan, bukan kunci. Keterangan dari browser yang tertutup hilang sendiri setelah sekitar 5 menit.
+- **Kunci edit**: SOP yang sedang terbuka di tab pemegang hak edit terkunci. Orang lain, termasuk pemegang hak Lihat,
+  tidak bisa membukanya (dari daftar, tautan, maupun Keterkaitan) sampai tab itu ditutup; di daftar tampil
+  "Terkunci, sedang diedit oleh …". Server juga menolak penyimpanan dari selain pemegang kunci. Kunci lepas sendiri
+  sekitar 5 menit setelah browser pemegangnya tertutup, atau setelah sekitar 15 menit tanpa klik atau ketikan. Tidak
+  ada yang bisa mengambil alih kunci sebelum itu, termasuk admin. Bila kunci ternyata dipegang orang lain, tab yang belum
+  berubah ditutup, sedangkan tab berisi perubahan dilepas dari Pustaka Daring agar isinya tidak hilang.
 - Pemakaian dan batas penyimpanan hanya tampil untuk admin. Angkanya perkiraan dari ukuran JSON, belum termasuk indeks Firestore.
 
 Menyiapkan proyek Firebase (cukup sekali):
