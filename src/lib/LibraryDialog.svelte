@@ -69,7 +69,25 @@
   </div>
 {/snippet}
 
-<dialog bind:this={dialog} class="dialog" use:tips onclose={close}>
+<!-- Berkas yang dilepas di dialog ini tidak sampai ke editor di belakangnya (yang membukanya di tab).
+     Tab Daring menangani sendiri berkas yang dilepas di foldernya. -->
+<dialog
+  bind:this={dialog}
+  class="dialog"
+  use:tips
+  onclose={close}
+  ondragover={(e) => {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.stopPropagation();
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'none';
+  }}
+  ondrop={(e) => {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.stopPropagation();
+    e.preventDefault();
+  }}
+>
   <div class="pane" id="libpane-local" data-pane="local" role="tabpanel" aria-label="Pustaka Lokal" hidden={tab !== 'local'}>
     <LocalPane {open} active={tab === 'local'} {tabs} onclose={close} {...local} />
   </div>

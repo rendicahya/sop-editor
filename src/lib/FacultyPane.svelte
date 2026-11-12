@@ -7,6 +7,7 @@
   import ContextMenu from './ContextMenu.svelte';
   import Icon from './Icon.svelte';
   import * as ui from './ask.svelte.js';
+  import { readSopFiles } from './sopFiles.js';
 
   /**
    * openIds: id SOP yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
@@ -275,16 +276,19 @@
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', isFolder ? item.name : titleOf(item));
   }
+  // Berkas dari komputer (.sop, .json, .zip) bisa dilepas di folder yang boleh ditambah isinya.
+  const fromComputer = (e) => !drag && e.dataTransfer?.types.includes('Files');
   function dragOver(e, target) {
-    if (!drag) return;
+    const files = fromComputer(e);
+    if (!drag && !files) return;
     e.stopPropagation();
-    if (!canDrop(target)) {
+    if (files ? !canAdd(target) || !!importing : !canDrop(target)) {
       e.dataTransfer.dropEffect = 'none';
       if (dropAt === target) dropAt = undefined;
       return;
     }
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = files ? 'copy' : 'move';
     if (dropAt !== target) {
       dropAt = target;
       clearTimeout(hoverTimer);
@@ -300,8 +304,80 @@
     e.stopPropagation();
     const d = drag;
     const ok = canDrop(target);
+    const files = fromComputer(e) && canAdd(target) && !importing ? [...e.dataTransfer.files] : null;
     dragEnd();
     if (d && ok) moveTo(d.item, d.isFolder, target);
+    else if (files?.length) importFiles(files, target);
+  }
+
+  // ---- Unggah berkas dari komputer ----
+  let importing = $state(null); // { done, total }
+  let picker;
+  let pickTarget = null;
+  function pickFiles(target) {
+    pickTarget = target;
+    picker.value = '';
+    picker.click();
+  }
+
+  async function importFiles(files, target) {
+    let found;
+    try {
+      found = await readSopFiles(files);
+    } catch (e) {
+      return ui.alert(e.message);
+    }
+    const { items, bad, other } = found;
+    if (!items.length) {
+      return ui.alert(bad.length ? `${bad.length} berkas SOP tidak bisa dibaca (bukan dokumen SOP yang valid).` : 'Tidak ada berkas .sop. Lepaskan berkas .sop, atau berkas .zip berisi berkas .sop.', { title: 'Tidak ada yang diunggah' });
+    }
+    const dest = target ? `folder ${byId.get(target)?.name}` : 'Utama';
+    const msg = [
+      `Unggah ${items.length} SOP ke ${dest}?`,
+      items.some((i) => i.dirs.length) && 'Folder di dalam ZIP ikut dibuat. Folder yang namanya sudah ada di sini dipakai.',
+      bad.length && `${bad.length} berkas dilewati karena bukan dokumen SOP yang valid.`,
+      other && `${other} berkas lain (bukan .sop) diabaikan.`
+    ].filter(Boolean).join('\n\n');
+    if (!(await ui.confirm(msg, { title: 'Unggah ke Pustaka Daring', ok: 'Unggah' }))) return;
+
+    importing = { done: 0, total: items.length };
+    const made = new Map();
+    const failures = [];
+    let ok = 0;
+    for (const it of items) {
+      try {
+        await F.uploadSop(it.doc, it.title, await folderFor(target, it.dirs, made));
+        ok++;
+      } catch (e) {
+        failures.push(`${it.name}: ${e.message}`);
+        if (e.code === 'full') break;
+      }
+      importing.done++;
+    }
+    importing = null;
+    if (target) expanded.add(target);
+    await refresh();
+    if (ok) onnotify(`${ok} SOP diunggah ke ${dest}`);
+    if (failures.length) {
+      const list = failures.slice(0, 8).join('\n') + (failures.length > 8 ? `\n…dan ${failures.length - 8} lainnya` : '');
+      ui.alert(`${failures.length} SOP gagal diunggah:\n\n${list}`, { title: ok ? 'Sebagian gagal diunggah' : 'Gagal mengunggah' });
+    }
+  }
+
+  /** Folder tujuan untuk berkas di `dirs` (jalur di dalam ZIP) di bawah `parent`; dibuat bila belum ada. */
+  async function folderFor(parent, dirs, made) {
+    for (const name of dirs) {
+      const key = `${parent}/${name.toLowerCase()}`;
+      let id = made.get(key);
+      if (!id) {
+        const existing = folders.find((f) => parents.get(f.id) === parent && f.name.toLowerCase() === name.toLowerCase());
+        if (existing && !canAdd(existing.id)) throw new Error(`folder "${name}" sudah ada dan bukan milik Anda`);
+        id = existing?.id ?? (await F.createFolder(name, parent));
+        made.set(key, id);
+      }
+      parent = id;
+    }
+    return parent;
   }
   function dragEnd() {
     clearTimeout(hoverTimer);
@@ -419,7 +495,8 @@
     return [
       { label: 'SOP baru di sini', run: () => newSop(id), disabled: !add },
       { label: 'Folder baru di sini', run: () => newFolder(id), disabled: !add },
-      { label: 'Unggah dokumen ini ke sini', run: () => onupload(id), disabled: !add || !cansave }
+      { label: 'Unggah dokumen ini ke sini', run: () => onupload(id), disabled: !add || !cansave },
+      { label: 'Unggah berkas .sop atau .zip ke sini…', run: () => pickFiles(id), disabled: !add || !!importing }
     ];
   }
   function folderMenu(f) {
@@ -587,6 +664,18 @@
     {/if}
     <button class="ib x" onclick={onclose} aria-label="Tutup" data-tip="Tutup"><Icon name="x" /></button>
   </header>
+  <input
+    type="file"
+    class="picker"
+    bind:this={picker}
+    hidden
+    multiple
+    accept=".sop,.json,.zip,application/json,application/zip"
+    onchange={(e) => {
+      const files = [...e.currentTarget.files];
+      if (files.length) importFiles(files, pickTarget);
+    }}
+  />
 
   {#if faculty.status === 'in'}
     {#if loadError}<p class="error">{loadError} <button class="link" onclick={refresh}>Coba lagi</button></p>{/if}
@@ -638,8 +727,12 @@
             {@render ib('upload', uploadTip, () => onupload(here), { disabled: !!uploadBlocked })}
             {@render ib('refresh', 'Muat ulang daftar', refresh)}
           </div>
+          {#if importing}<p class="progress" role="status">Mengunggah {importing.done + 1 > importing.total ? importing.total : importing.done + 1} dari {importing.total} SOP…</p>{/if}
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <ul class="list" class:drop={!searching && drag && dropAt === here} oncontextmenu={(e) => openMenu(e, hereItems(here))} {...(searching ? {} : dropzone(here))}>
+          {#if !drag && dropAt !== undefined}
+            <p class="filehint" aria-hidden="true">Lepaskan berkas .sop atau .zip untuk mengunggah ke {dropAt ? byId.get(dropAt)?.name : 'Utama'}</p>
+          {/if}
+          <ul class="list" class:drop={!searching && dropAt === here} oncontextmenu={(e) => openMenu(e, hereItems(here))} {...(searching ? {} : dropzone(here))}>
             {#each shownFolders as f (f.id)}
               {@const parent = parents.get(f.id)}
               <li class:drop={dropAt === f.id} class:dragging={drag?.item === f} draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
@@ -1104,11 +1197,34 @@
     background: var(--line);
   }
   .content {
+    position: relative;
     display: flex;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
     padding: 0.45rem 0.6rem;
+  }
+  .filehint {
+    position: absolute;
+    left: 50%;
+    bottom: 1rem;
+    transform: translateX(-50%);
+    z-index: 2;
+    margin: 0;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.2);
+  }
+  .progress {
+    margin: 0 0 0.4rem;
+    font-size: 0.85rem;
+    color: var(--muted);
   }
   .crumbs {
     display: flex;
