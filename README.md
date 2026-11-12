@@ -79,6 +79,10 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   Pilihan **Watermark** menambahkan teks miring dan samar di tengah setiap halaman: DRAFT, SALINAN TERKENDALI,
   SALINAN TIDAK TERKENDALI, RAHASIA, CONTOH, atau teks lain (maks. 60 karakter). Watermark hanya ada di PDF,
   tidak di pratinjau editor maupun ekspor lain.
+- **Properti dokumen** (menu Ekspor › Properti dokumen…, atau tombol di pratinjau PDF): judul, penulis, subjek, dan
+  kata kunci yang dimasukkan ke metadata berkas PDF, DOCX, dan XLSX. Disimpan di dalam berkas `.sop` (ikut Undo dan
+  Pustaka Daring). Kolom yang dikosongkan memakai bawaan: judul "SOP <nama>", penulis dari kepala institusi (tanpa
+  baris kementerian), subjek "Standar Operasional Prosedur Nomor <nomor>".
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
   halaman diagram alir menjadi tabel dengan kolom/baris berukuran sama persis seperti pratinjau. Teks semua sel bisa
   diedit di Word, dan diagramnya (simbol, garis alur berpanah, label, konektor antarhalaman) berupa **shape Word yang
@@ -262,7 +266,9 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
     "yesLabel": "Ya", "noLabel": "Tidak"
   }],
   // opsional: tautan butir Keterkaitan ke SOP Pustaka Daring, dicocokkan dengan teks butirnya
-  "links": [{ "text": "SOP Registrasi Mahasiswa", "sop": "<id SOP daring>", "title": "Registrasi Mahasiswa" }]
+  "links": [{ "text": "SOP Registrasi Mahasiswa", "sop": "<id SOP daring>", "title": "Registrasi Mahasiswa" }],
+  // opsional: properti dokumen untuk metadata berkas ekspor; kolom yang tidak ada memakai nilai bawaan
+  "meta": { "title": "...", "author": "...", "subject": "...", "keywords": "..." }
 }
 ```
 

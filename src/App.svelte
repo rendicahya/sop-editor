@@ -2,7 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
-  import { emptyDocument, parseDocumentText, normalizeDocument } from './lib/model.js';
+  import { emptyDocument, parseDocumentText, normalizeDocument, setMeta } from './lib/model.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf, sopFromPdf, PDF_PROTECT } from './lib/pdf.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
@@ -26,6 +26,7 @@
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
   import LinkSopDialog from './lib/LinkSopDialog.svelte';
+  import DocMetaDialog from './lib/DocMetaDialog.svelte';
   import { connectLinks } from './lib/sopLinks.js';
 
   let toast = $state(null); // { msg, action, n }
@@ -607,6 +608,7 @@
           const kept = normalizeDocument({ ...doc, links: old.links }).links;
           if (kept) doc.links = kept;
         }
+        if (!doc.meta && old.meta) doc.meta = old.meta;
         replaceDocument(doc, app.fileName, app.fileHandle);
         notify('Revisi dari AI diterapkan — periksa kembali isinya (Ctrl+Z untuk membatalkan)');
         return true;
@@ -913,6 +915,14 @@
     if (pdfDoc) buildPdf();
   }
 
+  // Properti dokumen (metadata berkas ekspor), disimpan di dokumen sehingga ikut tersimpan dan bisa di-Undo.
+  let metaOpen = $state(false);
+  function saveMeta(values) {
+    const before = JSON.stringify(app.doc.meta ?? null);
+    setMeta(app.doc, values);
+    if (JSON.stringify(app.doc.meta ?? null) !== before && pdfDoc) buildPdf();
+  }
+
   // Ekspor DOCX/XLSX dimuat terpisah agar tidak memperbesar muatan awal.
   let exportBusy = $state('');
   async function exportFile(kind) {
@@ -1152,6 +1162,9 @@
             <button role="menuitem" onclick={() => ((exportOpen = false), exportFile('png'))}>
               <strong>Gambar PNG (.zip)</strong><small>Satu gambar per halaman, 200 dpi</small>
             </button>
+            <button role="menuitem" class="sep" onclick={() => ((exportOpen = false), (metaOpen = true))}>
+              <strong>Properti dokumen…</strong><small>Judul, penulis, subjek, dan kata kunci berkas</small>
+            </button>
           </div>
         {/if}
       </div>
@@ -1313,6 +1326,7 @@
     watermark={pdfWatermark}
     busy={pdfBusy}
     onoptions={setPdfOptions}
+    onmeta={() => (metaOpen = true)}
     {pages}
     filename={`SOP-${slug(app.doc.header.namaSop)}.pdf`}
     fontNote={docFont === 'calibri' ? '' : 'Calibri belum tersedia, PDF memakai Carlito (ukuran identik)'}
@@ -1358,6 +1372,7 @@
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />
   <LinkSopDialog bind:req={linkPick} />
+  <DocMetaDialog doc={app.doc} bind:open={metaOpen} onsave={saveMeta} />
 
   {#if toast}
     {#key toast.n}

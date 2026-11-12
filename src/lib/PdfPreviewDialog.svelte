@@ -7,7 +7,7 @@
    * pdf: objek jsPDF hasil exportPdf; pages: tata letak (cadangan bila browser tak bisa menampilkan PDF).
    * protect, watermark: pilihan saat ini; onoptions({ protect?, watermark? }) membuat ulang PDF.
    */
-  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload, protect = 'none', watermark = '', busy = false, onoptions } = $props();
+  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload, protect = 'none', watermark = '', busy = false, onoptions, onmeta } = $props();
 
   // Watermark: '' (tanpa), salah satu WATERMARKS, atau 'custom' dengan teks bebas.
   let wmChoice = $state('');
@@ -120,6 +120,9 @@
         onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), applyCustom())}
       />
     {/if}
+    {#if onmeta}
+      <button type="button" class="btn ghost meta" onclick={onmeta} title="Judul, penulis, subjek, dan kata kunci di metadata PDF">Properti dokumen…</button>
+    {/if}
     {#if busy}<span class="busy">Membuat ulang PDF…</span>{/if}
   </div>
   {#if protect !== 'none'}
@@ -205,6 +208,10 @@
   }
   .opts .wm-text {
     width: min(18rem, 60vw);
+  }
+  .opts .meta {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.85rem;
   }
   .busy {
     color: var(--muted);

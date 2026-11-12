@@ -3,7 +3,7 @@
 // simbol, garis alur, dan label sebagai shape Word yang bisa diedit, diposisikan relatif terhadap halaman.
 import { zipSync, strToU8 } from 'fflate';
 import { layoutDocument, markerWidth, PT, PAGE } from './layout.js';
-import { formatTanggal } from './model.js';
+import { formatTanggal, officeCoreXml } from './model.js';
 import { parseRich, lineText, hasList, listMarker, plainText, sliceRich } from './richtext.js';
 
 const TW = 1440 / 25.4; // twip per mm
@@ -380,7 +380,6 @@ export async function exportDocx(doc) {
     `${XML}<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="720"/>` +
     `<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
 
-  const title = `SOP ${doc.header.namaSop || ''}`.trim();
   const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
   const files = {
     '[Content_Types].xml': strToU8(
@@ -399,11 +398,7 @@ export async function exportDocx(doc) {
       `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
       `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`
     ),
-    'docProps/core.xml': strToU8(
-      `${XML}<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" ` +
-      `xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${esc(title)}</dc:title>` +
-      `<dc:creator>SOP Editor</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created></cp:coreProperties>`
-    ),
+    'docProps/core.xml': strToU8(officeCoreXml(doc, now)),
     'word/_rels/document.xml.rels': strToU8(
       `${XML}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
       `<Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +

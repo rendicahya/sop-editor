@@ -133,6 +133,62 @@ export function setLink(doc, item, sop) {
   else delete doc.links;
 }
 
+// ---- Properti dokumen (metadata berkas ekspor) ----
+// doc.meta: { title?, author?, subject?, keywords? }. Kolom kosong memakai nilai bawaan dari kepala SOP.
+export const META_FIELDS = [
+  { key: 'title', label: 'Judul', max: 300 },
+  { key: 'author', label: 'Penulis', max: 300 },
+  { key: 'subject', label: 'Subjek', max: 500 },
+  { key: 'keywords', label: 'Kata kunci', max: 500 }
+];
+
+/** Nilai bawaan properti dokumen bila tidak diisi sendiri. */
+export function defaultMeta(doc) {
+  const h = doc.header ?? {};
+  const inst = String(h.institution ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
+  const nomor = String(h.nomor ?? '').trim();
+  return {
+    title: `SOP ${h.namaSop || ''}`.trim(),
+    // Baris pertama kepala (kementerian) dilewati bila ada unit di bawahnya.
+    author: (inst.length > 1 ? inst.slice(1) : inst).join(' '),
+    subject: `Standar Operasional Prosedur${nomor ? ` Nomor ${nomor}` : ''}`,
+    keywords: ''
+  };
+}
+
+/** Properti dokumen yang dipakai saat ekspor: isian sendiri, selain itu nilai bawaan. */
+export function docMeta(doc) {
+  const d = defaultMeta(doc);
+  const out = {};
+  for (const { key } of META_FIELDS) out[key] = doc.meta?.[key]?.trim() || d[key];
+  return out;
+}
+
+/** Menyimpan properti dokumen; kolom kosong kembali ke bawaan, `doc.meta` dihapus bila semuanya kosong. */
+export function setMeta(doc, values) {
+  const meta = {};
+  for (const { key, max } of META_FIELDS) {
+    const v = plainText(String(values?.[key] ?? '')).replace(/\s+/g, ' ').trim().slice(0, max);
+    if (v) meta[key] = v;
+  }
+  if (Object.keys(meta).length) doc.meta = meta;
+  else delete doc.meta;
+}
+
+/** Isi docProps/core.xml (DOCX/XLSX) dari properti dokumen. */
+export function officeCoreXml(doc, now) {
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const m = docMeta(doc);
+  const tag = (t, v) => (v ? `<${t}>${esc(v)}</${t}>` : '');
+  return (
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
+    `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" ` +
+    `xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">` +
+    tag('dc:title', m.title) + tag('dc:subject', m.subject) + tag('dc:creator', m.author || 'SOP Editor') + tag('cp:keywords', m.keywords) +
+    `<dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created></cp:coreProperties>`
+  );
+}
+
 /** Kolom langkah yang boleh berformat tebal/miring/garis bawah. */
 export const RICH_STEP = new Set(['kegiatan', 'kelengkapan', 'waktu', 'output', 'keterangan']);
 
@@ -259,6 +315,9 @@ export function normalizeDocument(raw) {
     .map((l) => ({ text: plain(l.text).trim(), sop: l.sop.slice(0, 64), title: plain(l.title).slice(0, 300) }))
     .filter((l, i, a) => a.findIndex((x) => linkKey(x.text) === linkKey(l.text)) === i);
   if (links.length) out.links = links;
+  if (raw.meta && typeof raw.meta === 'object') {
+    setMeta(out, Object.fromEntries(META_FIELDS.map(({ key }) => [key, plain(raw.meta[key])])));
+  }
   return out;
 }
 

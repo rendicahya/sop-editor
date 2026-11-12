@@ -4,7 +4,7 @@
 // PDF (layout.js) yang diperbesar K kali (teks 9 pt menjadi 11 pt), dan pemisah halaman cetak mengikuti PDF.
 import { unzipSync, zipSync, strToU8, strFromU8 } from 'fflate';
 import { layoutDocument, countLines, PT, PAGE } from './layout.js';
-import { formatTanggal } from './model.js';
+import { formatTanggal, officeCoreXml } from './model.js';
 import { parseRich, plainText, lineText } from './richtext.js';
 import templateUrl from '../assets/template-sop.xlsx?url';
 
@@ -469,7 +469,6 @@ export async function exportXlsx(doc) {
     `<definedName name="_xlnm.Print_Area" localSheetId="0">${cover.printArea}</definedName>` +
     `<definedName name="_xlnm.Print_Area" localSheetId="1">${flow.printArea}</definedName>` +
     `<definedName name="_xlnm.Print_Titles" localSheetId="1">Flowchart!$2:$3</definedName></definedNames><calcPr calcId="191029"/></workbook>`;
-  const title = `SOP ${doc.header.namaSop || ''}`.trim();
   const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
   const ct = 'application/vnd.openxmlformats-officedocument';
   const types =
@@ -491,11 +490,7 @@ export async function exportXlsx(doc) {
     '[Content_Types].xml': strToU8(types),
     '_rels/.rels': tpl['_rels/.rels'],
     'docProps/app.xml': tpl['docProps/app.xml'],
-    'docProps/core.xml': strToU8(
-      `${XML}<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" ` +
-      `xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${esc(title)}</dc:title>` +
-      `<dc:creator>SOP Editor</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created></cp:coreProperties>`
-    ),
+    'docProps/core.xml': strToU8(officeCoreXml(doc, now)),
     'xl/workbook.xml': strToU8(workbook),
     'xl/_rels/workbook.xml.rels': tpl['xl/_rels/workbook.xml.rels'],
     'xl/theme/theme1.xml': tpl['xl/theme/theme1.xml'],

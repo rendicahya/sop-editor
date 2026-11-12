@@ -3,6 +3,7 @@ import { layoutDocument, baseline, PAGE, PT } from './layout.js';
 import { pdfFont, registerFonts } from './fonts.js';
 import { zlibSync, unzlibSync, strToU8, strFromU8 } from 'fflate';
 import { slug } from './files.js';
+import { docMeta } from './model.js';
 
 /**
  * Perlindungan isi PDF:
@@ -22,7 +23,7 @@ function newPdf(doc, protect) {
     // Kata sandi pemilik acak: tidak ada yang bisa membuka PDF dengan hak penuh untuk mencabut larangan.
     ...(protect !== 'none' && { encryption: { userPassword: '', ownerPassword: randomPassword(), userPermissions: ['print'] } })
   });
-  pdf.setProperties({ title: `SOP ${doc.header.namaSop || ''}`.trim(), creator: 'SOP Editor' });
+  pdf.setProperties({ ...docMeta(doc), creator: 'SOP Editor' });
   return pdf;
 }
 
