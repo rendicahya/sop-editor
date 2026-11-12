@@ -1,5 +1,8 @@
 <script>
   import { onMount, tick, untrack } from 'svelte';
+
+  // Tahun pertama terbit; menjadi rentang (2026–2027, …) di tahun-tahun berikutnya.
+  const COPYRIGHT_YEAR = new Date().getFullYear() > 2026 ? `2026–${new Date().getFullYear()}` : '2026';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
   import { emptyDocument, parseDocumentText } from './lib/model.js';
@@ -1232,6 +1235,7 @@
             <button class="btn" onclick={open}>Buka</button>
             {@render libraryButton('btn')}
           </span>
+          {@render copyright()}
         </div>
       {:else}
         <div class="preview-scroll" bind:this={previewScroll}>
@@ -1339,8 +1343,13 @@
     {:else}
       <p>Memuat…</p>
     {/if}
+    {@render copyright()}
   </div>
 {/if}
+
+{#snippet copyright()}
+  <small class="copyright">© {COPYRIGHT_YEAR} Randy Cahya Wihandika</small>
+{/snippet}
 
 <AskDialog />
 
@@ -1349,4 +1358,5 @@
   <img src="./favicon.svg" alt="" width="56" height="56" />
   <strong>SOP Editor hanya bisa dibuka di laptop/PC</strong>
   <p>Aplikasi ini dirancang untuk layar lebar dengan mouse dan keyboard. Silakan buka alamat ini dari laptop atau PC.</p>
+  {@render copyright()}
 </div>

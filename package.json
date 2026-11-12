@@ -2,6 +2,8 @@
   "name": "sop-editor",
   "private": true,
   "version": "1.0.0",
+  "author": "Randy Cahya Wihandika",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
