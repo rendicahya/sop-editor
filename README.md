@@ -66,6 +66,11 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
 - **Pustaka Daring**: SOP bersama secara daring untuk akun @ub.ac.id atau @gmail.com yang didaftarkan admin. Lihat [Pustaka Daring](#pustaka-daring).
   Label hanya ada di pustaka (tidak masuk berkas .sop).
+- **Tautan Keterkaitan ke SOP lain**: klik kanan butir Keterkaitan › **Tautkan ke SOP lain…**, lalu pilih SOP dari
+  Pustaka Daring (butir kosong otomatis diisi nama SOP itu). Klik kanan judul bagian untuk **Tambah tautan ke SOP lain…**.
+  Butir yang tertaut diberi ikon tautan; klik ikonnya (atau menu **Buka …**) untuk membuka SOP itu di tab. Tautan
+  menempel pada teks butir, jadi tetap benar saat butir diurutkan ulang, tetapi terlepas bila teksnya diubah.
+  Tautan hanya berlaku di aplikasi; hasil cetak dan ekspor tetap berisi teks butirnya saja.
 - **Ekspor PDF** menampilkan PDF yang sebenarnya dulu dalam dialog pratinjau; berkas baru diunduh lewat tombol **Unduh PDF**.
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
   halaman diagram alir menjadi tabel dengan kolom/baris berukuran sama persis seperti pratinjau. Teks semua sel bisa
@@ -245,7 +250,9 @@ Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_
     "kelengkapan": "", "waktu": "", "output": "", "keterangan": "",
     "next": "auto | none | <id langkah>", "alt": "<id langkah> | null",
     "yesLabel": "Ya", "noLabel": "Tidak"
-  }]
+  }],
+  // opsional: tautan butir Keterkaitan ke SOP Pustaka Daring, dicocokkan dengan teks butirnya
+  "links": [{ "text": "SOP Registrasi Mahasiswa", "sop": "<id SOP daring>", "title": "Registrasi Mahasiswa" }]
 }
 ```
 
@@ -267,7 +274,6 @@ tetap apa adanya. Kolom lain selalu teks polos.
 - QR code verifikasi atau tanda tangan digital pada bagian pengesahan.
 
 **Pengelolaan berkas**
-- Keterkaitan antar-SOP yang bisa ditautkan ke dokumen lain di pustaka.
 - Berbagi via tautan (JSON terkompresi di URL) tanpa server.
 - Ekspor SVG per halaman; impor langkah dari Excel/CSV.
 
@@ -282,7 +288,6 @@ tetap apa adanya. Kolom lain selalu teks polos.
 **Kualitas & infrastruktur**
 - Uji otomatis untuk mesin tata letak (snapshot primitif per halaman) dan normalisasi JSON.
 - `svelte-check` dan lint di CI sebelum deploy.
-- Memperbarui GitHub Actions ke versi berbasis Node 24.
 - Subset font Carlito untuk memperkecil ukuran cache PWA.
 
 ## Lisensi

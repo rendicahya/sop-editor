@@ -12,10 +12,13 @@
   import { asStep } from './history.js';
   import { app } from './store.svelte.js';
   import { PT } from './layout.js';
-  import { newStep, removeStep, uid, SHAPES, SECTION_DEFS } from './model.js';
+  import { newStep, removeStep, uid, SHAPES, SECTION_DEFS, linkOf, setLink } from './model.js';
+  import { openLinkedSop, pickSop } from './sopLinks.js';
+  import { faculty } from './faculty.svelte.js';
   import { plainText, sliceRich, getSelection, setSelection } from './richtext.js';
   import RichField from './RichField.svelte';
   import ContextMenu from './ContextMenu.svelte';
+  import Icon from './Icon.svelte';
 
   // Lapisan isian di atas halaman (identitas dan diagram alir): teks diketik langsung pada posisinya di dokumen.
   // Teks isian dibuat transparan sehingga yang terlihat tetap hasil render SVG (sama dengan PDF);
@@ -522,13 +525,47 @@
     ];
   }
 
+  // ---- Tautan Keterkaitan ke SOP lain di Pustaka Daring ----
+  const linkable = (key) => key === 'keterkaitan';
+  const offline = $derived(faculty.status !== 'in');
+  const OFFLINE_TIP = 'Pustaka Daring sedang tidak bisa dihubungi';
+  const sopText = (title) => (/^sop\b/i.test(title.trim()) ? title.trim() : `SOP ${title.trim()}`);
+
+  /** Memilih SOP untuk butir `i` (null: butir baru di akhir). Butir kosong diisi nama SOP yang dipilih. */
+  async function linkItem(i = null) {
+    const list = items('keterkaitan');
+    const cur = i === null ? undefined : linkOf(app.doc, list[i]);
+    const sop = await pickSop(cur?.sop ?? null);
+    if (!sop) return;
+    asStep(() => {
+      if (i === null || i >= list.length) {
+        list.push(sopText(sop.title || 'tanpa judul'));
+        i = list.length - 1;
+      } else if (!plainText(list[i]).trim()) list[i] = sopText(sop.title || 'tanpa judul');
+      if (cur) setLink(app.doc, list[i], null);
+      setLink(app.doc, list[i], sop);
+    });
+  }
+
   function sectionItems(key, add = true) {
     const sec = app.doc.sections[key];
     return [
       { head: SECTION_DEFS.find((d) => d.key === key)?.title ?? '' },
       { label: 'Bernomor', icon: 'numbered', checked: sec.numbered, run: () => asStep(() => (sec.numbered = !sec.numbered)) },
       ...(key === 'kualifikasi' ? [{ label: 'Isi dari daftar pelaksana', icon: 'users', run: () => asStep(fromActors) }] : []),
-      ...(add ? [{ label: 'Tambah butir', icon: 'plus', run: () => addItem(key) }] : [])
+      ...(add ? [{ label: 'Tambah butir', icon: 'plus', run: () => addItem(key) }] : []),
+      ...(add && linkable(key) ? [{ label: 'Tambah tautan ke SOP lain…', icon: 'link', disabled: offline, title: offline ? OFFLINE_TIP : '', run: () => linkItem() }] : [])
+    ];
+  }
+
+  function linkMenu(f) {
+    if (!linkable(f.key)) return [];
+    const l = linkOf(app.doc, items(f.key)[f.index]);
+    return [
+      SEP,
+      ...(l ? [{ label: `Buka ${l.title || 'SOP tertaut'}`, icon: 'open', run: () => openLinkedSop(l.sop) }] : []),
+      { label: l ? 'Ganti tautan SOP…' : 'Tautkan ke SOP lain…', icon: 'link', disabled: offline, title: offline ? OFFLINE_TIP : '', run: () => linkItem(f.index) },
+      ...(l ? [{ label: 'Lepas tautan', icon: 'unlink', run: () => asStep(() => setLink(app.doc, items(f.key)[f.index], null)) }] : [])
     ];
   }
 
@@ -537,6 +574,7 @@
     const i = f.index;
     return [
       ...sectionItems(f.key, false),
+      ...linkMenu(f),
       SEP,
       { label: 'Tambah butir di atas', icon: 'addAbove', run: () => insertItem(f.key, i) },
       { label: 'Tambah butir di bawah', icon: 'addBelow', run: () => insertItem(f.key, i + 1) },
@@ -633,6 +671,7 @@
         onkeydown={(e) => onTextKey(e, f)}
       ></textarea>
     {:else if f.kind === 'item'}
+      {@const link = linkable(f.key) ? linkOf(app.doc, value(f)) : null}
       <div class="f-item" class:dragged={isDragged('item:' + f.key, f.index)} style={box({ ...f, size: 0, pad: 0 })} data-fid={f.id} data-drop="item:{f.key}" data-index={f.index}>
         <button class="grip" {...grip('item:' + f.key, f.index, 'butir')}>⠿</button>
         <RichField
@@ -645,6 +684,15 @@
           oninput={(v) => setValue(f, v)}
           onkeydown={(e) => onItemKey(e, f)}
         />
+        {#if link}
+          <button
+            class="f-link"
+            tabindex="-1"
+            title="Buka SOP tertaut: {link.title || 'tanpa judul'}"
+            aria-label="Buka SOP tertaut {link.title}"
+            onclick={() => openLinkedSop(link.sop)}><Icon name="link" size={10} /></button
+          >
+        {/if}
         <button class="f-del" tabindex="-1" title="Hapus butir" aria-label="Hapus butir" onclick={() => removeItem(f)}>✕</button>
       </div>
     {:else if f.kind === 'date'}
@@ -956,6 +1004,29 @@
     color: #fff;
     font-size: 9px;
     cursor: pointer;
+  }
+  /* Penanda butir Keterkaitan yang tertaut ke SOP lain; klik untuk membukanya. Tidak ikut tercetak. */
+  .f-link {
+    position: absolute;
+    right: calc(3 * var(--mm));
+    bottom: calc(0.3 * var(--mm));
+    display: grid;
+    place-items: center;
+    width: calc(3.4 * var(--mm));
+    height: calc(3.4 * var(--mm));
+    min-width: 13px;
+    min-height: 13px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: rgb(var(--edit) / 0.14);
+    color: rgb(var(--edit));
+    cursor: pointer;
+    z-index: 1;
+  }
+  .f-link:hover {
+    background: rgb(var(--edit));
+    color: #fff;
   }
   .f-item:hover .f-del,
   .f-item:focus-within .f-del,

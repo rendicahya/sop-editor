@@ -243,6 +243,20 @@ export async function listSops() {
   return { live: sorted.filter((s) => !s.deletedBy), bin: sorted.filter((s) => s.deletedBy) };
 }
 
+/** Satu SOP, atau null bila sudah dihapus, dipindah ke recycle bin, atau tidak boleh dilihat akun ini. */
+export async function getSop(id) {
+  const { F, db } = await load();
+  try {
+    const snap = await F.getDocFromServer(F.doc(db, 'sops', id));
+    if (!snap.exists()) return null;
+    const s = row(snap);
+    return s.deletedBy ? null : s;
+  } catch (e) {
+    if (e?.code === 'permission-denied') return null;
+    throw new Error(readable(e));
+  }
+}
+
 export async function listVersions(id) {
   const { F, db } = await load();
   const snap = await F.getDocsFromServer(F.collection(db, 'sops', id, 'versions'));

@@ -111,6 +111,28 @@ export function emptyDocument() {
   };
 }
 
+// ---- Tautan Keterkaitan ke SOP lain di Pustaka Daring ----
+// doc.links: [{ text, sop, title }]. Tautan menempel pada teks butir Keterkaitan (bukan nomor urutnya), jadi tetap
+// benar saat butir diurutkan ulang, disisipi, atau dihapus. Bila teks butir diubah, tautannya terlepas.
+
+/** Kunci pencocokan: teks polos, spasi dirapikan, tanpa beda huruf besar/kecil. */
+export const linkKey = (t) => plainText(String(t ?? '')).replace(/\s+/g, ' ').trim().toLowerCase();
+
+/** Tautan untuk butir Keterkaitan bertuliskan `item`, atau undefined. */
+export function linkOf(doc, item) {
+  const k = linkKey(item);
+  return k ? doc.links?.find((l) => linkKey(l.text) === k) : undefined;
+}
+
+/** Menautkan butir `item` ke `sop` ({ id, title }), atau melepasnya bila `sop` null. */
+export function setLink(doc, item, sop) {
+  const k = linkKey(item);
+  const rest = (doc.links ?? []).filter((l) => linkKey(l.text) !== k);
+  if (sop && k) rest.push({ text: plainText(item).trim(), sop: sop.id, title: sop.title ?? '' });
+  if (rest.length) doc.links = rest;
+  else delete doc.links;
+}
+
 /** Kolom langkah yang boleh berformat tebal/miring/garis bawah. */
 export const RICH_STEP = new Set(['kegiatan', 'kelengkapan', 'waktu', 'output', 'keterangan']);
 
@@ -229,7 +251,15 @@ export function normalizeDocument(raw) {
     if (route) steps[i].route = route;
   });
 
-  return { format: FORMAT, version: VERSION, header, sections, actors, steps };
+  const out = { format: FORMAT, version: VERSION, header, sections, actors, steps };
+  // Tautan yang butirnya sudah tidak ada dibuang.
+  const keys = new Set(sections.keterkaitan.items.map(linkKey));
+  const links = (Array.isArray(raw.links) ? raw.links : [])
+    .filter((l) => l && typeof l.sop === 'string' && l.sop && keys.has(linkKey(l.text)))
+    .map((l) => ({ text: plain(l.text).trim(), sop: l.sop.slice(0, 64), title: plain(l.title).slice(0, 300) }))
+    .filter((l, i, a) => a.findIndex((x) => linkKey(x.text) === linkKey(l.text)) === i);
+  if (links.length) out.links = links;
+  return out;
 }
 
 const EXIT_SIDES = ['bottom', 'left', 'right'];

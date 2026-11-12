@@ -2,7 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
-  import { emptyDocument, parseDocumentText } from './lib/model.js';
+  import { emptyDocument, parseDocumentText, normalizeDocument } from './lib/model.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf, sopFromPdf } from './lib/pdf.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
@@ -25,6 +25,8 @@
   import * as ui from './lib/ask.svelte.js';
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
+  import LinkSopDialog from './lib/LinkSopDialog.svelte';
+  import { connectLinks } from './lib/sopLinks.js';
 
   let toast = $state(null); // { msg, action, n }
   let toastTimer;
@@ -600,6 +602,11 @@
         const old = $state.snapshot(app.doc);
         const routes = new Map(old.steps.filter((s) => s.route).map((s) => [s.id, s.route]));
         for (const s of doc.steps) if (routes.has(s.id)) s.route = routes.get(s.id);
+        // Tautan Keterkaitan tidak dikenal AI: dipertahankan untuk butir yang teksnya tetap.
+        if (!doc.links && old.links) {
+          const kept = normalizeDocument({ ...doc, links: old.links }).links;
+          if (kept) doc.links = kept;
+        }
         replaceDocument(doc, app.fileName, app.fileHandle);
         notify('Revisi dari AI diterapkan — periksa kembali isinya (Ctrl+Z untuk membatalkan)');
         return true;
@@ -719,6 +726,27 @@
     }
     activeTab.remote = Faculty.remoteOf(sop);
   }
+
+  // Tautan Keterkaitan ke SOP lain di Pustaka Daring.
+  let linkPick = $state(null);
+  async function openLinkedSop(id) {
+    const opened = tabs.list.find((t) => t.remote?.id === id);
+    if (opened) return switchTab(opened.id);
+    if (faculty.status !== 'in') return ui.alert('Pustaka Daring tidak bisa dihubungi. Periksa koneksi internet, lalu coba lagi.');
+    let sop;
+    try {
+      sop = await Faculty.getSop(id);
+    } catch (e) {
+      return ui.alert(e.message);
+    }
+    if (!sop) return ui.alert('SOP yang ditautkan tidak ditemukan. Mungkin sudah dihapus, atau Anda tidak punya hak untuk melihatnya.');
+    openFacultySop(sop);
+    notify(`Dibuka: ${sop.title || 'SOP tanpa judul'}`);
+  }
+  connectLinks({
+    open: openLinkedSop,
+    pick: (current) => new Promise((resolve) => (linkPick = { current, exclude: activeTab?.remote?.id ?? null, resolve }))
+  });
 
   /** Daftar pustaka baru dimuat: tab yang terbuka mengikuti hak akses terbaru. */
   function onFacultyLoaded(live) {
@@ -1302,6 +1330,7 @@
   />
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />
+  <LinkSopDialog bind:req={linkPick} />
 
   {#if toast}
     {#key toast.n}
