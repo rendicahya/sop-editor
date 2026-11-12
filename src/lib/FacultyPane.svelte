@@ -763,6 +763,9 @@
                   <strong><Icon name="folder" size={15} /> {f.name} <em class:shared={F.isShared(f)}>{accessLabel(f)}</em></strong>
                   <small>{[searching && parent && `di ${pathText(parent)}`, folderInfo(f), `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}</small>
                 </button>
+                <span class="acts" role="group" aria-label="Tindakan folder">
+                  {@render ib('users', accessTip(f), () => openAccess('folders', f))}
+                </span>
               </li>
             {/each}
             {#each shownLive as s (s.id)}
