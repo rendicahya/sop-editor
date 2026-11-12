@@ -1334,6 +1334,19 @@
     display: inline-flex;
     flex: none;
   }
+  /* Tombol tindakan hanya tampil pada baris yang disorot mouse atau difokuskan keyboard, agar daftar panjang tidak
+     penuh tombol. Ruangnya tetap dipakai, jadi baris tidak bergeser. Layar sentuh (tanpa hover) selalu menampilkannya. */
+  @media (hover: hover) {
+    .list > li .acts {
+      opacity: 0;
+      transition: opacity 0.12s;
+    }
+    .list > li:hover .acts,
+    .list > li:focus-within .acts,
+    .list > li .acts:has(.on) {
+      opacity: 1;
+    }
+  }
   .btn:disabled {
     opacity: 0.45;
     cursor: default;
