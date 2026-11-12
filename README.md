@@ -193,6 +193,8 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
 - **Seret dan lepas** SOP atau folder ke folder di pohon, ke breadcrumb, atau ke area daftar untuk memindahkannya (di komputer; di layar sentuh pakai menu Pindahkan). Folder tertutup terbuka sendiri bila disorot sebentar.
 - Folder hanya bisa dihapus bila kosong. Isi yang tidak terlihat oleh penghapusnya, dan folder yang induknya tidak terlihat, tampil di tingkat utama.
 - SOP yang dihapus masuk **Recycle bin**. Pengguna hanya melihat, memulihkan, dan menghapus permanen yang dia hapus sendiri; admin menangani semuanya.
+- **Duplikat** menghasilkan SOP milik penyalinnya dengan hak akses yang sama seperti aslinya: semua yang bisa melihat
+  atau mengedit aslinya mendapat hak yang sama pada salinan (ditandai **Khusus** bila berbeda dari folder tempatnya).
 - **Riwayat lama bisa dihapus** oleh pemilik SOP dan admin: per versi (ikon tempat sampah di Riwayat), atau sekaligus
   lewat **Hapus riwayat lama…** dengan menyisakan sejumlah versi terbaru (0 = hapus seluruh riwayat; isi saat ini tetap
   utuh). Ruang yang dipakai versi itu dikembalikan ke kuota pustaka. Tidak bisa dibatalkan.
