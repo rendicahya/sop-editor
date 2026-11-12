@@ -9,6 +9,8 @@
   import * as ui from './ask.svelte.js';
   import { readSopFiles } from './sopFiles.js';
   import { dismiss } from './dismiss.js';
+  import { librarySort, sorted } from './librarySort.svelte.js';
+  import SortSelect from './SortSelect.svelte';
 
   /**
    * openIds: id SOP yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
@@ -122,7 +124,6 @@
   const pathText = (id) => pathOf(id).map((f) => f.name).join(' / ');
   const crumbs = $derived(pathOf(here));
 
-  const shownFolders = $derived(searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))).sort(byName) : childrenOf(here));
   /** Ringkasan isi folder untuk baris folder di panel kanan. */
   function folderInfo(f) {
     const subs = childrenOf(f.id).length;
@@ -172,7 +173,27 @@
     else return;
     e.preventDefault();
   }
-  const shownLive = $derived(live.filter((s) => (searching ? matches(s) : folderOf(s) === here)));
+  const shownLive = $derived(
+    sorted(live.filter((s) => (searching ? matches(s) : folderOf(s) === here)), librarySort.by, titleOf, (s) => s.updatedAt)
+  );
+  /** Waktu perubahan terakhir di dalam folder (termasuk subfolder), untuk urutan menurut tanggal. */
+  const activity = $derived.by(() => {
+    const out = new Map(folders.map((f) => [f.id, f.createdAt ?? 0]));
+    for (const s of live) {
+      for (let id = folderOf(s), n = 0; id && n < 100; id = parents.get(id), n++) {
+        if (s.updatedAt > (out.get(id) ?? 0)) out.set(id, s.updatedAt);
+      }
+    }
+    return out;
+  });
+  const shownFolders = $derived(
+    sorted(
+      searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))) : childrenOf(here),
+      librarySort.by,
+      (f) => f.name,
+      (f) => activity.get(f.id) ?? 0
+    )
+  );
   const counts = $derived.by(() => {
     const out = new Map();
     for (const s of live) out.set(folderOf(s), (out.get(folderOf(s)) ?? 0) + 1);
@@ -720,6 +741,7 @@
                 {/each}
               </nav>
             {/if}
+            <SortSelect />
             {#if here && !searching}
               {@render ib('users', accessTip(byId.get(here)), () => openAccess('folders', byId.get(here)))}
             {/if}

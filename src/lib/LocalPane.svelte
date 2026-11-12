@@ -3,6 +3,8 @@
   import * as ui from './ask.svelte.js';
   import Icon from './Icon.svelte';
   import { listEntries, putEntry, patchEntry, deleteEntry, cleanTags, haystack } from './library.js';
+  import { librarySort, sorted } from './librarySort.svelte.js';
+  import SortSelect from './SortSelect.svelte';
 
   /**
    * openIds: id tab yang sedang terbuka (= id entri pustaka), current: id tab aktif.
@@ -45,7 +47,8 @@
   const shown = $derived.by(() => {
     const q = query.trim().toLowerCase();
     const byTag = (e) => tag === null || (tag === '' ? !e.tags.length : e.tags.includes(tag));
-    return entries.filter((e) => byTag(e) && (!q || q.split(/\s+/).every((w) => e.text.includes(w))));
+    const found = entries.filter((e) => byTag(e) && (!q || q.split(/\s+/).every((w) => e.text.includes(w))));
+    return sorted(found, librarySort.by, titleOf, (e) => e.updated ?? 0);
   });
   // Pilihan untuk hapus sekaligus: hanya entri yang tampil dan tidak sedang terbuka di tab.
   const deletable = $derived(shown.filter((e) => !openIds.includes(e.id)));
@@ -193,6 +196,8 @@
         <button class="btn small danger" onclick={removePicked}>Hapus terpilih</button>
         <button class="link" onclick={() => (picked = [])}>Batal</button>
       {/if}
+      <span class="grow"></span>
+      <SortSelect />
     </div>
   {/if}
 
