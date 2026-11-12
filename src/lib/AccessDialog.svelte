@@ -72,32 +72,36 @@
     if (v !== 'none') rows.unshift({ who: F.EVERYONE, role: v });
   }
 
+  /** Menambahkan isian kotak email/grup ke daftar. Mengembalikan false bila isiannya tidak bisa ditambahkan. */
   function add(e) {
-    e.preventDefault();
+    e?.preventDefault();
     const typed = who.trim().replace(/\s+/g, ' ').toLowerCase();
     const group = groups.find((g) => groupLabel(g).toLowerCase() === typed || g.name.toLowerCase() === typed);
     const value = typed === EVERYONE_LABEL.toLowerCase() ? F.EVERYONE : group ? group.id : typed;
-    if (!value) return;
+    if (!value) return true;
     if (value !== F.EVERYONE && !group && !members.some((m) => m.email === value)) {
       error = typed.includes('@')
         ? `${typed} belum terdaftar sebagai anggota. Minta admin mendaftarkannya.`
         : `Tidak ada anggota atau grup bernama ${who.trim()}.`;
-      return;
+      return false;
     }
     if (value === owner) {
       error = 'Pemilik sudah otomatis bisa melihat dan mengedit.';
-      return;
+      return false;
     }
     error = '';
     const found = rows.find((r) => r.who === value);
     if (found) found.role = role;
     else rows.push({ who: value, role });
     who = '';
+    return true;
   }
 
   function save(e) {
     e.preventDefault();
     if (parent && follow) return onsave({ custom: false, ...F.inherited(parent, owner) });
+    // Email yang sudah diketik tapi belum ditambahkan dengan tombol + ikut disimpan, bukan diam-diam dibuang.
+    if (manage && who.trim() && !add()) return;
     const own = owner ? [owner] : [];
     const readers = [...own, ...rows.map((r) => r.who)];
     const editors = [...own, ...rows.filter((r) => r.role === 'edit').map((r) => r.who)];
@@ -153,7 +157,7 @@
 
       {#if manage && !(parent && follow)}
         <div class="add">
-          <input bind:value={who} list="access-members" placeholder="Email anggota atau nama grup" aria-label="Email anggota atau nama grup" onkeydown={(e) => e.key === 'Enter' && add(e)} />
+          <input bind:value={who} list="access-members" placeholder="Email anggota atau nama grup" aria-label="Email anggota atau nama grup" onkeydown={(e) => e.key === 'Enter' && who.trim() && add(e)} />
           <datalist id="access-members">
             {#each choices as c (c)}<option value={c}></option>{/each}
           </datalist>
