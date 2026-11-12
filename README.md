@@ -223,7 +223,9 @@ npx firebase login
 npx firebase deploy --only firestore:rules
 ```
 
-Lalu di Firebase Console, buat dokumen `members/<email-admin>` berisi kolom `role` = `admin`. Anggota lain didaftarkan dari tab **Admin** di aplikasi.
+Lalu di Firebase Console, buat dokumen `members/<email-admin>` berisi kolom `role` = `admin`. Anggota lain didaftarkan dari tab **Admin** di aplikasi; banyak email bisa ditempel sekaligus, dipisah koma, spasi,
+titik koma, atau baris baru (format "Nama &lt;email&gt;" juga diterima). Email yang sudah terdaftar tidak diubah perannya,
+hanya dimasukkan ke grup yang dipilih; alamat yang tidak sah dilewati setelah konfirmasi.
 
 Batasan akses ditegakkan oleh `firebase/firestore.rules`. Setelah mengubahnya, jalankan `npm test` di folder `firebase/` (perlu Java) lalu deploy ulang.
 
