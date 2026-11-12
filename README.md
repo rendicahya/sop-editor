@@ -31,6 +31,13 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   langkah yang tidak pernah dicapai, keputusan tanpa cabang ya/tidak, tujuan alur yang sudah dihapus, alur tanpa titik
   akhir atau yang berputar tanpa sampai ke Selesai, akhir alur yang simbolnya bukan Mulai/Selesai, kegiatan kosong,
   serta isian identitas penting (nama, nomor, tanggal, pengesah). Klik temuan untuk langsung menuju isiannya.
+  Saran tambahan: kolom Output kosong, kegiatan keputusan yang bukan pertanyaan, kegiatan yang ditulis dua kali,
+  pelaksana yang tampaknya sama tetapi ditulis berbeda (mis. "Kasubbag Akademik" dan "Kasubag. akademik"), dan istilah
+  di kolom Kelengkapan/Output yang ditulis berganti-ganti (mis. "Form Pendaftaran" dan "formulir pendaftaran").
+- **Pengingat tinjauan berkala**: SOP yang berlaku lebih dari 1–5 tahun (dipilih di panel Periksa, bawaan 2 tahun;
+  diingat per browser) sejak tanggal efektif atau tanggal revisi terakhir diberi peringatan "sebaiknya ditinjau ulang".
+  Di Pustaka Daring, SOP itu berlencana **Perlu ditinjau** dan bisa didaftar sekaligus lewat **Perlu ditinjau** di
+  bawah pohon folder.
 - **Estimasi total waktu**: kolom Waktu pada jalur utama (dari langkah 1 mengikuti cabang "ya", tanpa putaran balik)
   dijumlahkan dan ditampilkan di bar tab, mis. "24 hari 5 menit". Terbaca: "5 Menit", "1-2 hari kerja" (menjadi
   rentang), "1 jam 30 menit", "1x24 jam", "1/2 hari", "sehari", "maks. 3 hari". Satuan dijumlahkan terpisah (menit
@@ -79,6 +86,10 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   Pilihan **Watermark** menambahkan teks miring dan samar di tengah setiap halaman: DRAFT, SALINAN TERKENDALI,
   SALINAN TIDAK TERKENDALI, RAHASIA, CONTOH, atau teks lain (maks. 60 karakter). Watermark hanya ada di PDF,
   tidak di pratinjau editor maupun ekspor lain.
+- **PDF gabungan (buku SOP)**: beberapa SOP digabung menjadi satu PDF, diawali halaman daftar isi (nomor, nama, dan
+  halaman tiap SOP; klik untuk melompat) dan bookmark per SOP. Dari Pustaka Daring: pilih SOP atau folder lalu
+  **Gabung PDF** (isi folder dan subfoldernya ikut), atau klik kanan folder › **Gabung isinya jadi satu PDF…**. Dari
+  editor: menu Ekspor › **PDF gabungan semua tab…**. Pilihan Isi PDF dan Watermark berlaku juga di sini.
 - **Properti dokumen** (menu Ekspor › Properti dokumen…, atau tombol di pratinjau PDF): judul, penulis, subjek, dan
   kata kunci yang dimasukkan ke metadata berkas PDF, DOCX, dan XLSX. Disimpan di dalam berkas `.sop` (ikut Undo dan
   Pustaka Daring). Kolom yang dikosongkan memakai bawaan: judul "SOP <nama>", penulis dari kepala institusi (tanpa
@@ -185,6 +196,13 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
   lewat **Hapus riwayat lama…** dengan menyisakan sejumlah versi terbaru (0 = hapus seluruh riwayat; isi saat ini tetap
   utuh). Ruang yang dipakai versi itu dikembalikan ke kuota pustaka. Tidak bisa dibatalkan.
 - Setiap penyimpanan membuat versi di **Riwayat**. Bila SOP sudah diubah orang lain, penyimpan memilih: timpa, simpan sebagai salinan, atau batal. Pemegang hak Lihat hanya bisa menyimpan sebagai salinan.
+- **Bandingkan versi** (Riwayat › Bandingkan versi…, atau ikon bandingkan pada satu versi): dua versi mana pun, isi
+  terkini, atau isi tab yang belum disimpan dibandingkan berdampingan. Yang ditampilkan: identitas SOP, butir
+  ketentuan, pelaksana, dan kegiatan (ditambah, dihapus, diubah, atau dipindah) dengan perbedaan per kata.
+- **Kembalikan versi saat SOP terbuka di tab**: isi versi lama dimuat ke tab itu sebagai perubahan biasa (bisa di-Undo)
+  dan baru menjadi isi terkini setelah disimpan. Bila SOP tidak terbuka, versi lama langsung menjadi isi terkini.
+- **Peta keterkaitan** (di bawah pohon folder): diagram SOP yang saling tertaut lewat butir Keterkaitan. Arahkan ke
+  SOP untuk menyorot tautannya, klik untuk melihat yang dirujuk dan merujuknya, klik dua kali untuk membuka.
 - **Sedang diedit** hanya pemberitahuan, bukan kunci. Keterangan dari browser yang tertutup hilang sendiri setelah sekitar 5 menit.
 - Pemakaian dan batas penyimpanan hanya tampil untuk admin. Angkanya perkiraan dari ukuran JSON, belum termasuk indeks Firestore.
 
@@ -286,7 +304,6 @@ tetap apa adanya. Kolom lain selalu teks polos.
 - Pilihan ukuran kertas (A4/F4/Letter), margin, dan ukuran font.
 - Nomor halaman dan footer (mis. "Halaman 1 dari 3", nomor SOP) di setiap halaman.
 - Pemenggalan kata yang lebih baik untuk nama pelaksana yang panjang di kolom sempit.
-- Riwayat revisi (daftar tanggal dan ringkasan perubahan).
 - QR code verifikasi atau tanda tangan digital pada bagian pengesahan.
 
 **Pengelolaan berkas**

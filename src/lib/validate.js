@@ -1,10 +1,33 @@
 // Pemeriksa dokumen: alur diagram (langkah tak terjangkau, keputusan tanpa cabang, alur tanpa akhir)
 // dan isian penting yang kosong. Tiap temuan membawa `ref` = data-field isian di halaman untuk dituju.
 import { plainText } from './richtext.js';
-import { SECTION_DEFS } from './model.js';
+import { SECTION_DEFS, formatTanggal, todayIso } from './model.js';
 
-/** level: 'error' (salah/akan tercetak keliru), 'warn' (sebaiknya diperbaiki), 'info' (saran). */
-export function checkDocument(doc) {
+// Singkatan yang sering ditulis berganti-ganti dengan bentuk panjangnya.
+const ABBR = {
+  form: 'formulir', mhs: 'mahasiswa', dospem: 'dosen pembimbing', ttd: 'tanda tangan', kaprodi: 'ketua program studi',
+  sk: 'surat keputusan', dok: 'dokumen', no: 'nomor', tgl: 'tanggal', thn: 'tahun', email: 'email', bag: 'bagian',
+  subbag: 'subbagian', subag: 'subbagian', kasubbag: 'kepala subbagian', kasubag: 'kepala subbagian', kabag: 'kepala bagian', wd: 'wakil dekan', sekprodi: 'sekretaris program studi'
+};
+
+/** Kunci pembanding istilah: tanpa beda huruf besar/kecil, tanda baca, spasi ganda, dan singkatan umum. */
+export function termKey(t) {
+  return plainText(String(t ?? ''))
+    .toLowerCase()
+    .replace(/[-_.'’`]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(' ')
+    .map((w) => ABBR[w] ?? w)
+    .join(' ');
+}
+const tidy = (t) => plainText(String(t ?? '')).replace(/\s+/g, ' ').trim();
+
+/**
+ * level: 'error' (salah/akan tercetak keliru), 'warn' (sebaiknya diperbaiki), 'info' (saran).
+ * opts.reviewYears: SOP yang berlaku lebih lama dari ini (sejak tanggal efektif/revisi) diberi saran ditinjau.
+ */
+export function checkDocument(doc, { reviewYears = 0, today = todayIso() } = {}) {
   const out = [];
   const add = (level, msg, ref = null) => out.push({ level, msg, ref });
   const hd = doc.header;
@@ -22,6 +45,13 @@ export function checkDocument(doc) {
   if (!hd.disahkanJabatan?.trim()) add('warn', 'Jabatan pengesah masih kosong.', 'h:disahkanJabatan');
   if (!hd.disahkanNama?.trim()) add('warn', 'Nama pengesah masih kosong.', 'h:disahkanNama');
   if (!hd.disahkanNip?.trim()) add('info', 'NIP pengesah masih kosong.', 'h:disahkanNip');
+  if (reviewYears) {
+    const since = [hd.tglEfektif, hd.tglRevisi].filter(iso).sort().at(-1);
+    if (since && `${Number(since.slice(0, 4)) + reviewYears}${since.slice(4)}` <= today) {
+      const what = since === hd.tglRevisi ? 'Revisi terakhir' : 'SOP berlaku sejak';
+      add('warn', `${what} ${formatTanggal(since)}, sudah lebih dari ${reviewYears} tahun: sebaiknya ditinjau ulang, lalu perbarui tanggal revisi.`, 'd:tglRevisi');
+    }
+  }
 
   for (const def of SECTION_DEFS) {
     const sec = doc.sections[def.key];
@@ -37,6 +67,10 @@ export function checkDocument(doc) {
     const name = a.name.trim();
     if (!name) add('warn', `Nama pelaksana ke-${i + 1} masih kosong.`, 'a:' + a.id);
     else if (names.has(name.toLowerCase())) add('warn', `Pelaksana "${name}" ditulis dua kali.`, 'a:' + a.id);
+    else {
+      const twin = doc.actors.slice(0, i).find((b) => b.name.trim() && termKey(b.name) === termKey(name));
+      if (twin) add('warn', `Pelaksana "${name}" dan "${twin.name.trim()}" tampaknya sama, hanya ditulis berbeda.`, 'a:' + a.id);
+    }
     names.set(name.toLowerCase(), a.id);
     const used = doc.steps.some((s) => s.actor === a.id || s.with?.includes(a.id));
     if (!used) add('info', `Pelaksana "${name || `ke-${i + 1}`}" tidak punya kegiatan.`, 'a:' + a.id);
@@ -111,6 +145,38 @@ export function checkDocument(doc) {
     if (s.shape === 'terminator' && i > 0 && outs[i].length && ins[i].length)
       add('warn', `${label(i)}: simbol Mulai/Selesai berada di tengah alur.`, sy(i));
   });
+
+  // Kelengkapan isian per langkah.
+  const seenKegiatan = new Map();
+  steps.forEach((s, i) => {
+    if (s.shape === 'terminator') return;
+    if (!plainText(s.output).trim()) add('info', `${label(i)}: kolom Output masih kosong.`, `st:${s.id}:output`);
+    const k = plainText(s.kegiatan).trim();
+    if (s.shape === 'decision' && k && !/\?\s*$/.test(k)) add('info', `${label(i)}: kegiatan keputusan sebaiknya berupa pertanyaan (diakhiri "?").`, `st:${s.id}:kegiatan`);
+    const kk = termKey(k);
+    if (kk && seenKegiatan.has(kk)) add('info', `${label(i)}: kegiatannya sama dengan langkah ${seenKegiatan.get(kk) + 1}.`, `st:${s.id}:kegiatan`);
+    else if (kk) seenKegiatan.set(kk, i);
+  });
+
+  // Istilah yang sama tetapi ditulis berbeda di kolom Kelengkapan dan Output, mis. "Form Pendaftaran" dan "formulir pendaftaran".
+  const terms = new Map(); // kunci → Map(tulisan → ref pertama)
+  steps.forEach((s) => {
+    for (const f of ['kelengkapan', 'output']) {
+      for (const part of plainText(s[f] ?? '').split(/[,;\n]+/)) {
+        const t = tidy(part);
+        const k = termKey(t);
+        if (!k) continue;
+        if (!terms.has(k)) terms.set(k, new Map());
+        const forms = terms.get(k);
+        if (!forms.has(t)) forms.set(t, `st:${s.id}:${f}`);
+      }
+    }
+  });
+  for (const forms of terms.values()) {
+    if (forms.size < 2) continue;
+    const list = [...forms.keys()];
+    add('info', `Istilah ditulis berbeda: ${list.map((t) => `"${t}"`).join(', ')}. Samakan penulisannya.`, forms.get(list[1]));
+  }
 
   const rank = { error: 0, warn: 1, info: 2 };
   return out.sort((a, b) => rank[a.level] - rank[b.level]);

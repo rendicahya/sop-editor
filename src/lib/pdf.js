@@ -14,7 +14,8 @@ import { docMeta } from './model.js';
  */
 export const PDF_PROTECT = ['none', 'lock', 'image'];
 
-function newPdf(doc, protect) {
+/** `meta`: { title, author, subject, keywords } untuk properti PDF. */
+function newPdf(meta, protect) {
   const pdf = new jsPDF({
     unit: 'mm',
     format: 'a4',
@@ -23,9 +24,41 @@ function newPdf(doc, protect) {
     // Kata sandi pemilik acak: tidak ada yang bisa membuka PDF dengan hak penuh untuk mencabut larangan.
     ...(protect !== 'none' && { encryption: { userPassword: '', ownerPassword: randomPassword(), userPermissions: ['print'] } })
   });
-  pdf.setProperties({ ...docMeta(doc), creator: 'SOP Editor' });
+  pdf.setProperties({ ...meta, creator: 'SOP Editor' });
   return pdf;
 }
+
+/** Penggambar halaman SOP ke `pdf` sesuai mode perlindungan; halaman pertama bawaan jsPDF dipakai lebih dulu. */
+async function pageWriter(pdf, protect, wm, vectorFonts) {
+  let used = false;
+  const images = new Map();
+  const png = protect === 'image' ? await import('./png.js') : null;
+  if (png) await png.loadDocFonts();
+  pdf.setLineJoin('miter');
+  if (!png || vectorFonts) registerFonts(pdf);
+  const next = () => {
+    if (used) pdf.addPage('a4', 'landscape');
+    used = true;
+    return pdf.getNumberOfPages();
+  };
+  return {
+    next,
+    /** Menambah satu halaman tata letak (layout.js). */
+    async page(page) {
+      next();
+      if (png) {
+        const canvas = await png.renderPage(page, images, IMAGE_DPI);
+        if (wm) paintWatermark(canvas, page, wm, png.FONT);
+        pdf.addImage(canvas, 'PNG', 0, 0, page.w, page.h, undefined, 'FAST');
+      } else {
+        for (const it of page.items) drawItem(pdf, it);
+        if (wm) drawWatermark(pdf, page, wm);
+      }
+    }
+  };
+}
+
+const cleanWatermark = (w) => String(w ?? '').replace(/\s+/g, ' ').trim();
 
 function randomPassword() {
   const a = new Uint8Array(24);
@@ -86,29 +119,130 @@ function paintWatermark(canvas, page, text, font) {
 
 /** opts: { protect: lihat PDF_PROTECT, watermark: teks (kosong = tanpa watermark) }. */
 export async function exportPdf(doc, { protect = 'none', watermark = '' } = {}) {
-  const pages = layoutDocument(doc);
-  const pdf = newPdf(doc, protect);
-  const wm = watermark.replace(/\s+/g, ' ').trim();
-  if (protect === 'image') {
-    const { renderPage, loadDocFonts, FONT } = await import('./png.js');
-    await loadDocFonts();
-    const images = new Map();
-    for (let i = 0; i < pages.length; i++) {
-      if (i > 0) pdf.addPage('a4', 'landscape');
-      const canvas = await renderPage(pages[i], images, IMAGE_DPI);
-      if (wm) paintWatermark(canvas, pages[i], wm, FONT);
-      pdf.addImage(canvas, 'PNG', 0, 0, pages[i].w, pages[i].h, undefined, 'FAST');
-    }
-    return pdf;
-  }
-  pdf.setLineJoin('miter');
-  registerFonts(pdf);
-  pages.forEach((page, i) => {
-    if (i > 0) pdf.addPage('a4', 'landscape');
-    for (const it of page.items) drawItem(pdf, it);
-    if (wm) drawWatermark(pdf, page, wm);
-  });
+  const pdf = newPdf(docMeta(doc), protect);
+  const w = await pageWriter(pdf, protect, cleanWatermark(watermark), false);
+  for (const page of layoutDocument(doc)) await w.page(page);
   if (protect === 'none') attachSop(pdf, doc);
+  return pdf;
+}
+
+// ---- Buku SOP: beberapa SOP dalam satu PDF, diawali daftar isi ----
+const TOC = { x: 20, right: 277, top: 18, bottom: 192, cols: [12, 70], size: 10 };
+
+/**
+ * Menggabungkan `docs` (dokumen SOP, berurutan) menjadi satu PDF dengan halaman daftar isi yang bisa diklik dan
+ * bookmark per SOP. `title`: judul buku. opts sama dengan exportPdf; data SOP tidak disisipkan.
+ */
+export async function exportPdfBook(docs, title, { protect = 'none', watermark = '' } = {}) {
+  const first = docs[0] ? docMeta(docs[0]) : {};
+  const pdf = newPdf({ title, author: first.author ?? '', subject: `Kumpulan ${docs.length} Standar Operasional Prosedur`, keywords: '' }, protect);
+  const wm = cleanWatermark(watermark);
+  const w = await pageWriter(pdf, protect, wm, true);
+  const layouts = docs.map((d) => layoutDocument(d));
+  const font = pdfFont();
+
+  // Baris daftar isi: tinggi tiap baris mengikuti jumlah baris nama SOP.
+  const lh = TOC.size * PT * 1.3;
+  const nameX = TOC.x + TOC.cols[0] + TOC.cols[1];
+  const nameW = TOC.right - 22 - nameX;
+  pdf.setFont(font, 'normal');
+  pdf.setFontSize(TOC.size);
+  const rows = docs.map((d, i) => {
+    const name = pdf.splitTextToSize(d.header.namaSop?.trim() || 'SOP tanpa judul', nameW);
+    const nomor = pdf.splitTextToSize(d.header.nomor?.trim() || '—', TOC.cols[1] - 4);
+    return { i, name, nomor, h: Math.max(name.length, nomor.length) * lh + 2.6 };
+  });
+  // Pembagian baris ke halaman daftar isi: halaman pertama memuat judul buku, berikutnya hanya kepala tabel.
+  const tocPages = [[]];
+  let y = 58;
+  for (const r of rows) {
+    if (y + r.h > TOC.bottom && tocPages.at(-1).length) {
+      tocPages.push([]);
+      y = 36;
+    }
+    tocPages.at(-1).push(r);
+    y += r.h;
+  }
+  const starts = [];
+  let p = tocPages.length + 1;
+  for (const l of layouts) {
+    starts.push(p);
+    p += l.length;
+  }
+  const total = p - 1;
+
+  const tableHead = (y0) => {
+    pdf.setFont(font, 'bold');
+    pdf.setFontSize(TOC.size);
+    pdf.setTextColor('#000000');
+    pdf.text('No', TOC.x, y0);
+    pdf.text('Nomor SOP', TOC.x + TOC.cols[0], y0);
+    pdf.text('Nama SOP', nameX, y0);
+    pdf.text('Halaman', TOC.right, y0, { align: 'right' });
+    pdf.setDrawColor('#000000');
+    pdf.setLineWidth(0.3);
+    pdf.line(TOC.x, y0 + 2, TOC.right, y0 + 2);
+    return y0 + 2;
+  };
+  const tocPage = { w: 297, h: 210 };
+  tocPages.forEach((list, k) => {
+    w.next();
+    let y0;
+    if (k === 0) {
+      pdf.setFont(font, 'bold');
+      pdf.setFontSize(18);
+      pdf.setTextColor('#000000');
+      const heading = pdf.splitTextToSize(title, TOC.right - TOC.x);
+      pdf.text(heading.slice(0, 2), tocPage.w / 2, 28, { align: 'center' });
+      pdf.setFont(font, 'normal');
+      pdf.setFontSize(10);
+      pdf.setTextColor('#555555');
+      pdf.text(`${docs.length} SOP · ${total} halaman`, tocPage.w / 2, 28 + Math.min(2, heading.length) * 18 * PT * 1.2 + 1, { align: 'center' });
+      pdf.setFont(font, 'bold');
+      pdf.setFontSize(12);
+      pdf.setTextColor('#000000');
+      pdf.text('DAFTAR ISI', TOC.x, 50);
+      y0 = tableHead(56) + 0.4;
+    } else {
+      pdf.setFont(font, 'bold');
+      pdf.setFontSize(12);
+      pdf.setTextColor('#000000');
+      pdf.text('DAFTAR ISI (lanjutan)', TOC.x, TOC.top + 6);
+      y0 = tableHead(32) + 0.4;
+    }
+    for (const r of list) {
+      const base = y0 + 1.3 + TOC.size * PT * 0.85;
+      pdf.setFont(font, 'normal');
+      pdf.setFontSize(TOC.size);
+      pdf.setTextColor('#000000');
+      pdf.text(`${r.i + 1}.`, TOC.x, base);
+      pdf.text(r.nomor, TOC.x + TOC.cols[0], base, { lineHeightFactor: 1.3 });
+      pdf.setTextColor('#1d4ed8');
+      pdf.text(r.name, nameX, base, { lineHeightFactor: 1.3 });
+      pdf.setTextColor('#000000');
+      pdf.text(String(starts[r.i]), TOC.right, base, { align: 'right' });
+      pdf.link(TOC.x, y0, TOC.right - TOC.x, r.h, { pageNumber: starts[r.i] });
+      y0 += r.h;
+      pdf.setDrawColor('#cccccc');
+      pdf.setLineWidth(0.15);
+      pdf.line(TOC.x, y0, TOC.right, y0);
+    }
+    if (wm) drawWatermark(pdf, tocPage, wm);
+  });
+
+  for (const l of layouts) for (const page of l) await w.page(page);
+
+  // Plugin outline jsPDF menulis judul bookmark tanpa enkripsi, sehingga rusak pada PDF terkunci; judul dienkripsi di sini.
+  const outline = pdf.outline;
+  const objStart = outline.objStart;
+  let node = null;
+  outline.objStart = function (n) {
+    node = n;
+    return objStart.call(this, n);
+  };
+  outline.makeString = (val) => `(${pdf.internal.pdfEscape(pdf.internal.getEncryptor(node.id)(val))})`;
+  pdf.outline.add(null, 'Daftar Isi', { pageNumber: 1 });
+  docs.forEach((d, i) => pdf.outline.add(null, `${i + 1}. ${d.header.namaSop?.trim() || 'SOP tanpa judul'}`, { pageNumber: starts[i] }));
   return pdf;
 }
 
