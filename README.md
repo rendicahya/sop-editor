@@ -76,6 +76,9 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   dengan izin cetak saja; salin dan ubah dilarang di Acrobat, Chrome, Edge, tetapi sebagian penampil seperti Firefox
   mengabaikannya), atau **Gambar** (tiap halaman menjadi gambar 250 dpi sehingga teks sama sekali tidak bisa diseleksi;
   berkas lebih besar). PDF yang dikunci atau berupa gambar tidak berisi data SOP, jadi tidak bisa dibuka lagi di editor.
+  Pilihan **Watermark** menambahkan teks miring dan samar di tengah setiap halaman: DRAFT, SALINAN TERKENDALI,
+  SALINAN TIDAK TERKENDALI, RAHASIA, CONTOH, atau teks lain (maks. 60 karakter). Watermark hanya ada di PDF,
+  tidak di pratinjau editor maupun ekspor lain.
 - **Ekspor DOCX** (Word) yang bisa diedit: halaman identitas menjadi tabel Word biasa (daftar bernomor asli), dan
   halaman diagram alir menjadi tabel dengan kolom/baris berukuran sama persis seperti pratinjau. Teks semua sel bisa
   diedit di Word, dan diagramnya (simbol, garis alur berpanah, label, konektor antarhalaman) berupa **shape Word yang

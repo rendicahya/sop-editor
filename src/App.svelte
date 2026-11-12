@@ -883,31 +883,34 @@
   let pdfSaved;
   // Perlindungan isi PDF (lihat PDF_PROTECT), diingat per browser.
   let pdfProtect = $state(PDF_PROTECT.includes(getPref('pdfProtect')) ? getPref('pdfProtect') : 'none');
+  // Teks watermark (kosong: tanpa watermark), juga diingat per browser.
+  let pdfWatermark = $state(getPref('pdfWatermark') ?? '');
   let pdfBusy = $state(false);
-  async function pdf() {
-    if (pdfBusy) return;
+  let pdfRun = 0;
+  async function buildPdf() {
+    const run = ++pdfRun;
     pdfBusy = true;
     try {
-      pdfSaved = fileMark();
-      pdfDoc = await exportPdf(app.doc, pdfProtect);
+      const out = await exportPdf(app.doc, { protect: pdfProtect, watermark: pdfWatermark });
+      if (run === pdfRun) pdfDoc = out; // pilihan diganti lagi selagi dibuat: hasil lama dibuang
     } catch (e) {
       ui.alert('Gagal membuat PDF: ' + e.message);
     } finally {
-      pdfBusy = false;
+      if (run === pdfRun) pdfBusy = false;
     }
   }
-  async function setPdfProtect(mode) {
-    pdfProtect = mode;
-    setPref('pdfProtect', mode);
-    if (!pdfDoc) return;
-    pdfBusy = true;
-    try {
-      pdfDoc = await exportPdf(app.doc, mode);
-    } catch (e) {
-      ui.alert('Gagal membuat PDF: ' + e.message);
-    } finally {
-      pdfBusy = false;
-    }
+  function pdf() {
+    if (pdfBusy) return;
+    pdfSaved = fileMark();
+    buildPdf();
+  }
+  /** Pilihan di dialog pratinjau berubah: diingat, lalu PDF dibuat ulang. */
+  function setPdfOptions({ protect = pdfProtect, watermark = pdfWatermark }) {
+    pdfProtect = protect;
+    pdfWatermark = watermark.trim().slice(0, 60);
+    setPref('pdfProtect', pdfProtect);
+    setPref('pdfWatermark', pdfWatermark);
+    if (pdfDoc) buildPdf();
   }
 
   // Ekspor DOCX/XLSX dimuat terpisah agar tidak memperbesar muatan awal.
@@ -1307,8 +1310,9 @@
     bind:pdf={pdfDoc}
     ondownload={() => pdfSaved?.()}
     protect={pdfProtect}
+    watermark={pdfWatermark}
     busy={pdfBusy}
-    onprotect={setPdfProtect}
+    onoptions={setPdfOptions}
     {pages}
     filename={`SOP-${slug(app.doc.header.namaSop)}.pdf`}
     fontNote={docFont === 'calibri' ? '' : 'Calibri belum tersedia, PDF memakai Carlito (ukuran identik)'}

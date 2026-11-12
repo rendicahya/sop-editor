@@ -4,7 +4,7 @@ import { zipSync } from 'fflate';
 import { layoutDocument, baseline, PT } from './layout.js';
 
 const DPI = 200;
-const FONT = 'SOPDoc, Calibri, Carlito, sans-serif';
+export const FONT = 'SOPDoc, Calibri, Carlito, sans-serif';
 
 const loadImage = (src) =>
   new Promise((resolve, reject) => {
