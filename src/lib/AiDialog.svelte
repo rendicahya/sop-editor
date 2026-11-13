@@ -2,7 +2,7 @@
   import Icon from './Icon.svelte';
   import { aiPrompt, aiImportPrompt, aiRevisePrompt } from './aiPrompt.js';
   import * as ui from './ask.svelte.js';
-  import { DEFAULT_PENGESAH } from './model.js';
+  import { DEFAULTS } from './appDefaults.svelte.js';
   import { app } from './store.svelte.js';
   import { dismiss } from './dismiss.js';
 
@@ -110,7 +110,7 @@
       <p>Buka chat baru di asisten AI, lalu lampirkan berkas SOP lama (unggah PDF/DOCX atau foto setiap halaman).</p>
       <label class="check">
         <input type="checkbox" bind:checked={draft.update} />
-        <span>Perbarui kop instansi dan pengesah ke bawaan saat ini ({DEFAULT_PENGESAH.disahkanNama})</span>
+        <span>Perbarui kop instansi dan pengesah ke bawaan saat ini ({DEFAULTS.disahkanNama})</span>
       </label>
       <label class="field">
         <textarea rows="4" aria-label="Catatan untuk AI (opsional)" bind:value={draft.note} placeholder="Catatan untuk AI (opsional). Contoh: tanggal pembuatan diganti hari ini; pelaksana “Kasubbag” diganti “Kepala Subbagian Akademik”."></textarea>

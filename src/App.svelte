@@ -29,6 +29,7 @@
   import * as ui from './lib/ask.svelte.js';
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
+  import { applyDefaults } from './lib/appDefaults.svelte.js';
   import LinkSopDialog from './lib/LinkSopDialog.svelte';
   import DocMetaDialog from './lib/DocMetaDialog.svelte';
   import { connectLinks } from './lib/sopLinks.js';
@@ -875,6 +876,10 @@
   $effect(() => {
     if (faculty.status !== 'in') return void (notes.mine = []);
     return Faculty.watchMentions((list) => (notes.mine = list));
+  });
+  // Bawaan SOP baru (kop, nomor, pengesah) yang diatur admin; tetap memakai salinan di browser saat luring.
+  $effect(() => {
+    if (faculty.status === 'in') return Faculty.watchDefaults(applyDefaults);
   });
   connectLinks({
     open: openLinkedSop,

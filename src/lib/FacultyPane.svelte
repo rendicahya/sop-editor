@@ -16,6 +16,7 @@
   import LinkMapDialog from './LinkMapDialog.svelte';
   import { review, setReviewYears, REVIEW_CHOICES, reviewSince, isReviewDue } from './review.svelte.js';
   import { formatTanggal } from './model.js';
+  import { DEFAULTS, BUILTIN_DEFAULTS, DEFAULT_FIELDS, defaultsMeta, applyDefaults } from './appDefaults.svelte.js';
   import { notes, copyLink, markMentionsSeen, unseenMentions } from './comments.svelte.js';
 
   /**
@@ -1097,6 +1098,43 @@
   const uploadTip = $derived(uploadBlocked || (here ? `Unggah dokumen ini ke ${byId.get(here).name}` : 'Unggah dokumen ini ke Utama'));
 
   // ---- Admin ----
+
+  // Bawaan SOP baru: formulir mengikuti nilai di server selama admin belum mengetiknya.
+  const pickDefaults = (d) => Object.fromEntries(DEFAULT_FIELDS.map(([k]) => [k, d[k] ?? '']));
+  let dflt = $state(pickDefaults(DEFAULTS));
+  let dfltEdited = $state(false);
+  let dfltBusy = $state(false);
+  $effect(() => {
+    const cur = pickDefaults(DEFAULTS);
+    if (!untrack(() => dfltEdited)) dflt = cur;
+  });
+  // Spasi di tepi dibuang; kop tetap boleh beberapa baris.
+  const tidyDefaults = (d) =>
+    Object.fromEntries(DEFAULT_FIELDS.map(([k, , max]) => [k, (k === 'institution' ? d[k].split('\n').map((l) => l.trim()).filter(Boolean).join('\n') : d[k].trim()).slice(0, max)]));
+  const dfltDirty = $derived(DEFAULT_FIELDS.some(([k]) => tidyDefaults(dflt)[k] !== DEFAULTS[k]));
+  async function saveDefaults(e) {
+    e?.preventDefault();
+    if (!dfltDirty || dfltBusy) return;
+    dfltBusy = true;
+    try {
+      const values = tidyDefaults(dflt);
+      await F.saveDefaults(values);
+      applyDefaults({ ...values, updatedAt: Date.now(), updatedByName: faculty.user.name });
+      dfltEdited = false;
+      dflt = pickDefaults(DEFAULTS); // tampilkan versi yang sudah dirapikan
+      onnotify('Bawaan SOP baru disimpan. Berlaku untuk SOP yang dibuat setelah ini.');
+    } catch (err) {
+      ui.alert(err.message);
+    } finally {
+      dfltBusy = false;
+    }
+  }
+  function resetDefaultsForm(src) {
+    dflt = pickDefaults(src);
+    dfltEdited = src !== DEFAULTS;
+  }
+  const dfltWhen = $derived(defaultsMeta.updatedAt ? new Date(defaultsMeta.updatedAt).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '');
+
   async function refreshAdmin() {
     try {
       [usage, members, groups] = await Promise.all([F.getUsage(), F.listMembers(), F.listGroups()]);
@@ -1262,7 +1300,7 @@
       <span class="grow"></span>
     {/if}
     {#if admin}
-      <button type="button" class="adm" class:on={view === 'admin'} aria-pressed={view === 'admin'} data-tip={view === 'admin' ? 'Kembali ke daftar SOP' : 'Anggota, grup, dan penyimpanan'} onclick={() => (view = view === 'admin' ? 'sops' : 'admin')}>
+      <button type="button" class="adm" class:on={view === 'admin'} aria-pressed={view === 'admin'} data-tip={view === 'admin' ? 'Kembali ke daftar SOP' : 'Bawaan SOP baru, anggota, grup, dan penyimpanan'} onclick={() => (view = view === 'admin' ? 'sops' : 'admin')}>
         <Icon name="settings" size={15} /><span>Admin</span>
       </button>
     {/if}
@@ -1533,6 +1571,32 @@
           {:else}
             <small>Memuat…</small>
           {/if}
+        </section>
+        <section>
+          <h3>Bawaan SOP baru</h3>
+          <small>
+            Isian awal setiap SOP baru, juga dipakai Asisten AI. SOP yang sudah ada tidak berubah.
+            {#if defaultsMeta.custom && dfltWhen}Terakhir diubah {defaultsMeta.updatedByName || 'admin'}, {dfltWhen}.{:else}Saat ini memakai bawaan aplikasi.{/if}
+          </small>
+          <form class="defaults" onsubmit={saveDefaults} oninput={() => (dfltEdited = true)}>
+            {#each DEFAULT_FIELDS as [k, label, max] (k)}
+              <label>
+                <span>{label}</span>
+                {#if k === 'institution'}
+                  <textarea rows="3" maxlength={max} bind:value={dflt[k]} placeholder="Satu baris per tingkat, dari kementerian sampai unit kerja"></textarea>
+                {:else}
+                  <input maxlength={max} bind:value={dflt[k]} placeholder={k === 'disahkanNip' ? 'NIP. …' : k === 'nomor' ? 'mis. UN10/F15/' : ''} />
+                {/if}
+              </label>
+            {/each}
+            <div class="row">
+              <button class="btn small primary" disabled={!dfltDirty || dfltBusy}><Icon name="save" size={14} />{dfltBusy ? 'Menyimpan…' : 'Simpan bawaan'}</button>
+              {#if dfltEdited}<button type="button" class="btn small ghost" onclick={() => resetDefaultsForm(DEFAULTS)}>Batalkan perubahan</button>{/if}
+              <button type="button" class="btn small ghost" onclick={() => resetDefaultsForm(BUILTIN_DEFAULTS)} title="Isi formulir dengan bawaan asli aplikasi; belum tersimpan sampai Anda menekan Simpan">
+                <Icon name="restore" size={14} />Isi dengan bawaan aplikasi
+              </button>
+            </div>
+          </form>
         </section>
         <section>
           <h3>Anggota <span class="muted">{members.length}</span></h3>
@@ -2290,6 +2354,26 @@
   }
   .admin section {
     flex: none;
+  }
+  .defaults {
+    display: grid;
+    gap: 0.45rem;
+    margin-top: 0.5rem;
+  }
+  .defaults label {
+    display: grid;
+    grid-template-columns: 9.5rem 1fr;
+    align-items: start;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+  }
+  .defaults label > span {
+    padding-top: 0.4rem;
+    color: var(--muted);
+  }
+  .defaults textarea {
+    resize: vertical;
+    font: inherit;
   }
   .admin select {
     width: auto;

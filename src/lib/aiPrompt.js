@@ -1,19 +1,19 @@
 // Prompt siap salin agar asisten AI menghasilkan JSON yang bisa dibuka aplikasi ini:
 // menyusun SOP baru dari deskripsi, atau menyalin SOP lama (PDF/Word/foto) ke format aplikasi.
-import { DEFAULT_INSTITUTION, DEFAULT_PENGESAH, todayIso } from './model.js';
+import { todayIso } from './model.js';
+import { DEFAULTS, pengesahDefaults } from './appDefaults.svelte.js';
 
-const NOMOR_PREFIX = 'UN10/F15/';
-
-const EXAMPLE = {
+// Contoh dan aturan dibuat setiap kali prompt disusun, agar selalu memakai bawaan terbaru dari admin.
+const example = () => ({
   format: 'sop-editor',
   version: 1,
   header: {
-    institution: DEFAULT_INSTITUTION,
+    institution: DEFAULTS.institution,
     nomor: 'UN00/F00/01/HK.01.02/001',
     tglPembuatan: '2026-01-15',
     tglRevisi: '',
     tglEfektif: '2026-02-01',
-    ...DEFAULT_PENGESAH,
+    ...pengesahDefaults(),
     namaSop: 'Pengajuan Cuti Akademik'
   },
   sections: {
@@ -35,11 +35,11 @@ const EXAMPLE = {
     { id: 's3', kegiatan: 'Persetujuan cuti', actor: 'a3', shape: 'process', kelengkapan: 'Berkas terverifikasi', waktu: '2 hari', output: 'Surat persetujuan', keterangan: '' },
     { id: 's4', kegiatan: 'Selesai', actor: 'a1', shape: 'terminator', kelengkapan: '', waktu: '', output: 'Surat persetujuan', keterangan: '' }
   ]
-};
+});
 
-const PENGESAH_RULE =
-  `isi "disahkanJabatan" dengan "${DEFAULT_PENGESAH.disahkanJabatan}", "disahkanNama" dengan "${DEFAULT_PENGESAH.disahkanNama}", ` +
-  `dan "disahkanNip" dengan "${DEFAULT_PENGESAH.disahkanNip}"`;
+const pengesahRule = () =>
+  `isi "disahkanJabatan" dengan "${DEFAULTS.disahkanJabatan}", "disahkanNama" dengan "${DEFAULTS.disahkanNama}", ` +
+  `dan "disahkanNip" dengan "${DEFAULTS.disahkanNip}"`;
 
 /** Aturan struktur JSON yang sama untuk kedua prompt. */
 const formatRules = (header) => `ATURAN FORMAT:
@@ -63,9 +63,10 @@ ${header}
 export function aiPrompt(description = '') {
   const desc = description.trim() || '[TULIS DI SINI: nama SOP, unit kerja, siapa saja yang terlibat, dan urutan prosesnya]';
   const today = todayIso();
-  const example = {
-    ...EXAMPLE,
-    header: { ...EXAMPLE.header, nomor: NOMOR_PREFIX, tglPembuatan: today, tglRevisi: today, tglEfektif: today }
+  const base = example();
+  const sample = {
+    ...base,
+    header: { ...base.header, nomor: DEFAULTS.nomor, tglPembuatan: today, tglRevisi: today, tglEfektif: today }
   };
   return `Buatkan dokumen SOP (Standar Operasional Prosedur) instansi pemerintah/perguruan tinggi Indonesia dalam format JSON untuk aplikasi "SOP Editor".
 
@@ -73,15 +74,15 @@ DESKRIPSI PROSES:
 ${desc}
 
 ${formatRules(`- header: isi semua kolom teks. "institution" boleh beberapa baris (pisahkan dengan \\n), ditulis HURUF KAPITAL dari kementerian sampai unit kerja. "namaSop" ditulis dengan huruf kapital di awal tiap kata (mis. "Pengajuan Cuti Akademik"), bukan huruf kapital semua. Jangan menyertakan logo atau tanda tangan.
-- Nomor SOP: "nomor" selalu diawali "${NOMOR_PREFIX}". Lanjutkan hanya bila deskripsi menyebut nomor lengkapnya; bila tidak, isi "${NOMOR_PREFIX}" saja tanpa mengarang kelanjutannya.
+- Nomor SOP: "nomor" selalu diawali "${DEFAULTS.nomor}". Lanjutkan hanya bila deskripsi menyebut nomor lengkapnya; bila tidak, isi "${DEFAULTS.nomor}" saja tanpa mengarang kelanjutannya.
 - Tanggal: isi "tglPembuatan", "tglRevisi", dan "tglEfektif" dengan tanggal hari ini, "${today}" (format YYYY-MM-DD).
-- Pengesah: kecuali deskripsi menyebut pejabat lain, ${PENGESAH_RULE}.
+- Pengesah: kecuali deskripsi menyebut pejabat lain, ${pengesahRule()}.
 - Dasar hukum: gunakan peraturan yang benar-benar ada; bila ragu, tulis "[lengkapi: …]" alih-alih mengarang nomor peraturan.`)}
 - Tulis istilah asing dengan <i>miring</i>. Jangan memakai format tebal (<b>) sama sekali; format lain seperlunya saja.
 - Gunakan bahasa Indonesia baku.
 
 CONTOH STRUKTUR (isi dengan proses di atas, jangan disalin isinya, kecuali nomor dan tanggal sesuai aturan di atas):
-${JSON.stringify(example, null, 2)}`;
+${JSON.stringify(sample, null, 2)}`;
 }
 
 /** Dokumen untuk dikirim ke AI: tanpa jalur garis manual (dipulihkan saat jawaban dibuka). */
@@ -117,7 +118,7 @@ ${JSON.stringify(docForAi(doc), null, 2)}`;
 export function aiImportPrompt(note = '', update = true) {
   const extra = note.trim() ? `\nCATATAN TAMBAHAN DARI PENGGUNA (utamakan bila bertentangan dengan aturan di bawah):\n${note.trim()}\n` : '';
   const header = update
-    ? `- header: salin nomor SOP, nama SOP, dan tanggal dari dokumen. Namun "institution" diisi "${DEFAULT_INSTITUTION.replace(/\n/g, '\\n')}" dan pengesah diperbarui: ${PENGESAH_RULE}.`
+    ? `- header: salin nomor SOP, nama SOP, dan tanggal dari dokumen. Namun "institution" diisi "${DEFAULTS.institution.replace(/\n/g, '\\n')}" dan pengesah diperbarui: ${pengesahRule()}.`
     : `- header: salin semua kolom dari dokumen apa adanya, termasuk kop instansi ("institution", baris dipisah \\n) dan pengesah (jabatan, nama, NIP).`;
   return `Saya melampirkan dokumen SOP (Standar Operasional Prosedur) lama, berupa PDF, Word, atau foto/pindaian. Salin isinya menjadi JSON untuk aplikasi "SOP Editor".
 ${extra}
@@ -137,5 +138,5 @@ ATURAN PENYALINAN:
 ${formatRules(header)}
 
 CONTOH STRUKTUR (hanya bentuknya; isinya harus dari dokumen terlampir):
-${JSON.stringify(EXAMPLE, null, 2)}`;
+${JSON.stringify(example(), null, 2)}`;
 }

@@ -1,5 +1,6 @@
 // Model dokumen SOP. Format JSON yang disimpan/dibuka mengikuti struktur ini.
 import { normalizeMarkup, plainText } from './richtext.js';
+import { DEFAULTS, pengesahDefaults } from './appDefaults.svelte.js';
 
 export const FORMAT = 'sop-editor';
 export const VERSION = 1;
@@ -43,15 +44,7 @@ export function todayIso() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Kop baku SOP di lingkungan UB (logo UB selalu dicetak, lihat layout.js). */
-export const DEFAULT_INSTITUTION = 'KEMENTERIAN PENDIDIKAN TINGGI, SAINS, DAN TEKNOLOGI\nFAKULTAS ILMU KOMPUTER\nUNIVERSITAS BRAWIJAYA';
 
-// Pengesah default SOP FILKOM: dekan yang sedang menjabat.
-export const DEFAULT_PENGESAH = {
-  disahkanJabatan: 'DEKAN FAKULTAS ILMU KOMPUTER',
-  disahkanNama: 'Ir. Tri Astoto Kurniawan, S.T., M.T., Ph.D., IPM.',
-  disahkanNip: 'NIP. 197105182003121001'
-};
 
 export function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -94,12 +87,13 @@ export function emptyDocument() {
     format: FORMAT,
     version: VERSION,
     header: {
-      institution: DEFAULT_INSTITUTION,
-      nomor: 'UN10/F15/',
+      // Kop, awalan nomor, dan pengesah dari bawaan yang diatur admin (lihat appDefaults.svelte.js).
+      institution: DEFAULTS.institution,
+      nomor: DEFAULTS.nomor,
       tglPembuatan: todayIso(),
       tglRevisi: '',
       tglEfektif: todayIso(),
-      ...DEFAULT_PENGESAH,
+      ...pengesahDefaults(),
       namaSop: ''
     },
     sections,

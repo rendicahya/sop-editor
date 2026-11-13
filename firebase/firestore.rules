@@ -576,6 +576,28 @@ service cloud.firestore {
         && d.updatedBy == uid()
         && d.updatedByName is string && d.updatedByName.size() <= 120;
     }
+    // ---- Bawaan SOP baru (kop, awalan nomor, pengesah) ----
+    // Dibaca semua anggota; hanya admin yang mengubah. Batas panjang sama dengan DEFAULT_FIELDS di appDefaults.svelte.js.
+    function shortText(v, max) {
+      return v is string && v.size() <= max;
+    }
+    function validDefaults(d) {
+      return d.keys().hasOnly(['institution', 'nomor', 'disahkanJabatan', 'disahkanNama', 'disahkanNip', 'updatedAt', 'updatedBy', 'updatedByName'])
+        && shortText(d.institution, 300)
+        && shortText(d.nomor, 60)
+        && shortText(d.disahkanJabatan, 200)
+        && shortText(d.disahkanNama, 200)
+        && shortText(d.disahkanNip, 60)
+        && d.updatedAt == request.time
+        && d.updatedBy == uid()
+        && shortText(d.updatedByName, 120);
+    }
+    match /config/sop {
+      allow read: if isMember();
+      allow create, update: if isAdmin() && validDefaults(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
     match /curricula/{id} {
       allow read: if isMember();
       allow create: if isAdmin() && !id.matches('.*[/*].*') && validCurriculum(request.resource.data);

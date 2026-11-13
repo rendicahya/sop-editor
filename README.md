@@ -232,6 +232,11 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
   ada yang bisa mengambil alih kunci sebelum itu, termasuk admin. Bila kunci ternyata dipegang orang lain, tab yang belum
   berubah ditutup, sedangkan tab berisi perubahan dilepas dari Pustaka Daring agar isinya tidak hilang.
 - Pemakaian dan batas penyimpanan hanya tampil untuk admin. Angkanya perkiraan dari ukuran JSON, belum termasuk indeks Firestore.
+- **Bawaan SOP baru** diatur admin di tab **Admin**: kop instansi, awalan nomor SOP, serta jabatan, nama, dan NIP pengesah
+  (mis. saat dekan berganti). Isian ini dipakai setiap SOP baru dan oleh Asisten AI (termasuk pilihan "perbarui kop dan
+  pengesah" saat mengimpor SOP lama), langsung berlaku bagi semua anggota tanpa memuat ulang, dan diingat di browser agar
+  tetap berlaku saat luring. SOP yang sudah ada tidak berubah. Disimpan di Firestore `config/sop`: semua anggota bisa
+  membaca, hanya admin yang bisa mengubah.
 
 Menyiapkan proyek Firebase (cukup sekali):
 
