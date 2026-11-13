@@ -74,8 +74,22 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
   Seperti Pustaka Daring, Pustaka Lokal juga punya saringan **Perlu ditinjau**, **daftar induk SOP (XLSX)**, **cadangan
   ZIP** (seluruh/hasil yang tampil/pilihan, atau satu berkas .sop), **Gabung PDF** dari pilihan, dan **impor** berkas
-  .sop/.zip (tombol unggah atau lepas berkas di daftar; nama folder di dalam ZIP dijadikan label). SOP yang terbuka di
-  tab boleh dipilih untuk PDF/ZIP, tetapi tidak ikut dihapus.
+  .sop/.zip (tombol unggah atau lepas berkas di daftar). SOP yang terbuka di tab boleh dipilih untuk PDF/ZIP/pindah,
+  tetapi tidak ikut dihapus.
+  **Folder** (bisa bersarang): buat, ubah nama, pindahkan, unduh isinya sebagai ZIP, atau hapus. SOP dan folder
+  dipindahkan lewat tombol Pindahkan atau diseret ke folder/jalur di atas daftar. Pencarian dan saringan mencari di
+  semua folder dan menampilkan jalurnya. Cadangan ZIP dan daftar induk mengikuti folder yang sedang dibuka (di Utama:
+  seluruh pustaka), dan folder di dalam ZIP yang diimpor ikut dibuat. SOP baru yang disimpan dari dialog Pustaka masuk
+  ke folder yang sedang dibuka.
+  **Baru dihapus**: SOP yang dihapus (termasuk isi folder yang dihapus) disimpan 30 hari dan bisa dipulihkan ke folder
+  asalnya (ke Utama bila foldernya sudah tidak ada), atau dihapus permanen / dikosongkan sekaligus.
+- **Pratinjau SOP di pustaka**: tombol mata di baris SOP (Pustaka Lokal, Pustaka Daring, dan Baru dihapus) menampilkan
+  halaman SOP persis seperti cetakannya tanpa membukanya di tab, lengkap dengan nomor, tanggal efektif, jumlah langkah,
+  dan foldernya; **Buka di tab** membukanya.
+- **Pemeriksaan sebelum ekspor, cetak, dan unggah pertama ke Pustaka Daring**: bila panel Periksa masih menemukan
+  kesalahan atau peringatan (mis. nomor SOP belum lengkap, tanggal efektif kosong, keputusan tanpa cabang), daftar
+  singkatnya ditampilkan dengan pilihan **Perbaiki dulu** (membuka panel Periksa) atau **Tetap ekspor/cetak/unggah**.
+  Temuan yang sama tidak ditanyakan lagi setelah dijawab "Tetap".
 - **Pustaka Daring**: SOP bersama secara daring untuk akun @ub.ac.id atau @gmail.com yang didaftarkan admin. Lihat [Pustaka Daring](#pustaka-daring).
   Label hanya ada di pustaka (tidak masuk berkas .sop).
 - **Tautan Keterkaitan ke SOP lain**: klik kanan butir Keterkaitan › **Tautkan ke SOP lain…**, lalu pilih SOP dari
@@ -303,7 +317,8 @@ Struktur utama:
 | `src/lib/png.js` | Ekspor PNG: tiap halaman digambar ke canvas lalu dikemas ZIP |
 | `src/lib/validate.js` | Pemeriksa dokumen: alur diagram dan isian penting |
 | `src/lib/duration.js` | Estimasi total waktu: membaca kolom Waktu dan menjumlahkannya di jalur utama |
-| `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan per tab (id tab = id entri), daftar, hapus |
+| `src/lib/library.js` | Pustaka Lokal di IndexedDB: simpan per tab (id tab = id entri), daftar, folder, Baru dihapus (30 hari) |
+| `src/lib/SopPreviewDialog.svelte` | Pratinjau halaman SOP dari pustaka tanpa membukanya di tab |
 | `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, label, duplikat |
 | `src/lib/faculty.svelte.js` | Pustaka Daring: login, baca/tulis Firestore, riwayat, keterangan sedang diedit; Firebase dimuat saat pertama dipakai |
 | `src/lib/AdminDialog.svelte` | Dialog Admin (tombol di toolbar, khusus admin): Bawaan SOP baru, Anggota, Grup, Penyimpanan |

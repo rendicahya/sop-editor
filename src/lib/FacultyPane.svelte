@@ -15,6 +15,7 @@
   import VersionDiffDialog from './VersionDiffDialog.svelte';
   import LinkMapDialog from './LinkMapDialog.svelte';
   import SopInfoDialog from './SopInfoDialog.svelte';
+  import SopPreviewDialog from './SopPreviewDialog.svelte';
   import { review, setReviewYears, REVIEW_CHOICES, reviewSince, reviewDue, isReviewDue } from './review.svelte.js';
   import { formatTanggal, todayIso } from './model.js';
   import { registerXlsx } from './register.js';
@@ -45,6 +46,7 @@
   let moving = $state(null); // { item, isFolder, target }
   let accessTarget = $state(null);
   let infoOf = $state(null); // SOP yang detailnya sedang ditampilkan
+  let previewOf = $state(null); // SOP yang sedang dipratinjau
   let menu = $state(null); // { x, y, items }
   let query = $state('');
   let busy = $state(false);
@@ -1196,6 +1198,7 @@
     const manage = canManage(s);
     return [
       { label: 'Buka', icon: 'open', hint: 'Enter', run: () => openSop(s) },
+      { label: 'Pratinjau', icon: 'eye', run: () => (previewOf = s) },
       { sep: true },
       { label: 'Detail', icon: 'info', run: () => (infoOf = s.id) },
       { label: 'Duplikat', icon: 'copy', run: () => duplicate(s) },
@@ -1616,6 +1619,7 @@
                   {#if editors}<small class="editing">🔒 Terkunci, sedang diedit oleh {editors}</small>{/if}
                 </button>
                 <span class="acts" role="group" aria-label="Tindakan SOP">
+                  {@render ib('eye', 'Pratinjau', () => (previewOf = s))}
                   {@render ib('copy', 'Duplikat sebagai milik Anda', () => duplicate(s))}
                   {@render ib('history', 'Riwayat', () => toggleHistory(s), { on: history?.id === s.id, expanded: history?.id === s.id })}
                   {@render ib('users', accessTip(s), () => openAccess('sops', s))}
@@ -1768,6 +1772,11 @@
   />
 {/if}
 
+<SopPreviewDialog
+  item={previewOf && { title: titleOf(previewOf), json: previewOf.json, where: folderOf(previewOf) ? `Folder ${pathText(folderOf(previewOf))}` : 'Folder Utama' }}
+  onopen={() => { const s = previewOf; previewOf = null; openSop(s); }}
+  onclose={() => (previewOf = null)}
+/>
 <LinkMapDialog bind:open={mapOpen} sops={live} {titleOf} where={(s) => (folderOf(s) ? pathText(folderOf(s)) : 'Utama')} isOpen={isOpen} onopen={(s) => ((mapOpen = false), openSop(s))} />
 
 <style>

@@ -1023,6 +1023,7 @@
     try {
       if (!tab.remote) {
         if (isBlank(doc)) return notify('Dokumen masih kosong, belum ada yang diunggah'), false;
+        if (!(await checkDone('unggah'))) return false;
         linkTab(tab, doc, await Faculty.uploadSop(doc, undefined, folder));
         notify('Diunggah ke Pustaka Daring.');
         return true;
@@ -1103,8 +1104,31 @@
     return go;
   }
 
+  /**
+   * Sebelum ekspor, cetak, atau unggah pertama: ingatkan bila Periksa masih menemukan kesalahan atau peringatan.
+   * false = batal, panel Periksa dibuka. Temuan yang sama tidak ditanyakan lagi setelah dijawab "Tetap …".
+   */
+  let checkAllowed = '';
+  async function checkDone(verb) {
+    const list = issues.filter((i) => i.level !== 'info');
+    if (!list.length) return true;
+    const sig = tabs.active + '\n' + list.map((i) => i.msg).join('\n');
+    if (sig === checkAllowed) return true;
+    const counts = [issueErrors && `${issueErrors} kesalahan`, issueWarns && `${issueWarns} peringatan`].filter(Boolean).join(' dan ');
+    const top = list.slice(0, 6).map((i) => `• ${i.msg}`).join('\n');
+    const more = list.length > 6 ? `\n…dan ${list.length - 6} lainnya.` : '';
+    const go = await ui.confirm(`Pemeriksaan menemukan ${counts} pada dokumen ini:\n\n${top}${more}`, {
+      title: 'Dokumen belum lengkap',
+      ok: `Tetap ${verb}`,
+      cancel: 'Perbaiki dulu'
+    });
+    if (go) checkAllowed = sig;
+    else checkOpen = true;
+    return go;
+  }
+
   async function pdf() {
-    if (pdfBusy || !(await reviewDone())) return;
+    if (pdfBusy || !(await checkDone('ekspor')) || !(await reviewDone())) return;
     pdfBook = null;
     pdfSaved = fileMark();
     buildPdf();
@@ -1113,7 +1137,7 @@
   /** Cetak: pratinjau PDF dibuka, lalu dialog cetak browser langsung muncul. */
   let pdfPrint = $state(false);
   async function printPdf() {
-    if (pdfBusy || !(await reviewDone())) return;
+    if (pdfBusy || !(await checkDone('cetak')) || !(await reviewDone())) return;
     pdfPrint = true;
     pdfBook = null;
     pdfSaved = null;
@@ -1171,7 +1195,7 @@
   // Ekspor DOCX/XLSX dimuat terpisah agar tidak memperbesar muatan awal.
   let exportBusy = $state('');
   async function exportFile(kind) {
-    if (!(await reviewDone())) return;
+    if (!(await checkDone('ekspor')) || !(await reviewDone())) return;
     exportBusy = kind.toUpperCase();
     const saved = fileMark();
     try {

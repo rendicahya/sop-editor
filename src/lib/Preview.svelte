@@ -2,7 +2,8 @@
   import PageSvg from './PageSvg.svelte';
   import PageFields from './PageFields.svelte';
 
-  let { pages, zoom = 100, editable = true } = $props();
+  // fields = false: hanya gambar halaman, tanpa lapisan isian editor (untuk pratinjau baca saja).
+  let { pages, zoom = 100, editable = true, fields = true } = $props();
 </script>
 
 <div class="pages" style:--zoom={zoom / 100}>
@@ -10,7 +11,7 @@
     <figure class="sheet">
       <div class="page">
         <PageSvg {page} />
-        {#if page.fields.length}<PageFields fields={page.fields} {editable} />{/if}
+        {#if fields && page.fields.length}<PageFields fields={page.fields} {editable} />{/if}
       </div>
       <figcaption>Halaman {i + 1} / {pages.length}</figcaption>
     </figure>

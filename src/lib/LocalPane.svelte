@@ -2,14 +2,29 @@
   import { newTabId } from './store.svelte.js';
   import * as ui from './ask.svelte.js';
   import Icon from './Icon.svelte';
-  import { listEntries, putEntry, patchEntry, deleteEntry, cleanTags, haystack } from './library.js';
+  import SopPreviewDialog from './SopPreviewDialog.svelte';
+  import { dismiss } from './dismiss.js';
+  import {
+    listEntries,
+    putEntry,
+    patchEntry,
+    deleteEntry,
+    cleanTags,
+    haystack,
+    listFolders,
+    putFolder,
+    deleteFolders,
+    cleanFolderName,
+    binDaysLeft,
+    BIN_DAYS
+  } from './library.js';
   import { librarySort, sorted } from './librarySort.svelte.js';
   import SortSelect from './SortSelect.svelte';
   import { readSopFiles } from './sopFiles.js';
   import { sopZip, sopText, safeName } from './sopZip.js';
   import { registerXlsx } from './register.js';
   import { downloadBlob } from './files.js';
-  import { formatTanggal, todayIso } from './model.js';
+  import { formatTanggal, todayIso, uid } from './model.js';
   import { review, reviewSince, reviewDue, isReviewDue } from './review.svelte.js';
 
   /**
@@ -19,15 +34,19 @@
    */
   let { open = false, active = false, tabs, onclose, openIds = [], current, onopen, onsave, cansave = true, onnotify, onbook } = $props();
 
-  let entries = $state([]);
+  let entries = $state([]); // semua entri, termasuk yang ada di "Baru dihapus"
+  let folders = $state([]);
+  let here = $state(null); // folder yang sedang dibuka; null = Utama
+  let bin = $state(false); // tampilan "Baru dihapus"
   let query = $state('');
   let tag = $state(null); // saringan label: null = semua, '' = tanpa label
   let tagEdit = $state(null); // id entri yang labelnya sedang diatur
   let newTag = $state('');
   let picked = $state([]); // id entri yang dicentang untuk tindakan sekaligus
   let due = $state(false); // hanya yang perlu ditinjau
+  let previewOf = $state(null); // entri yang sedang dipratinjau
 
-  // Tiap kali dialog dibuka, pencarian dan pilihan dikosongkan.
+  // Tiap kali dialog dibuka, pencarian, pilihan, dan tampilan "Baru dihapus" dikosongkan; folder yang dibuka diingat.
   let wasOpen = false;
   $effect(() => {
     if (open && !wasOpen) {
@@ -35,6 +54,7 @@
       tagEdit = null;
       picked = [];
       due = false;
+      bin = false;
     }
     wasOpen = open;
   });
@@ -45,7 +65,9 @@
 
   async function refresh() {
     try {
-      entries = (await listEntries()).map((e) => {
+      const [list, dirs] = await Promise.all([listEntries(), listFolders()]);
+      folders = dirs;
+      entries = list.map((e) => {
         let header = {};
         try {
           header = JSON.parse(e.json).header ?? {};
@@ -55,19 +77,64 @@
       });
     } catch {
       entries = [];
+      folders = [];
       ui.alert('Pustaka Lokal tidak bisa dibaca di browser ini (mode privat atau penyimpanan diblokir).');
     }
   }
 
+  // ---- Folder ----
+  const byId = $derived(new Map(folders.map((f) => [f.id, f])));
+  const at = $derived(byId.has(here) ? here : null); // folder yang dibuka masih ada?
+  /** Folder entri; folder yang sudah tidak ada dianggap Utama. */
+  const folderOf = (e) => (byId.has(e.folder) ? e.folder : null);
+  const parentOf = (f) => (byId.has(f.parent) ? f.parent : null);
+  function pathOf(id) {
+    const out = [];
+    for (let f = byId.get(id); f && out.length < 50; f = byId.get(parentOf(f))) out.unshift(f);
+    return out;
+  }
+  const pathText = (id) => (id ? pathOf(id).map((f) => f.name).join(' / ') : 'Utama');
+  const byName = (a, b) => a.name.localeCompare(b.name, 'id', { numeric: true });
+  const childrenOf = (id) => folders.filter((f) => parentOf(f) === id).sort(byName);
+  /** Folder `id` beserta semua subfoldernya. */
+  function subtree(id) {
+    const out = new Set([id]);
+    for (const x of out) for (const f of folders) if (parentOf(f) === x) out.add(f.id);
+    return out;
+  }
+  const flatTree = $derived.by(() => {
+    const out = [];
+    const walk = (id, depth) => {
+      for (const f of childrenOf(id)) out.push({ ...f, depth }), walk(f.id, depth + 1);
+    };
+    walk(null, 0);
+    return out;
+  });
+
+  const live = $derived(entries.filter((e) => !e.deleted));
+  const binned = $derived(entries.filter((e) => e.deleted).sort((a, b) => b.deleted - a.deleted));
+  const searching = $derived(!!query.trim() || tag !== null || due);
+  const inFolder = (e, set) => set.has(folderOf(e));
+  function folderInfo(f) {
+    const tree = subtree(f.id);
+    const n = live.filter((e) => inFolder(e, tree)).length;
+    const sub = childrenOf(f.id).length;
+    return [n ? `${n} SOP` : 'Kosong', sub && `${sub} folder`].filter(Boolean).join(' · ');
+  }
+
+  const shownFolders = $derived(bin || searching ? [] : childrenOf(at));
   const shown = $derived.by(() => {
     const q = query.trim().toLowerCase();
+    const words = q ? q.split(/\s+/) : [];
+    const match = (e) => words.every((w) => e.text.includes(w));
+    if (bin) return binned.filter(match);
     const byTag = (e) => tag === null || (tag === '' ? !e.tags.length : e.tags.includes(tag));
-    const found = entries.filter((e) => byTag(e) && (!due || isDue(e)) && (!q || q.split(/\s+/).every((w) => e.text.includes(w))));
+    const found = searching ? live.filter((e) => byTag(e) && (!due || isDue(e)) && match(e)) : live.filter((e) => folderOf(e) === at);
     return sorted(found, librarySort.by, titleOf, (e) => e.updated ?? 0);
   });
   const isDue = (e) => isReviewDue(e.since, review.years);
-  const dueCount = $derived(entries.filter(isDue).length);
-  // Pilihan: entri yang tampil. Yang sedang terbuka di tab boleh dipilih (untuk PDF/ZIP), tetapi tidak ikut dihapus.
+  const dueCount = $derived(live.filter(isDue).length);
+  // Pilihan: entri yang tampil. Yang sedang terbuka di tab boleh dipilih (untuk PDF/ZIP/pindah), tetapi tidak ikut dihapus.
   const chosen = $derived(shown.filter((e) => picked.includes(e.id)));
   const deletable = $derived(chosen.filter((e) => !openIds.includes(e.id)));
   const allChosen = $derived(shown.length > 0 && chosen.length === shown.length);
@@ -77,15 +144,147 @@
   function pickAll() {
     picked = allChosen ? [] : shown.map((e) => e.id);
   }
-  async function removePicked() {
-    const n = deletable.length;
-    const skipped = chosen.length - n;
-    const note = skipped ? ` ${skipped} dokumen yang terbuka di tab tidak ikut dihapus.` : '';
-    if (!n || !(await ui.confirm(`Hapus ${n} dokumen terpilih dari pustaka? Tindakan ini tidak bisa dibatalkan.${note}`, { ok: 'Hapus', danger: true }))) return;
-    for (const e of deletable) await deleteEntry(e.id);
+  function go(id) {
+    here = id;
+    picked = [];
+    tagEdit = null;
+  }
+  function showBin(on) {
+    bin = on;
+    picked = [];
+    tagEdit = null;
+    query = '';
+  }
+
+  async function newFolder() {
+    const name = cleanFolderName(await ui.prompt(`Nama folder baru di ${pathText(at)}`, '', { title: 'Folder baru', ok: 'Buat', maxlength: 120 }));
+    if (!name) return;
+    if (childrenOf(at).some((f) => f.name.toLowerCase() === name.toLowerCase())) return ui.alert(`Folder "${name}" sudah ada di sini.`, { title: 'Folder baru' });
+    await putFolder({ id: 'f-' + uid() + uid(), name, parent: at, created: Date.now() });
+    await refresh();
+  }
+  async function renameFolder(f) {
+    const name = cleanFolderName(await ui.prompt('Nama folder', f.name, { title: 'Ubah nama folder', ok: 'Simpan', maxlength: 120 }));
+    if (!name || name === f.name) return;
+    if (childrenOf(parentOf(f)).some((x) => x.id !== f.id && x.name.toLowerCase() === name.toLowerCase()))
+      return ui.alert(`Folder "${name}" sudah ada di tempat yang sama.`, { title: 'Ubah nama folder' });
+    await putFolder({ ...$state.snapshot(f), name });
+    await refresh();
+  }
+  async function removeFolder(f) {
+    const tree = subtree(f.id);
+    const inside = live.filter((e) => inFolder(e, tree));
+    const busy = inside.filter((e) => openIds.includes(e.id));
+    if (busy.length) return ui.alert(`Tutup dulu tab berikut sebelum menghapus folder "${f.name}":\n\n${busy.map(titleOf).join('\n')}`, { title: 'Hapus folder' });
+    const sub = tree.size - 1;
+    const parts = [
+      inside.length ? `${inside.length} SOP di dalamnya dipindahkan ke Baru dihapus dan bisa dipulihkan selama ${BIN_DAYS} hari.` : 'Folder ini kosong.',
+      sub && `${sub} subfolder ikut dihapus.`
+    ].filter(Boolean);
+    if (!(await ui.confirm(`Hapus folder "${f.name}"? ${parts.join(' ')}`, { title: 'Hapus folder', ok: 'Hapus', danger: true }))) return;
+    const now = Date.now();
+    for (const e of inside) await patchEntry(e.id, { deleted: now, fromPath: pathText(folderOf(e)) });
+    await deleteFolders([...tree]);
+    if (tree.has(at)) here = parentOf(f);
+    await refresh();
+    onnotify(inside.length ? `Folder dihapus, ${inside.length} SOP dipindahkan ke Baru dihapus` : 'Folder dihapus');
+  }
+
+  // ---- Pindah: lewat dialog atau seret ke folder / jalur di atas daftar ----
+  let moving = $state(null); // { ids, fids, target }
+  let moveDialog;
+  $effect(() => {
+    if (moving && !moveDialog.open) moveDialog.showModal();
+    else if (!moving && moveDialog?.open) moveDialog.close();
+  });
+  const blocked = (fids) => new Set(fids.flatMap((id) => [...subtree(id)]));
+  const moveTargets = $derived(moving ? flatTree.filter((t) => !blocked(moving.fids).has(t.id)) : []);
+  const startMove = (ids, fids = []) => (ids.length || fids.length) && (moving = { ids, fids, target: at });
+  async function moveTo(ids, fids, target) {
+    target = byId.has(target) ? target : null;
+    if (fids.some((id) => subtree(id).has(target))) return ui.alert('Folder tidak bisa dipindahkan ke dalam dirinya sendiri.', { title: 'Pindahkan' });
+    let n = 0;
+    for (const id of ids) {
+      const e = entries.find((x) => x.id === id);
+      if (e && folderOf(e) !== target) await patchEntry(id, { folder: target }), n++;
+    }
+    for (const id of fids) {
+      const f = byId.get(id);
+      if (f && parentOf(f) !== target) await putFolder({ ...$state.snapshot(f), parent: target }), n++;
+    }
     picked = [];
     await refresh();
-    onnotify(`${n} dokumen dihapus`);
+    if (n) onnotify(`${n} item dipindahkan ke ${pathText(target)}`);
+  }
+  function submitMove(ev) {
+    ev.preventDefault();
+    const { ids, fids, target } = moving;
+    moving = null;
+    moveTo(ids, fids, target);
+  }
+
+  const DRAG = 'application/x-sop-local';
+  let dropAt = $state(undefined); // folder tujuan seret yang sedang disorot (null = Utama)
+  function dragStart(ev, e, isFolder) {
+    const ids = isFolder ? [] : picked.includes(e.id) ? chosen.map((x) => x.id) : [e.id];
+    ev.dataTransfer.setData(DRAG, JSON.stringify({ ids, fids: isFolder ? [e.id] : [] }));
+    ev.dataTransfer.effectAllowed = 'move';
+  }
+  function dropzone(id) {
+    const ok = (ev) => ev.dataTransfer?.types.includes(DRAG);
+    return {
+      ondragover: (ev) => {
+        if (!ok(ev)) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        dropAt = id;
+      },
+      ondragleave: (ev) => {
+        if (!ev.currentTarget.contains(ev.relatedTarget) && dropAt === id) dropAt = undefined;
+      },
+      ondrop: (ev) => {
+        if (!ok(ev)) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        dropAt = undefined;
+        try {
+          const { ids, fids } = JSON.parse(ev.dataTransfer.getData(DRAG));
+          if (!fids.includes(id)) moveTo(ids, fids, id);
+        } catch {}
+      }
+    };
+  }
+
+  // ---- Baru dihapus ----
+  async function trash(list, note = '') {
+    const now = Date.now();
+    for (const e of list) await patchEntry(e.id, { deleted: now, fromPath: pathText(folderOf(e)) });
+    picked = [];
+    await refresh();
+    onnotify((list.length === 1 ? `"${titleOf(list[0])}" dipindahkan ke Baru dihapus` : `${list.length} SOP dipindahkan ke Baru dihapus`) + note);
+  }
+  function removePicked() {
+    const skipped = chosen.length - deletable.length;
+    if (deletable.length) trash(deletable, skipped ? `; ${skipped} yang terbuka di tab tidak ikut` : '');
+  }
+  async function restore(list) {
+    let lost = 0;
+    for (const e of list) {
+      if (e.folder && !byId.has(e.folder)) lost++;
+      await patchEntry(e.id, { deleted: undefined, fromPath: undefined, folder: byId.has(e.folder) ? e.folder : null });
+    }
+    picked = [];
+    await refresh();
+    onnotify(`${list.length} SOP dipulihkan${lost ? `; ${lost} di antaranya ke Utama karena foldernya sudah dihapus` : ''}`);
+  }
+  async function purge(list) {
+    if (!list.length) return;
+    const what = list.length === 1 ? `"${titleOf(list[0])}"` : `${list.length} SOP`;
+    if (!(await ui.confirm(`Hapus permanen ${what}? Tindakan ini tidak bisa dibatalkan.`, { title: 'Hapus permanen', ok: 'Hapus permanen', danger: true }))) return;
+    for (const e of list) await deleteEntry(e.id);
+    picked = [];
+    await refresh();
+    onnotify(`${list.length} SOP dihapus permanen`);
   }
 
   // ---- Gabung PDF, cadangan ZIP, daftar induk ----
@@ -101,19 +300,32 @@
     onclose();
     onbook(list.map((e) => ({ json: e.json, title: titleOf(e) })), title);
   }
-  function downloadZip(list, name) {
-    if (!list.length) return ui.alert('Tidak ada SOP untuk diunduh.', { title: 'Unduh ZIP' });
+  /** Isi ZIP: tiap entri di bawah jalur foldernya, mulai dari folder `base` (null = Utama, jalur lengkap). */
+  const zipFiles = (list, base = null) => {
+    const skip = base ? pathOf(base).length - 1 : 0;
+    return list.map((e) => ({ dirs: pathOf(folderOf(e)).slice(skip).map((f) => f.name), name: titleOf(e), json: e.json, mtime: e.updated }));
+  };
+  function downloadZip(files, name) {
+    if (!files.length) return ui.alert('Tidak ada SOP untuk diunduh.', { title: 'Unduh ZIP' });
     try {
-      downloadBlob(sopZip(list.map((e) => ({ dirs: [], name: titleOf(e), json: e.json, mtime: e.updated }))), `${name}-${todayIso()}.zip`);
-      onnotify(`${list.length} SOP diunduh dalam berkas ZIP`);
+      downloadBlob(sopZip(files), `${safeName(name)}-${todayIso()}.zip`);
+      onnotify(`${files.length} SOP diunduh dalam berkas ZIP`);
     } catch (err) {
       ui.alert('ZIP gagal dibuat: ' + err.message, { title: 'Unduh ZIP' });
     }
   }
+  const folderZip = (f) => downloadZip(zipFiles(live.filter((e) => inFolder(e, subtree(f.id))), f.id), f.name);
+  /** Cakupan tombol cadangan dan daftar induk: hasil pencarian, folder yang dibuka beserta isinya, atau seluruh pustaka. */
+  const scope = $derived(searching ? shown : at ? live.filter((e) => inFolder(e, subtree(at))) : live);
+  const scopeText = $derived(searching ? 'hasil yang tampil' : at ? `folder ${byId.get(at).name} beserta isinya` : 'seluruh Pustaka Lokal');
+  function backup() {
+    if (searching) downloadZip(zipFiles(shown), 'Hasil-pencarian-SOP');
+    else if (at) folderZip(byId.get(at));
+    else downloadZip(zipFiles(live), 'Pustaka-Lokal');
+  }
   const downloadSop = (e) => downloadBlob(new Blob([sopText(e.json)], { type: 'application/json' }), `${safeName(e.fileName?.replace(/\.(sop|json)$/i, '') || titleOf(e))}.sop`);
-  const filtered = $derived(!!query.trim() || tag !== null || due);
   function exportRegister() {
-    const list = sorted(shown, 'name-asc', titleOf, (e) => e.updated ?? 0);
+    const list = sorted(scope, 'name-asc', titleOf, (e) => e.updated ?? 0);
     if (!list.length) return ui.alert('Tidak ada SOP untuk dimasukkan ke daftar induk.', { title: 'Daftar induk SOP' });
     const date = (v) => (v ? formatTanggal(v) : '');
     const stamp = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
@@ -121,6 +333,7 @@
       { label: 'No.', width: 5 },
       { label: 'Nama SOP', width: 42 },
       { label: 'Nomor SOP', width: 26 },
+      { label: 'Folder', width: 26 },
       { label: 'Label', width: 22 },
       { label: 'Tanggal pembuatan', width: 16 },
       { label: 'Tanggal revisi', width: 16 },
@@ -134,6 +347,7 @@
       i + 1,
       titleOf(e),
       e.nomor ?? '',
+      pathText(folderOf(e)),
       e.tags.join(', '),
       date(e.dates.tglPembuatan),
       date(e.dates.tglRevisi),
@@ -143,12 +357,8 @@
       new Date(e.updated).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
       e.fileName ?? ''
     ]);
-    const blob = registerXlsx({
-      title: 'Daftar Induk SOP',
-      note: `${filtered ? 'Hasil pencarian atau saringan' : 'Seluruh Pustaka Lokal'} · ${list.length} SOP · diunduh ${stamp}`,
-      columns,
-      rows
-    });
+    const label = searching ? 'Hasil pencarian atau saringan' : at ? `Folder ${pathText(at)}` : 'Seluruh Pustaka Lokal';
+    const blob = registerXlsx({ title: 'Daftar Induk SOP', note: `${label} · ${list.length} SOP · diunduh ${stamp}`, columns, rows });
     downloadBlob(blob, `Daftar-Induk-SOP-${todayIso()}.xlsx`);
     onnotify(`Daftar induk ${list.length} SOP diunduh`);
   }
@@ -157,6 +367,23 @@
   let importing = $state(false);
   let dropping = $state(false);
   let picker;
+  /** Folder untuk jalur `dirs` di bawah `base`; yang belum ada dibuat (nama sama dipakai ulang). */
+  async function folderFor(base, dirs, made) {
+    let parent = base;
+    for (const raw of dirs) {
+      const name = cleanFolderName(raw);
+      if (!name) continue;
+      const key = `${parent}/${name.toLowerCase()}`;
+      let id = made.get(key) ?? folders.find((f) => parentOf(f) === parent && f.name.toLowerCase() === name.toLowerCase())?.id;
+      if (!id) {
+        id = 'f-' + uid() + uid();
+        await putFolder({ id, name, parent, created: Date.now() });
+      }
+      made.set(key, id);
+      parent = id;
+    }
+    return parent;
+  }
   async function importFiles(files) {
     if (importing) return;
     let found;
@@ -169,16 +396,18 @@
     if (!items.length) {
       return ui.alert(bad.length ? `${bad.length} berkas SOP tidak bisa dibaca (bukan dokumen SOP yang valid).` : 'Tidak ada berkas .sop. Pilih berkas .sop, atau berkas .zip berisi berkas .sop.', { title: 'Tidak ada yang diimpor' });
     }
+    const base = searching ? null : at;
     const msg = [
-      `Masukkan ${items.length} SOP ke Pustaka Lokal?`,
+      `Masukkan ${items.length} SOP ke ${base ? `folder ${byId.get(base).name}` : 'Pustaka Lokal'}?`,
       tag && `SOP yang diimpor diberi label "${tag}".`,
-      items.some((i) => i.dirs.length) && 'Nama folder di dalam ZIP dijadikan label.',
+      items.some((i) => i.dirs.length) && 'Folder di dalam ZIP ikut dibuat.',
       bad.length && `${bad.length} berkas dilewati karena bukan dokumen SOP yang valid.`,
       other && `${other} berkas lain (bukan .sop) diabaikan.`
     ].filter(Boolean).join('\n\n');
     if (!(await ui.confirm(msg, { title: 'Impor ke Pustaka Lokal', ok: 'Impor' }))) return;
     importing = true;
     let n = 0;
+    const made = new Map();
     try {
       for (const it of items) {
         const doc = it.doc;
@@ -193,7 +422,8 @@
           created: now,
           updated: now,
           json: JSON.stringify(doc),
-          tags: cleanTags([...(tag ? [tag] : []), ...it.dirs])
+          tags: tag ? [tag] : [],
+          folder: await folderFor(base, it.dirs, made)
         });
         n++;
       }
@@ -207,7 +437,7 @@
   }
   const hasFiles = (ev) => ev.dataTransfer?.types.includes('Files');
   function dragOver(ev) {
-    if (!hasFiles(ev)) return;
+    if (!hasFiles(ev) || bin) return;
     ev.preventDefault();
     ev.stopPropagation();
     ev.dataTransfer.dropEffect = importing ? 'none' : 'copy';
@@ -217,7 +447,7 @@
     if (!ev.currentTarget.contains(ev.relatedTarget)) dropping = false;
   }
   function drop(ev) {
-    if (!hasFiles(ev)) return;
+    if (!hasFiles(ev) || bin) return;
     ev.preventDefault();
     ev.stopPropagation();
     dropping = false;
@@ -226,11 +456,11 @@
   // Label beserta jumlah entrinya; allTags untuk pengaturan label entri.
   const tagList = $derived.by(() => {
     const n = new Map();
-    for (const e of entries) for (const t of e.tags) n.set(t, (n.get(t) ?? 0) + 1);
+    for (const e of live) for (const t of e.tags) n.set(t, (n.get(t) ?? 0) + 1);
     return [...n].sort((a, b) => a[0].localeCompare(b[0], 'id'));
   });
-  const untagged = $derived(entries.filter((e) => !e.tags.length).length);
-  const allTags = $derived(cleanTags(entries.flatMap((e) => e.tags)));
+  const untagged = $derived(live.filter((e) => !e.tags.length).length);
+  const allTags = $derived(cleanTags(live.flatMap((e) => e.tags)));
 
   const rtf = new Intl.RelativeTimeFormat('id', { numeric: 'auto' });
   function ago(ms) {
@@ -254,7 +484,7 @@
     const d = JSON.parse(e.json);
     d.header.namaSop = (d.header.namaSop || 'SOP tanpa judul') + ' (salinan)';
     const now = Date.now();
-    await putEntry({ id: newTabId(), title: d.header.namaSop, nomor: d.header.nomor, fileName: null, created: now, updated: now, json: JSON.stringify(d), tags: [...e.tags] });
+    await putEntry({ id: newTabId(), title: d.header.namaSop, nomor: d.header.nomor, fileName: null, created: now, updated: now, json: JSON.stringify(d), tags: [...e.tags], folder: folderOf(e) });
     await refresh();
     onnotify('Salinan dibuat');
   }
@@ -285,38 +515,40 @@
     tag = allTags.find((t) => t.toLowerCase() === name.toLowerCase()) ?? null;
   }
   async function removeTag(old) {
-    const n = entries.filter((e) => e.tags.includes(old)).length;
+    const n = live.filter((e) => e.tags.includes(old)).length;
     if (!(await ui.confirm(`Hapus label "${old}" dari ${n} entri? Dokumennya tidak ikut terhapus.`, { ok: 'Hapus label', danger: true }))) return;
     await mapTag(old, () => null);
     tag = null;
   }
 
+  /** Menyimpan dokumen aktif; dokumen yang baru masuk pustaka ditaruh di folder yang sedang dibuka. */
   async function saveCurrent() {
+    const fresh = !live.some((e) => e.id === current);
     await onsave();
+    if (fresh && at) await patchEntry(current, { folder: at });
     tag = null;
     tagEdit = null;
     query = '';
-    await refresh();
-  }
-
-  async function remove(e) {
-    if (!(await ui.confirm(`Hapus "${titleOf(e)}" dari pustaka? Tindakan ini tidak bisa dibatalkan.`, { ok: 'Hapus', danger: true }))) return;
-    await deleteEntry(e.id);
+    bin = false;
     await refresh();
   }
 </script>
 
   <header>
     {@render tabs()}
-    <input class="search" type="search" bind:value={query} placeholder="Cari nama, nomor, label, pelaksana, atau kegiatan…" />
+    <input class="search" type="search" bind:value={query} placeholder={bin ? 'Cari di Baru dihapus…' : 'Cari nama, nomor, label, pelaksana, atau kegiatan…'} />
     <button class="ib x" onclick={onclose} aria-label="Tutup" data-tip="Tutup"><Icon name="x" /></button>
   </header>
   <p class="hint">
-    SOP di Pustaka Lokal tersimpan di browser ini. Tekan Ctrl+S untuk menyimpan perubahannya. Data hilang bila data situs
-    browser dihapus, jadi sesekali unduh cadangannya (tombol unduh ZIP di bawah).
+    {#if bin}
+      SOP yang dihapus disimpan di sini selama {BIN_DAYS} hari, lalu dihapus permanen.
+    {:else}
+      SOP di Pustaka Lokal tersimpan di browser ini. Tekan Ctrl+S untuk menyimpan perubahannya. Data hilang bila data situs
+      browser dihapus, jadi sesekali unduh cadangannya (tombol unduh ZIP di bawah).
+    {/if}
   </p>
 
-  {#if tagList.length || tag !== null || dueCount || due}
+  {#if !bin && (tagList.length || tag !== null || dueCount || due)}
     <div class="tagbar" role="group" aria-label="Saring menurut label">
       {#if dueCount || due}
         <button
@@ -342,6 +574,21 @@
     </div>
   {/if}
 
+  <nav class="crumbs" aria-label="Lokasi">
+    {#if bin}
+      <button class="crumb" onclick={() => showBin(false)}><Icon name="arrowLeft" size={14} />Kembali ke pustaka</button>
+      <span class="sep">›</span><strong><Icon name="trash" size={14} /> Baru dihapus</strong>
+    {:else if searching}
+      <span class="muted">Hasil dari semua folder</span>
+    {:else}
+      <button class="crumb" class:drop={dropAt === null} onclick={() => go(null)} aria-current={at === null ? 'location' : undefined} {...dropzone(null)}>Utama</button>
+      {#each pathOf(at) as f (f.id)}
+        <span class="sep">›</span>
+        <button class="crumb" class:drop={dropAt === f.id} onclick={() => go(f.id)} aria-current={f.id === at ? 'location' : undefined} {...dropzone(f.id)}>{f.name}</button>
+      {/each}
+    {/if}
+  </nav>
+
   <div class="selbar" class:some={chosen.length > 0}>
     {#if shown.length}
       <label title={allChosen ? 'Batal pilih' : 'Pilih semua'}>
@@ -349,20 +596,30 @@
         {#if chosen.length}<strong>{chosen.length} dipilih</strong>{:else}Pilih semua{/if}
       </label>
     {/if}
-    {#if chosen.length}
+    {#if chosen.length && bin}
+      <button class="btn small" onclick={() => restore(chosen)}><Icon name="restore" size={14} />Pulihkan</button>
+      <button class="btn small danger" onclick={() => purge(chosen)}><Icon name="trash" size={14} />Hapus permanen</button>
+    {:else if chosen.length}
       <button class="btn small" onclick={() => makeBook(chosen)} title="Gabungkan SOP yang dipilih menjadi satu PDF berdaftar isi"><Icon name="book" size={14} />Gabung PDF</button>
-      <button class="btn small" onclick={() => downloadZip(chosen, 'SOP-terpilih')} title="Unduh SOP yang dipilih sebagai berkas .sop dalam ZIP"><Icon name="download" size={14} />Unduh ZIP</button>
+      <button class="btn small" onclick={() => downloadZip(zipFiles(chosen), 'SOP-terpilih')} title="Unduh SOP yang dipilih sebagai berkas .sop dalam ZIP"><Icon name="download" size={14} />Unduh ZIP</button>
+      <button class="btn small" onclick={() => startMove(chosen.map((e) => e.id))} title="Pindahkan ke folder lain"><Icon name="move" size={14} />Pindahkan</button>
       <button
         class="btn small danger"
         onclick={removePicked}
         disabled={!deletable.length}
-        title={deletable.length < chosen.length ? 'SOP yang terbuka di tab tidak ikut dihapus' : 'Hapus dari pustaka'}><Icon name="trash" size={14} />Hapus{deletable.length < chosen.length ? ` (${deletable.length})` : ''}</button
+        title={deletable.length < chosen.length ? 'SOP yang terbuka di tab tidak ikut dihapus' : 'Pindahkan ke Baru dihapus'}><Icon name="trash" size={14} />Hapus{deletable.length < chosen.length ? ` (${deletable.length})` : ''}</button
       >
     {/if}
     <span class="grow"></span>
-    <button class="ib" onclick={() => ((picker.value = ''), picker.click())} disabled={importing} aria-label="Impor berkas .sop atau .zip" data-tip="Impor berkas .sop atau .zip (bisa juga dilepas di daftar)"><Icon name="upload" size={16} /></button>
-    <button class="ib" onclick={exportRegister} disabled={!shown.length} aria-label="Unduh daftar induk SOP (XLSX)" data-tip={filtered ? 'Unduh daftar induk SOP (XLSX) dari hasil yang tampil' : 'Unduh daftar induk SOP (XLSX)'}><Icon name="table" size={16} /></button>
-    <button class="ib" onclick={() => downloadZip(shown, filtered ? 'Hasil-pencarian-SOP' : 'Pustaka-Lokal')} disabled={!shown.length} aria-label="Unduh cadangan (ZIP)" data-tip={filtered ? 'Unduh cadangan (ZIP) hasil yang tampil' : 'Unduh cadangan (ZIP) seluruh Pustaka Lokal'}><Icon name="download" size={16} /></button>
+    {#if bin}
+      <button class="btn small danger" onclick={() => purge(binned)} disabled={!binned.length}>Kosongkan</button>
+    {:else}
+      <button class="ib" onclick={newFolder} disabled={searching} aria-label="Folder baru" data-tip={searching ? 'Hapus pencarian atau saringan dulu' : `Folder baru di ${pathText(at)}`}><Icon name="folderPlus" size={16} /></button>
+      <button class="ib" onclick={() => ((picker.value = ''), picker.click())} disabled={importing} aria-label="Impor berkas .sop atau .zip" data-tip="Impor berkas .sop atau .zip (bisa juga dilepas di daftar)"><Icon name="upload" size={16} /></button>
+      <button class="ib" onclick={exportRegister} disabled={!scope.length} aria-label="Unduh daftar induk SOP (XLSX)" data-tip={`Unduh daftar induk SOP (XLSX): ${scopeText}`}><Icon name="table" size={16} /></button>
+      <button class="ib" onclick={backup} disabled={!scope.length} aria-label="Unduh cadangan (ZIP)" data-tip={`Unduh cadangan (ZIP): ${scopeText}`}><Icon name="download" size={16} /></button>
+      <button class="ib bin" onclick={() => showBin(true)} aria-label="Baru dihapus" data-tip={`Baru dihapus (${binned.length})`}><Icon name="trash" size={16} />{#if binned.length}<span>{binned.length}</span>{/if}</button>
+    {/if}
     <SortSelect />
   </div>
   <input
@@ -375,40 +632,69 @@
   />
 
   <ul class="list" class:dropping ondragover={dragOver} ondragleave={dragLeave} ondrop={drop}>
-    {#each shown as e (e.id)}
-      {@const isOpen = openIds.includes(e.id)}
-      <li class:current={e.id === current}>
-        <input type="checkbox" class="pick" checked={picked.includes(e.id)} onchange={() => togglePick(e.id)} aria-label={`Pilih ${titleOf(e)}`} />
-        <button class="main" onclick={() => pick(e)}>
-          <strong>
-            {titleOf(e)}
-            {#if e.id === current}<em>sedang dibuka</em>{:else if isOpen}<em>terbuka di tab</em>{/if}
-            {#if isDue(e)}<em class="due" title={`Berlaku sejak ${formatTanggal(e.since)}, lebih dari ${review.years} tahun`}>Perlu ditinjau</em>{/if}
-          </strong>
-          <small>
-            {[e.nomor, e.fileName, 'diubah ' + ago(e.updated)].filter(Boolean).join(' · ')}
-          </small>
-          {#if e.tags.length}
-            <span class="tags">{#each e.tags as t (t)}<i>{t}</i>{/each}</span>
-          {/if}
+    {#each shownFolders as f (f.id)}
+      <li class="folder" class:drop={dropAt === f.id} draggable="true" ondragstart={(ev) => dragStart(ev, f, true)} {...dropzone(f.id)}>
+        <span class="pick-gap"></span>
+        <button class="main" onclick={() => go(f.id)}>
+          <strong><Icon name="folder" size={17} /> {f.name}</strong>
+          <small>{folderInfo(f)}</small>
         </button>
         <span class="acts">
-          <button
-            class="btn small"
-            class:on={tagEdit === e.id}
-            aria-expanded={tagEdit === e.id}
-            onclick={() => ((tagEdit = tagEdit === e.id ? null : e.id), (newTag = ''))}
-            title="Atur label untuk mengelompokkan">Label</button
-          >
-          <button class="btn small" onclick={() => duplicate(e)} title="Buat salinan di pustaka"><Icon name="copy" size={14} />Duplikat</button>
-          <button class="btn small" onclick={() => downloadSop(e)} title="Unduh sebagai berkas .sop" aria-label={`Unduh ${titleOf(e)} sebagai berkas .sop`}><Icon name="download" size={14} /></button>
-          <button
-            class="btn small danger"
-            onclick={() => remove(e)}
-            disabled={isOpen}
-            title={isOpen ? 'Tutup tabnya dulu untuk menghapus' : 'Hapus dari pustaka'}
-          >Hapus</button>
+          <button class="btn small" onclick={() => renameFolder(f)} title="Ubah nama folder" aria-label={`Ubah nama folder ${f.name}`}><Icon name="pencil" size={14} /></button>
+          <button class="btn small" onclick={() => startMove([], [f.id])} title="Pindahkan folder" aria-label={`Pindahkan folder ${f.name}`}><Icon name="move" size={14} /></button>
+          <button class="btn small" onclick={() => folderZip(f)} title="Unduh isinya sebagai ZIP" aria-label={`Unduh isi folder ${f.name} sebagai ZIP`}><Icon name="download" size={14} /></button>
+          <button class="btn small danger" onclick={() => removeFolder(f)} title="Hapus folder" aria-label={`Hapus folder ${f.name}`}><Icon name="trash" size={14} /></button>
         </span>
+      </li>
+    {/each}
+    {#each shown as e (e.id)}
+      {@const isOpen = openIds.includes(e.id)}
+      <li class:current={e.id === current} draggable={!bin} ondragstart={(ev) => dragStart(ev, e, false)}>
+        <input type="checkbox" class="pick" checked={picked.includes(e.id)} onchange={() => togglePick(e.id)} aria-label={`Pilih ${titleOf(e)}`} />
+        {#if bin}
+          <button class="main" onclick={() => (previewOf = e)} title="Pratinjau">
+            <strong>{titleOf(e)}</strong>
+            <small>{[e.nomor, `dari ${e.fromPath || 'Utama'}`, `dihapus ${ago(e.deleted)}`, `terhapus permanen dalam ${binDaysLeft(e)} hari`].filter(Boolean).join(' · ')}</small>
+          </button>
+          <span class="acts">
+            <button class="btn small" onclick={() => (previewOf = e)} title="Pratinjau" aria-label={`Pratinjau ${titleOf(e)}`}><Icon name="eye" size={14} /></button>
+            <button class="btn small" onclick={() => restore([e])} title="Pulihkan ke folder asalnya"><Icon name="restore" size={14} />Pulihkan</button>
+            <button class="btn small danger" onclick={() => purge([e])} title="Hapus permanen">Hapus permanen</button>
+          </span>
+        {:else}
+          <button class="main" onclick={() => pick(e)}>
+            <strong>
+              {titleOf(e)}
+              {#if e.id === current}<em>sedang dibuka</em>{:else if isOpen}<em>terbuka di tab</em>{/if}
+              {#if isDue(e)}<em class="due" title={`Berlaku sejak ${formatTanggal(e.since)}, lebih dari ${review.years} tahun`}>Perlu ditinjau</em>{/if}
+            </strong>
+            <small>
+              {[searching && `di ${pathText(folderOf(e))}`, e.nomor, e.fileName, 'diubah ' + ago(e.updated)].filter(Boolean).join(' · ')}
+            </small>
+            {#if e.tags.length}
+              <span class="tags">{#each e.tags as t (t)}<i>{t}</i>{/each}</span>
+            {/if}
+          </button>
+          <span class="acts">
+            <button class="btn small" onclick={() => (previewOf = e)} title="Pratinjau tanpa membuka" aria-label={`Pratinjau ${titleOf(e)}`}><Icon name="eye" size={14} /></button>
+            <button
+              class="btn small"
+              class:on={tagEdit === e.id}
+              aria-expanded={tagEdit === e.id}
+              onclick={() => ((tagEdit = tagEdit === e.id ? null : e.id), (newTag = ''))}
+              title="Atur label untuk mengelompokkan">Label</button
+            >
+            <button class="btn small" onclick={() => duplicate(e)} title="Buat salinan di pustaka"><Icon name="copy" size={14} />Duplikat</button>
+            <button class="btn small" onclick={() => startMove([e.id])} title="Pindahkan ke folder lain" aria-label={`Pindahkan ${titleOf(e)}`}><Icon name="move" size={14} /></button>
+            <button class="btn small" onclick={() => downloadSop(e)} title="Unduh sebagai berkas .sop" aria-label={`Unduh ${titleOf(e)} sebagai berkas .sop`}><Icon name="download" size={14} /></button>
+            <button
+              class="btn small danger"
+              onclick={() => trash([e])}
+              disabled={isOpen}
+              title={isOpen ? 'Tutup tabnya dulu untuk menghapus' : 'Pindahkan ke Baru dihapus'}
+            >Hapus</button>
+          </span>
+        {/if}
         {#if tagEdit === e.id}
           <div class="tag-edit">
             {#each allTags as t (t)}
@@ -430,18 +716,65 @@
           </div>
         {/if}
       </li>
-    {:else}
-      <li class="empty">
-        {query.trim() || due || tag !== null
-          ? 'Tidak ada yang cocok.'
-          : 'Belum ada dokumen. SOP yang disimpan ke Pustaka Lokal akan muncul di sini, atau lepaskan berkas .sop/.zip di sini untuk mengimpornya.'}
-      </li>
     {/each}
+    {#if !shown.length && !shownFolders.length}
+      <li class="empty">
+        {#if bin}
+          {query.trim() ? 'Tidak ada yang cocok.' : 'Tidak ada SOP yang baru dihapus.'}
+        {:else if searching}
+          Tidak ada yang cocok.
+        {:else if at}
+          Folder ini kosong. Pindahkan SOP ke sini, atau lepaskan berkas .sop/.zip di sini untuk mengimpornya.
+        {:else}
+          Belum ada dokumen. SOP yang disimpan ke Pustaka Lokal akan muncul di sini, atau lepaskan berkas .sop/.zip di sini untuk mengimpornya.
+        {/if}
+      </li>
+    {/if}
   </ul>
 
   <footer>
     <button class="btn" onclick={saveCurrent} disabled={!cansave}><Icon name="save" size={15} />Simpan dokumen ini ke pustaka</button>
   </footer>
+
+<SopPreviewDialog
+  item={previewOf && { title: titleOf(previewOf), json: previewOf.json, where: previewOf.deleted ? `Dihapus dari ${previewOf.fromPath || 'Utama'}` : `Folder ${pathText(folderOf(previewOf))}` }}
+  onopen={previewOf && !previewOf.deleted
+    ? () => {
+        const e = previewOf;
+        previewOf = null;
+        pick(e);
+      }
+    : undefined}
+  onclose={() => (previewOf = null)}
+/>
+
+<dialog bind:this={moveDialog} class="move-dialog" use:dismiss onclose={() => (moving = null)} aria-labelledby="local-move-title">
+  {#if moving}
+    <form onsubmit={submitMove}>
+      <h2 id="local-move-title">Pindahkan</h2>
+      <p class="muted">
+        {moving.ids.length + moving.fids.length === 1
+          ? moving.fids.length
+            ? `Folder ${byId.get(moving.fids[0])?.name}`
+            : titleOf(entries.find((e) => e.id === moving.ids[0]) ?? {})
+          : `${moving.ids.length + moving.fids.length} item`}
+      </p>
+      <label>
+        <span>Ke folder</span>
+        <select bind:value={moving.target}>
+          <option value={null}>Utama</option>
+          {#each moveTargets as t (t.id)}
+            <option value={t.id}>{'   '.repeat(t.depth + 1)}{t.name}</option>
+          {/each}
+        </select>
+      </label>
+      <footer>
+        <button type="button" class="btn" onclick={() => (moving = null)}>Batal</button>
+        <button class="btn primary"><Icon name="move" size={15} />Pindahkan</button>
+      </footer>
+    </form>
+  {/if}
+</dialog>
 
 <style>
   header {
@@ -473,8 +806,58 @@
     background: var(--surface-2);
     color: var(--text);
   }
+  .ib.bin {
+    width: auto;
+    min-width: 1.85rem;
+    gap: 0.2rem;
+    padding: 0 0.3rem;
+  }
+  .ib.bin span {
+    font-size: 0.72rem;
+  }
   .hint {
     margin: 0 0 0.6rem;
+  }
+  .crumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.15rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.3rem;
+    min-height: 1.6rem;
+  }
+  .crumbs strong {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .crumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: none;
+    color: var(--accent);
+    padding: 0.1rem 0.35rem;
+    font: inherit;
+    cursor: pointer;
+  }
+  .crumb[aria-current] {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .crumb:hover {
+    background: var(--surface-2);
+  }
+  .crumb.drop {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .sep,
+  .muted {
+    color: var(--muted);
   }
   .list {
     list-style: none;
@@ -499,6 +882,24 @@
   }
   .list li.current {
     background: var(--surface-2);
+  }
+  .list li.drop {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    background: var(--accent-soft);
+  }
+  .pick-gap {
+    flex: none;
+    width: 13px;
+  }
+  .folder strong {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .folder strong :global(svg) {
+    color: var(--accent);
+    flex: none;
   }
   .main {
     flex: 1;
@@ -541,14 +942,11 @@
   .selbar {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    flex-wrap: wrap;
+    gap: 0.4rem;
     font-size: 0.82rem;
     color: var(--muted);
     min-height: 1.9rem;
-  }
-  .selbar {
-    flex-wrap: wrap;
-    gap: 0.4rem;
     margin-bottom: 0.35rem;
     padding: 0.2rem 0.3rem 0.2rem 0;
     border-radius: 8px;
@@ -709,5 +1107,38 @@
   }
   .grow {
     flex: 1;
+  }
+  .move-dialog {
+    width: min(420px, calc(100vw - 2rem));
+    border: 0;
+    border-radius: 14px;
+    padding: 1rem 1.1rem;
+    box-shadow: 0 20px 50px rgb(0 0 0 / 0.25);
+    background: var(--surface);
+    color: var(--text);
+  }
+  .move-dialog::backdrop {
+    background: rgb(15 23 42 / 0.45);
+  }
+  .move-dialog h2 {
+    margin: 0 0 0.3rem;
+    font-size: 1.05rem;
+  }
+  .move-dialog p {
+    margin: 0 0 0.8rem;
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+  }
+  .move-dialog label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+  }
+  .move-dialog select {
+    font: inherit;
+  }
+  .move-dialog footer {
+    justify-content: flex-end;
   }
 </style>
