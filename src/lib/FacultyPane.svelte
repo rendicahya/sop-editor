@@ -1204,6 +1204,21 @@
     if (groups.some((x) => x.id !== g.id && x.name.toLowerCase() === name.toLowerCase())) return ui.alert(`Grup ${name} sudah ada.`);
     adminAct(() => F.renameGroup(g.id, name));
   }
+  /** Grup baru dengan anggota yang sama. Hak akses SOP tidak ikut disalin; atur lewat Hak akses bila perlu. */
+  async function duplicateGroup(g) {
+    const taken = (n) => groups.some((x) => x.name.toLowerCase() === n.toLowerCase());
+    let suggest = cleanName(`${g.name} (salinan)`);
+    for (let i = 2; taken(suggest); i++) suggest = cleanName(`${g.name} (salinan ${i})`);
+    const name = cleanName((await ui.prompt('Nama grup baru', suggest, { title: `Duplikat grup ${g.name}`, ok: 'Duplikat', maxlength: 80 })) ?? '');
+    if (!name) return;
+    if (taken(name)) return ui.alert(`Grup ${name} sudah ada.`);
+    const emails = inGroup(g).map((m) => m.email);
+    adminAct(async () => {
+      const id = await F.createGroup(name);
+      await F.setGroupMembers(id, emails, members);
+      openGroup = id;
+    });
+  }
   async function deleteGroup(g) {
     const msg = `Hapus grup ${g.name}? Anggotanya tetap terdaftar, tetapi hak akses yang diberikan lewat grup ini tidak berlaku lagi.`;
     if (await ui.confirm(msg, { ok: 'Hapus', danger: true })) adminAct(() => F.deleteGroup(g.id, members));
@@ -1656,6 +1671,7 @@
                     <span>{g.name} <small class="groups-of">{count} anggota</small></span>
                     {@render ib('users', shown ? 'Tutup daftar anggota' : 'Atur anggota grup', () => (openGroup = shown ? null : g.id), { on: shown, expanded: shown })}
                     {@render ib('pencil', 'Ubah nama grup', () => renameGroup(g))}
+                    {@render ib('copy', 'Duplikat grup beserta anggotanya', () => duplicateGroup(g))}
                     {@render ib('trash', 'Hapus grup', () => deleteGroup(g), { danger: true })}
                   </div>
                   {#if shown}
