@@ -1499,7 +1499,7 @@
           <button class="close" onclick={() => closeTab(t.id)} title="Tutup tab (Alt+W)" aria-label="Tutup {tabTitle(t)}">×</button>
         </div>
       {/each}
-      <button class="add" onclick={() => addTab(emptyDocument())} title="Tab baru" aria-label="Tab baru">+</button>
+      <button class="add" onclick={() => addTab(emptyDocument())} title="Tab baru (dokumen kosong)"><Icon name="plus" size={14} /><span>Tab baru</span></button>
     </div>
     <FormatBar />
     {#if duration.text || duration.unread.length}

@@ -756,7 +756,7 @@
         <span class="g-tools g-top">
           <button class="grip" {...grip('actor', f.index, 'pelaksana')}>⠿</button>
           <button tabindex="-1" title="Geser ke kiri" aria-label="Geser pelaksana ke kiri" aria-disabled={f.index === 0} onclick={() => moveActor(f.index, -1)}><Icon name="arrowLeft" size={12} /></button>
-          <button tabindex="-1" title="Tambah pelaksana di kanan" aria-label="Tambah pelaksana" onclick={() => addActor(f.index)}><Icon name="plus" size={12} /></button>
+          <button tabindex="-1" class="add" title="Tambah pelaksana di kanan" aria-label="Tambah pelaksana" onclick={() => addActor(f.index)}><Icon name="plus" size={14} /></button>
           <button
             tabindex="-1"
             class="danger"
@@ -784,7 +784,7 @@
           <button tabindex="-1" title="Naikkan" aria-label="Naikkan kegiatan" aria-disabled={f.index === 0} onclick={() => moveStepRow(f.index, -1)}><Icon name="arrowUp" size={12} /></button>
           <button tabindex="-1" title="Turunkan" aria-label="Turunkan kegiatan" aria-disabled={f.index === steps.length - 1} onclick={() => moveStepRow(f.index, 1)}><Icon name="arrowDown" size={12} /></button>
           <button tabindex="-1" title="Duplikat" aria-label="Duplikat kegiatan" onclick={() => duplicateStep(f.index)}><Icon name="copy" size={12} /></button>
-          <button tabindex="-1" title="Tambah kegiatan di bawah" aria-label="Tambah kegiatan di bawah" onclick={() => addStep(f.index)}><Icon name="plus" size={12} /></button>
+          <button tabindex="-1" class="add" title="Tambah kegiatan di bawah" aria-label="Tambah kegiatan di bawah" onclick={() => addStep(f.index)}><Icon name="plus" size={14} /></button>
           <button tabindex="-1" class="danger" title="Hapus kegiatan" aria-label="Hapus kegiatan" onclick={() => removeStep(steps, f.index)}><Icon name="x" size={12} /></button>
         </span>
       </div>
@@ -1235,6 +1235,16 @@
   .g-tools button:hover {
     background: rgb(var(--edit));
     color: #fff;
+  }
+  /* Tombol tambah diisi warna agar menonjol di antara tombol lain yang hanya bergaris. */
+  .g-tools button.add {
+    width: 22px;
+    background: rgb(var(--edit));
+    border-color: rgb(var(--edit));
+    color: #fff;
+  }
+  .g-tools button.add:hover {
+    filter: brightness(1.12);
   }
   .g-tools button.danger {
     border-color: rgb(192 57 43 / 0.5);

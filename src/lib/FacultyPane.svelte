@@ -113,7 +113,9 @@
     busy = true;
     loadError = '';
     try {
-      const [r, f] = await Promise.all([F.listSops(), F.listFolders()]);
+      // Grup ikut dibaca (koleksi kecil) agar lencana hak akses menampilkan namanya, bukan sekadar jumlah.
+      const [r, f, g] = await Promise.all([F.listSops(), F.listFolders(), F.listGroups().catch(() => groups)]);
+      groups = g;
       // Penyebaran hak akses tidak boleh menghalangi tampilnya daftar; yang gagal dicoba lagi saat dimuat berikutnya.
       await F.reconcileAccess(f, [...r.live, ...r.bin]).catch(() => {});
       live = r.live.map(withText);
@@ -991,14 +993,19 @@
     accessTarget = null;
     act(() => F.setAccess(kind, item.id, data), 'Hak akses disimpan');
   }
-  /** Ringkasan siapa yang bisa melihat, untuk lencana di daftar. */
-  function accessLabel(item) {
+  /** Lencana siapa yang bisa melihat, untuk daftar: satu tag per grup (nama grup), lalu jumlah orang. */
+  const nameOfGroup = (id) => groups.find((g) => g.id === id)?.name;
+  function accessTags(item) {
     const readers = item.readers ?? [];
-    if (readers.includes(F.EVERYONE)) return 'Semua anggota';
+    if (readers.includes(F.EVERYONE)) return ['Semua anggota'];
     const others = readers.filter((r) => r !== item.createdByEmail);
-    const nGroups = others.filter(F.isGroup).length;
-    const nPeople = others.length - nGroups;
-    return [nGroups && `${nGroups} grup`, nPeople && `${nPeople} orang`].filter(Boolean).join(' · ') || 'Private';
+    const ids = others.filter(F.isGroup);
+    // Grup yang sudah dihapus atau belum termuat dihitung saja, tanpa nama.
+    const named = ids.map(nameOfGroup).filter(Boolean).sort((a, b) => a.localeCompare(b, 'id'));
+    const unnamed = ids.length - named.length;
+    const nPeople = others.length - ids.length;
+    const tags = [...named, unnamed && `${unnamed} grup`, nPeople && `${nPeople} orang`].filter(Boolean);
+    return tags.length ? tags : ['Private'];
   }
   const accessTip = (item) => (canManage(item) ? 'Atur hak akses' : 'Lihat hak akses');
 
@@ -1458,7 +1465,7 @@
               <li data-key={row.key} class:sel={selected.has(row.key)} class:drop={dropAt === f.id} class:dragging={dragged(f.id)} draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => rowMenu(e, row)}>
                 {@render pick(row)}
                 <button class="main" onclick={(e) => rowClick(e, row, () => enterFolder(f.id))} onfocus={() => (cursor = row.key)}>
-                  <strong><Icon name="folder" size={18} /> {f.name} <em class:shared={F.isShared(f)}>{accessLabel(f)}</em></strong>
+                  <strong><Icon name="folder" size={18} /> {f.name} {#each accessTags(f) as t}<em class:shared={F.isShared(f)}>{t}</em>{/each}</strong>
                   <small>{[searching && parent && `di ${pathText(parent)}`, folderInfo(f), `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}</small>
                 </button>
                 <span class="acts" role="group" aria-label="Tindakan folder">
@@ -1476,7 +1483,7 @@
                   <strong>
                     <Icon name="file" size={15} />
                     {titleOf(s)}
-                    <em class:shared={F.isShared(s)}>{accessLabel(s)}</em>
+                    {#each accessTags(s) as t}<em class:shared={F.isShared(s)}>{t}</em>{/each}
                     {#if s.custom && folderOf(s)}<em>Khusus</em>{/if}
                     {#if !canEdit(s)}<em>Hanya lihat</em>{/if}
                     {#if isOpen(s)}<em>Terbuka di tab</em>{/if}
