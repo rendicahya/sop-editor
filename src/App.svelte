@@ -1659,7 +1659,8 @@
       onopen: openEntry,
       onsave: saveToLibrary,
       cansave: !empty,
-      onnotify: notify
+      onnotify: notify,
+      onbook: makeBook
     }}
     faculty={{
       openIds: openRemoteIds,

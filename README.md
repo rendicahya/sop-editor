@@ -72,6 +72,10 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   dan dokumennya bisa diduplikasi.
   **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen: satu entri boleh berlabel lebih dari satu,
   daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
+  Seperti Pustaka Daring, Pustaka Lokal juga punya saringan **Perlu ditinjau**, **daftar induk SOP (XLSX)**, **cadangan
+  ZIP** (seluruh/hasil yang tampil/pilihan, atau satu berkas .sop), **Gabung PDF** dari pilihan, dan **impor** berkas
+  .sop/.zip (tombol unggah atau lepas berkas di daftar; nama folder di dalam ZIP dijadikan label). SOP yang terbuka di
+  tab boleh dipilih untuk PDF/ZIP, tetapi tidak ikut dihapus.
 - **Pustaka Daring**: SOP bersama secara daring untuk akun @ub.ac.id atau @gmail.com yang didaftarkan admin. Lihat [Pustaka Daring](#pustaka-daring).
   Label hanya ada di pustaka (tidak masuk berkas .sop).
 - **Tautan Keterkaitan ke SOP lain**: klik kanan butir Keterkaitan › **Tautkan ke SOP lain…**, lalu pilih SOP dari

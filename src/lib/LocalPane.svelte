@@ -5,20 +5,27 @@
   import { listEntries, putEntry, patchEntry, deleteEntry, cleanTags, haystack } from './library.js';
   import { librarySort, sorted } from './librarySort.svelte.js';
   import SortSelect from './SortSelect.svelte';
+  import { readSopFiles } from './sopFiles.js';
+  import { sopZip, sopText, safeName } from './sopZip.js';
+  import { registerXlsx } from './register.js';
+  import { downloadBlob } from './files.js';
+  import { formatTanggal, todayIso } from './model.js';
+  import { review, reviewSince, reviewDue, isReviewDue } from './review.svelte.js';
 
   /**
    * openIds: id tab yang sedang terbuka (= id entri pustaka), current: id tab aktif.
    * Panel di dialog Pustaka: open = dialognya terbuka, active = tab Lokal yang tampil, tabs = pemilih tab di kepala panel,
-   * onclose() menutup dialog.
+   * onclose() menutup dialog. onbook(entries, title): menggabungkan entri menjadi satu PDF.
    */
-  let { open = false, active = false, tabs, onclose, openIds = [], current, onopen, onsave, cansave = true, onnotify } = $props();
+  let { open = false, active = false, tabs, onclose, openIds = [], current, onopen, onsave, cansave = true, onnotify, onbook } = $props();
 
   let entries = $state([]);
   let query = $state('');
   let tag = $state(null); // saringan label: null = semua, '' = tanpa label
   let tagEdit = $state(null); // id entri yang labelnya sedang diatur
   let newTag = $state('');
-  let picked = $state([]); // id entri yang dicentang untuk dihapus sekaligus
+  let picked = $state([]); // id entri yang dicentang untuk tindakan sekaligus
+  let due = $state(false); // hanya yang perlu ditinjau
 
   // Tiap kali dialog dibuka, pencarian dan pilihan dikosongkan.
   let wasOpen = false;
@@ -27,6 +34,7 @@
       query = '';
       tagEdit = null;
       picked = [];
+      due = false;
     }
     wasOpen = open;
   });
@@ -37,7 +45,14 @@
 
   async function refresh() {
     try {
-      entries = (await listEntries()).map((e) => ({ ...e, tags: e.tags ?? [], text: haystack(e) }));
+      entries = (await listEntries()).map((e) => {
+        let header = {};
+        try {
+          header = JSON.parse(e.json).header ?? {};
+        } catch {}
+        const dates = { tglPembuatan: header.tglPembuatan ?? '', tglRevisi: header.tglRevisi ?? '', tglEfektif: header.tglEfektif ?? '' };
+        return { ...e, tags: e.tags ?? [], text: haystack(e), since: reviewSince(header), dates };
+      });
     } catch {
       entries = [];
       ui.alert('Pustaka Lokal tidak bisa dibaca di browser ini (mode privat atau penyimpanan diblokir).');
@@ -47,27 +62,166 @@
   const shown = $derived.by(() => {
     const q = query.trim().toLowerCase();
     const byTag = (e) => tag === null || (tag === '' ? !e.tags.length : e.tags.includes(tag));
-    const found = entries.filter((e) => byTag(e) && (!q || q.split(/\s+/).every((w) => e.text.includes(w))));
+    const found = entries.filter((e) => byTag(e) && (!due || isDue(e)) && (!q || q.split(/\s+/).every((w) => e.text.includes(w))));
     return sorted(found, librarySort.by, titleOf, (e) => e.updated ?? 0);
   });
-  // Pilihan untuk hapus sekaligus: hanya entri yang tampil dan tidak sedang terbuka di tab.
-  const deletable = $derived(shown.filter((e) => !openIds.includes(e.id)));
-  const chosen = $derived(deletable.filter((e) => picked.includes(e.id)));
-  const allChosen = $derived(deletable.length > 0 && chosen.length === deletable.length);
+  const isDue = (e) => isReviewDue(e.since, review.years);
+  const dueCount = $derived(entries.filter(isDue).length);
+  // Pilihan: entri yang tampil. Yang sedang terbuka di tab boleh dipilih (untuk PDF/ZIP), tetapi tidak ikut dihapus.
+  const chosen = $derived(shown.filter((e) => picked.includes(e.id)));
+  const deletable = $derived(chosen.filter((e) => !openIds.includes(e.id)));
+  const allChosen = $derived(shown.length > 0 && chosen.length === shown.length);
   function togglePick(id) {
     picked = picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id];
   }
   function pickAll() {
-    const ids = deletable.map((e) => e.id);
-    picked = allChosen ? picked.filter((x) => !ids.includes(x)) : [...new Set([...picked, ...ids])];
+    picked = allChosen ? [] : shown.map((e) => e.id);
   }
   async function removePicked() {
-    const n = chosen.length;
-    if (!n || !(await ui.confirm(`Hapus ${n} dokumen terpilih dari pustaka? Tindakan ini tidak bisa dibatalkan.`, { ok: 'Hapus', danger: true }))) return;
-    for (const e of chosen) await deleteEntry(e.id);
+    const n = deletable.length;
+    const skipped = chosen.length - n;
+    const note = skipped ? ` ${skipped} dokumen yang terbuka di tab tidak ikut dihapus.` : '';
+    if (!n || !(await ui.confirm(`Hapus ${n} dokumen terpilih dari pustaka? Tindakan ini tidak bisa dibatalkan.${note}`, { ok: 'Hapus', danger: true }))) return;
+    for (const e of deletable) await deleteEntry(e.id);
     picked = [];
     await refresh();
     onnotify(`${n} dokumen dihapus`);
+  }
+
+  // ---- Gabung PDF, cadangan ZIP, daftar induk ----
+  async function makeBook(list) {
+    if (!list.length) return;
+    const raw = await ui.prompt(`${list.length} SOP digabung menjadi satu PDF, diawali halaman daftar isi yang bisa diklik. Judul halaman depan:`, tag ? `Kumpulan SOP ${tag}` : 'Kumpulan SOP', {
+      title: 'Gabung jadi satu PDF',
+      ok: 'Buat PDF',
+      maxlength: 200
+    });
+    const title = raw?.trim().replace(/\s+/g, ' ');
+    if (!title) return;
+    onclose();
+    onbook(list.map((e) => ({ json: e.json, title: titleOf(e) })), title);
+  }
+  function downloadZip(list, name) {
+    if (!list.length) return ui.alert('Tidak ada SOP untuk diunduh.', { title: 'Unduh ZIP' });
+    try {
+      downloadBlob(sopZip(list.map((e) => ({ dirs: [], name: titleOf(e), json: e.json, mtime: e.updated }))), `${name}-${todayIso()}.zip`);
+      onnotify(`${list.length} SOP diunduh dalam berkas ZIP`);
+    } catch (err) {
+      ui.alert('ZIP gagal dibuat: ' + err.message, { title: 'Unduh ZIP' });
+    }
+  }
+  const downloadSop = (e) => downloadBlob(new Blob([sopText(e.json)], { type: 'application/json' }), `${safeName(e.fileName?.replace(/\.(sop|json)$/i, '') || titleOf(e))}.sop`);
+  const filtered = $derived(!!query.trim() || tag !== null || due);
+  function exportRegister() {
+    const list = sorted(shown, 'name-asc', titleOf, (e) => e.updated ?? 0);
+    if (!list.length) return ui.alert('Tidak ada SOP untuk dimasukkan ke daftar induk.', { title: 'Daftar induk SOP' });
+    const date = (v) => (v ? formatTanggal(v) : '');
+    const stamp = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+    const columns = [
+      { label: 'No.', width: 5 },
+      { label: 'Nama SOP', width: 42 },
+      { label: 'Nomor SOP', width: 26 },
+      { label: 'Label', width: 22 },
+      { label: 'Tanggal pembuatan', width: 16 },
+      { label: 'Tanggal revisi', width: 16 },
+      { label: 'Tanggal efektif', width: 16 },
+      { label: `Jatuh tempo tinjauan (${review.years} tahun)`, width: 18 },
+      { label: 'Status tinjauan', width: 15 },
+      { label: 'Terakhir diubah', width: 19 },
+      { label: 'Berkas', width: 24 }
+    ];
+    const rows = list.map((e, i) => [
+      i + 1,
+      titleOf(e),
+      e.nomor ?? '',
+      e.tags.join(', '),
+      date(e.dates.tglPembuatan),
+      date(e.dates.tglRevisi),
+      date(e.dates.tglEfektif),
+      date(reviewDue(e.since)),
+      !e.since ? 'Tanggal belum diisi' : isDue(e) ? 'Perlu ditinjau' : 'Berlaku',
+      new Date(e.updated).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
+      e.fileName ?? ''
+    ]);
+    const blob = registerXlsx({
+      title: 'Daftar Induk SOP',
+      note: `${filtered ? 'Hasil pencarian atau saringan' : 'Seluruh Pustaka Lokal'} · ${list.length} SOP · diunduh ${stamp}`,
+      columns,
+      rows
+    });
+    downloadBlob(blob, `Daftar-Induk-SOP-${todayIso()}.xlsx`);
+    onnotify(`Daftar induk ${list.length} SOP diunduh`);
+  }
+
+  // ---- Impor berkas .sop/.zip dari komputer (tombol atau seret-lepas) ----
+  let importing = $state(false);
+  let dropping = $state(false);
+  let picker;
+  async function importFiles(files) {
+    if (importing) return;
+    let found;
+    try {
+      found = await readSopFiles(files);
+    } catch (err) {
+      return ui.alert(err.message);
+    }
+    const { items, bad, other } = found;
+    if (!items.length) {
+      return ui.alert(bad.length ? `${bad.length} berkas SOP tidak bisa dibaca (bukan dokumen SOP yang valid).` : 'Tidak ada berkas .sop. Pilih berkas .sop, atau berkas .zip berisi berkas .sop.', { title: 'Tidak ada yang diimpor' });
+    }
+    const msg = [
+      `Masukkan ${items.length} SOP ke Pustaka Lokal?`,
+      tag && `SOP yang diimpor diberi label "${tag}".`,
+      items.some((i) => i.dirs.length) && 'Nama folder di dalam ZIP dijadikan label.',
+      bad.length && `${bad.length} berkas dilewati karena bukan dokumen SOP yang valid.`,
+      other && `${other} berkas lain (bukan .sop) diabaikan.`
+    ].filter(Boolean).join('\n\n');
+    if (!(await ui.confirm(msg, { title: 'Impor ke Pustaka Lokal', ok: 'Impor' }))) return;
+    importing = true;
+    let n = 0;
+    try {
+      for (const it of items) {
+        const doc = it.doc;
+        if (it.title) doc.header.namaSop = it.title;
+        const now = Date.now();
+        const file = it.name.split('/').pop();
+        await putEntry({
+          id: newTabId(),
+          title: doc.header.namaSop,
+          nomor: doc.header.nomor,
+          fileName: /\.sop$/i.test(file) ? file : null,
+          created: now,
+          updated: now,
+          json: JSON.stringify(doc),
+          tags: cleanTags([...(tag ? [tag] : []), ...it.dirs])
+        });
+        n++;
+      }
+    } catch (err) {
+      ui.alert(`Impor berhenti setelah ${n} SOP: ${err.message}`, { title: 'Gagal mengimpor' });
+    } finally {
+      importing = false;
+      await refresh();
+    }
+    if (n) onnotify(`${n} SOP dimasukkan ke Pustaka Lokal`);
+  }
+  const hasFiles = (ev) => ev.dataTransfer?.types.includes('Files');
+  function dragOver(ev) {
+    if (!hasFiles(ev)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    ev.dataTransfer.dropEffect = importing ? 'none' : 'copy';
+    dropping = !importing;
+  }
+  function dragLeave(ev) {
+    if (!ev.currentTarget.contains(ev.relatedTarget)) dropping = false;
+  }
+  function drop(ev) {
+    if (!hasFiles(ev)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    dropping = false;
+    if (!importing) importFiles([...ev.dataTransfer.files]);
   }
   // Label beserta jumlah entrinya; allTags untuk pengaturan label entri.
   const tagList = $derived.by(() => {
@@ -159,12 +313,21 @@
   </header>
   <p class="hint">
     SOP di Pustaka Lokal tersimpan di browser ini. Tekan Ctrl+S untuk menyimpan perubahannya. Data hilang bila data situs
-    browser dihapus, jadi simpan juga SOP penting sebagai berkas .sop.
+    browser dihapus, jadi sesekali unduh cadangannya (tombol unduh ZIP di bawah).
   </p>
 
-  {#if tagList.length || tag !== null}
+  {#if tagList.length || tag !== null || dueCount || due}
     <div class="tagbar" role="group" aria-label="Saring menurut label">
-      <button class:on={tag === null} aria-pressed={tag === null} onclick={() => (tag = null)}>Semua</button>
+      {#if dueCount || due}
+        <button
+          class="due"
+          class:on={due}
+          aria-pressed={due}
+          onclick={() => (due = !due)}
+          title={`Tanggal efektif atau revisi terakhir sudah lewat ${review.years} tahun`}>Perlu ditinjau <span>{dueCount}</span></button
+        >
+      {/if}
+      <button class:on={tag === null && !due} aria-pressed={tag === null && !due} onclick={() => ((tag = null), (due = false))}>Semua</button>
       {#each tagList as [t, n] (t)}
         <button class:on={tag === t} aria-pressed={tag === t} onclick={() => (tag = tag === t ? null : t)}>{t} <span>{n}</span></button>
       {/each}
@@ -179,44 +342,48 @@
     </div>
   {/if}
 
-  {#if shown.length}
-    <div class="selbar">
-      <label>
-        <input
-          type="checkbox"
-          checked={allChosen}
-          indeterminate={chosen.length > 0 && !allChosen}
-          disabled={!deletable.length}
-          onchange={pickAll}
-        />
-        Pilih semua{deletable.length < shown.length ? ' (kecuali yang terbuka di tab)' : ''}
+  <div class="selbar" class:some={chosen.length > 0}>
+    {#if shown.length}
+      <label title={allChosen ? 'Batal pilih' : 'Pilih semua'}>
+        <input type="checkbox" class="pick" checked={allChosen} indeterminate={chosen.length > 0 && !allChosen} onchange={pickAll} />
+        {#if chosen.length}<strong>{chosen.length} dipilih</strong>{:else}Pilih semua{/if}
       </label>
-      {#if chosen.length}
-        <span>{chosen.length} dipilih</span>
-        <button class="btn small danger" onclick={removePicked}><Icon name="trash" size={14} />Hapus terpilih</button>
-      {/if}
-      <span class="grow"></span>
-      <SortSelect />
-    </div>
-  {/if}
+    {/if}
+    {#if chosen.length}
+      <button class="btn small" onclick={() => makeBook(chosen)} title="Gabungkan SOP yang dipilih menjadi satu PDF berdaftar isi"><Icon name="book" size={14} />Gabung PDF</button>
+      <button class="btn small" onclick={() => downloadZip(chosen, 'SOP-terpilih')} title="Unduh SOP yang dipilih sebagai berkas .sop dalam ZIP"><Icon name="download" size={14} />Unduh ZIP</button>
+      <button
+        class="btn small danger"
+        onclick={removePicked}
+        disabled={!deletable.length}
+        title={deletable.length < chosen.length ? 'SOP yang terbuka di tab tidak ikut dihapus' : 'Hapus dari pustaka'}><Icon name="trash" size={14} />Hapus{deletable.length < chosen.length ? ` (${deletable.length})` : ''}</button
+      >
+    {/if}
+    <span class="grow"></span>
+    <button class="ib" onclick={() => ((picker.value = ''), picker.click())} disabled={importing} aria-label="Impor berkas .sop atau .zip" data-tip="Impor berkas .sop atau .zip (bisa juga dilepas di daftar)"><Icon name="upload" size={16} /></button>
+    <button class="ib" onclick={exportRegister} disabled={!shown.length} aria-label="Unduh daftar induk SOP (XLSX)" data-tip={filtered ? 'Unduh daftar induk SOP (XLSX) dari hasil yang tampil' : 'Unduh daftar induk SOP (XLSX)'}><Icon name="table" size={16} /></button>
+    <button class="ib" onclick={() => downloadZip(shown, filtered ? 'Hasil-pencarian-SOP' : 'Pustaka-Lokal')} disabled={!shown.length} aria-label="Unduh cadangan (ZIP)" data-tip={filtered ? 'Unduh cadangan (ZIP) hasil yang tampil' : 'Unduh cadangan (ZIP) seluruh Pustaka Lokal'}><Icon name="download" size={16} /></button>
+    <SortSelect />
+  </div>
+  <input
+    bind:this={picker}
+    type="file"
+    hidden
+    multiple
+    accept=".sop,.json,.zip,application/json,application/zip"
+    onchange={(ev) => ev.currentTarget.files.length && importFiles([...ev.currentTarget.files])}
+  />
 
-  <ul class="list">
+  <ul class="list" class:dropping ondragover={dragOver} ondragleave={dragLeave} ondrop={drop}>
     {#each shown as e (e.id)}
       {@const isOpen = openIds.includes(e.id)}
       <li class:current={e.id === current}>
-        <input
-          type="checkbox"
-          class="pick"
-          checked={!isOpen && picked.includes(e.id)}
-          disabled={isOpen}
-          onchange={() => togglePick(e.id)}
-          aria-label={`Pilih ${titleOf(e)}`}
-          title={isOpen ? 'Tutup tabnya dulu untuk menghapus' : 'Pilih untuk dihapus sekaligus'}
-        />
+        <input type="checkbox" class="pick" checked={picked.includes(e.id)} onchange={() => togglePick(e.id)} aria-label={`Pilih ${titleOf(e)}`} />
         <button class="main" onclick={() => pick(e)}>
           <strong>
             {titleOf(e)}
             {#if e.id === current}<em>sedang dibuka</em>{:else if isOpen}<em>terbuka di tab</em>{/if}
+            {#if isDue(e)}<em class="due" title={`Berlaku sejak ${formatTanggal(e.since)}, lebih dari ${review.years} tahun`}>Perlu ditinjau</em>{/if}
           </strong>
           <small>
             {[e.nomor, e.fileName, 'diubah ' + ago(e.updated)].filter(Boolean).join(' · ')}
@@ -234,6 +401,7 @@
             title="Atur label untuk mengelompokkan">Label</button
           >
           <button class="btn small" onclick={() => duplicate(e)} title="Buat salinan di pustaka"><Icon name="copy" size={14} />Duplikat</button>
+          <button class="btn small" onclick={() => downloadSop(e)} title="Unduh sebagai berkas .sop" aria-label={`Unduh ${titleOf(e)} sebagai berkas .sop`}><Icon name="download" size={14} /></button>
           <button
             class="btn small danger"
             onclick={() => remove(e)}
@@ -264,7 +432,9 @@
       </li>
     {:else}
       <li class="empty">
-        {query.trim() ? 'Tidak ada yang cocok.' : 'Belum ada dokumen. SOP yang disimpan ke Pustaka Lokal akan muncul di sini.'}
+        {query.trim() || due || tag !== null
+          ? 'Tidak ada yang cocok.'
+          : 'Belum ada dokumen. SOP yang disimpan ke Pustaka Lokal akan muncul di sini, atau lepaskan berkas .sop/.zip di sini untuk mengimpornya.'}
       </li>
     {/each}
   </ul>
@@ -376,11 +546,47 @@
     color: var(--muted);
     min-height: 1.9rem;
   }
+  .selbar {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
+    padding: 0.2rem 0.3rem 0.2rem 0;
+    border-radius: 8px;
+  }
+  .selbar.some {
+    background: var(--accent-soft);
+  }
   .selbar label {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.45rem;
     padding-left: 0.6rem;
+    margin-right: 0.3rem;
+    cursor: pointer;
+  }
+  .selbar strong {
+    color: var(--accent);
+  }
+  .ib:disabled {
+    opacity: 0.4;
+    cursor: default;
+    background: none;
+  }
+  .list.dropping {
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
+    background: var(--accent-soft);
+  }
+  em.due {
+    color: #92400e;
+    background: var(--warn-bg, #fef3c7);
+  }
+  .tagbar button.due {
+    border-color: var(--warn-line, #f59e0b);
+    color: #92400e;
+  }
+  .tagbar button.due.on {
+    background: var(--warn-bg, #fef3c7);
   }
   .pick {
     flex: none;
