@@ -77,8 +77,9 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   dan dokumennya bisa diduplikasi.
   Tampilannya sama dengan Pustaka Daring: pohon folder di kiri (lebarnya bisa digeser), daftar khusus (Perlu ditinjau,
   Baru dihapus), tombol ringkas di atas daftar, Filter (label, waktu diubah), tombol tindakan yang muncul saat baris
-  disorot, pilihan dengan Ctrl/Shift+klik, menu klik kanan, potong-tempel (Ctrl+X/Ctrl+V), dan pintasan keyboard yang
-  sama. Yang hanya ada di Daring (hak akses, komentar, kunci edit, peta keterkaitan) tidak ada di sini.
+  disorot, pilihan dengan Ctrl/Shift+klik, menu klik kanan, potong-tempel (Ctrl+X/Ctrl+V), ubah nama (F2), Urungkan
+  (tombol di pesan atau Ctrl+Z, beberapa detik setelah memindah, menghapus, atau mengubah nama), dan pintasan keyboard
+  yang sama. Yang hanya ada di Daring (hak akses, komentar, kunci edit, peta keterkaitan) tidak ada di sini.
   **Riwayat versi**: setiap kali SOP disimpan, isi sebelumnya dicatat (20 versi terakhir). Versi lama bisa dipratinjau,
   dibandingkan, dikembalikan (bila SOP terbuka di tab, versinya dimuat ke tab dan bisa di-Urungkan), atau dihapus.
   **Salin ke Pustaka Daring**: SOP terpilih, atau satu folder beserta subfoldernya, diunggah ke folder Daring pilihan

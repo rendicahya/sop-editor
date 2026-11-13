@@ -99,7 +99,7 @@ export const LOCAL_TOUR = [
   {
     target: `${L} .list > li:not(.folder):has(.acts)`,
     title: 'Tindakan per SOP',
-    text: 'Arahkan mouse ke baris untuk melihat tombolnya: pratinjau, duplikat, riwayat versi, label, unduh .sop, salin ke Pustaka Daring, pindah, dan hapus.'
+    text: 'Arahkan mouse ke baris untuk melihat tombolnya: pratinjau, ubah nama, duplikat, riwayat versi, label, unduh .sop, salin ke Pustaka Daring, pindah, dan hapus.'
   }
 ];
 

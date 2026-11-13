@@ -150,6 +150,71 @@ test('tampilan seperti Pustaka Daring: pohon folder, label lewat filter, menu kl
   await expect(page.locator('dialog[open]')).toHaveCount(1);
 });
 
+test('ubah nama SOP (F2 dan tombol) lalu urungkan', async ({ page }) => {
+  await seedLocal(page, [
+    { id: 'a1', name: 'SOP A' },
+    { id: 'b1', name: 'SOP B' }
+  ]);
+  const pane = await openLibrary(page);
+  const undoBtn = page.locator('.toast').getByRole('button', { name: 'Urungkan' });
+
+  // F2 pada baris yang ditandai.
+  await pane.locator('.list li', { hasText: 'SOP B' }).locator('input.pick').click();
+  await page.keyboard.press('F2');
+  await answer(page, 'Simpan', 'SOP Beta');
+  await expect.poll(async () => (await names(pane)).sort()).toEqual(['SOP A', 'SOP Beta']);
+  await expect(page.locator('.toast')).toContainText('Nama SOP diubah menjadi "SOP Beta"');
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => (await names(pane)).sort()).toEqual(['SOP A', 'SOP B']);
+
+  // Lewat tombol baris; nama di dalam dokumen ikut berubah.
+  await pane.getByRole('button', { name: 'Ubah nama SOP A' }).click();
+  await answer(page, 'Simpan', 'SOP Alfa');
+  await expect.poll(async () => (await names(pane)).sort()).toEqual(['SOP Alfa', 'SOP B']);
+  const file = await download(page, () => pane.getByRole('button', { name: 'Unduh SOP Alfa sebagai berkas .sop' }).click());
+  expect(JSON.parse(file.buf.toString()).header.namaSop).toBe('SOP Alfa');
+  await pane.getByRole('button', { name: 'Ubah nama SOP Alfa' }).click();
+  await answer(page, 'Simpan', 'SOP Alfa 2');
+  await undoBtn.click();
+  await expect.poll(async () => (await names(pane)).sort()).toEqual(['SOP Alfa', 'SOP B']);
+});
+
+test('urungkan hapus (Delete), pindah (seret ke pohon), dan hapus folder', async ({ page }) => {
+  await seedLocal(page, [
+    { id: 'a1', name: 'SOP A', folder: 'f-k' },
+    { id: 'b1', name: 'SOP B' },
+    { id: 'c1', name: 'SOP C' }
+  ], [{ id: 'f-k', name: 'Keuangan' }]);
+  const pane = await openLibrary(page);
+  const undoBtn = page.locator('.toast').getByRole('button', { name: 'Urungkan' });
+
+  // Delete pada baris yang ditandai → Baru dihapus → Urungkan.
+  await pane.locator('.list li', { hasText: 'SOP B' }).locator('input.pick').click();
+  await page.keyboard.press('Delete');
+  await expect.poll(() => names(pane)).toEqual(['SOP C']);
+  await expect(binButton(pane).locator('small')).toHaveText('1');
+  await undoBtn.click();
+  await expect.poll(async () => (await names(pane)).sort()).toEqual(['SOP B', 'SOP C']);
+  await expect(binButton(pane).locator('small')).toHaveCount(0);
+
+  // Seret ke folder di pohon → Ctrl+Z.
+  await pane.locator('.list li', { hasText: 'SOP C' }).locator('.main').dragTo(pane.locator('.tree .tname', { hasText: 'Keuangan' }));
+  await expect.poll(() => names(pane)).toEqual(['SOP B']);
+  await expect(page.locator('.toast')).toContainText('1 item dipindahkan ke Keuangan');
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => (await names(pane)).sort()).toEqual(['SOP B', 'SOP C']);
+
+  // Hapus folder beserta isinya → Urungkan: folder dan SOP-nya kembali.
+  await pane.getByRole('button', { name: 'Hapus folder Keuangan' }).click();
+  await answer(page, 'Hapus');
+  await expect.poll(() => folderNames(pane)).toEqual([]);
+  await undoBtn.click();
+  await expect.poll(() => folderNames(pane)).toEqual(['Keuangan']);
+  await pane.locator('.tree .tname', { hasText: 'Keuangan' }).click();
+  await expect.poll(() => names(pane)).toEqual(['SOP A']);
+  await expect(binButton(pane).locator('small')).toHaveCount(0);
+});
+
 test('impor ZIP: folder di dalam ZIP ikut dibuat', async ({ page }, info) => {
   await seedLocal(page, [{ id: 'b1', name: 'SOP B' }]);
   const pane = await openLibrary(page);

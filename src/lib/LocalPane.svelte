@@ -381,7 +381,7 @@
       if (selected.size) selected.clear();
       else clip = null;
     } else if (k === 'Delete' && targets().length) removeRows(targets());
-    else if (k === 'F2' && row?.isFolder && view === 'sops') renameFolder(row.item);
+    else if (k === 'F2' && row && view === 'sops') row.isFolder ? renameFolder(row.item) : renameSop(row.item);
     else if (k === 'Backspace') up();
     else if (k === 'x' && ctrl && view === 'sops' && targets().length) cut(targets());
     else if ((k === 'ContextMenu' || (k === 'F10' && e.shiftKey)) && row) {
@@ -433,7 +433,9 @@
       search?.focus();
       search?.select();
     } else if (typing) return;
-    else if (ctrl && e.key === 'v' && clip && view === 'sops' && !searching) paste();
+    else if (ctrl && e.key === 'z' && !e.shiftKey) {
+      if (!undoLast()) return;
+    } else if (ctrl && e.key === 'v' && clip && view === 'sops' && !searching) paste();
     else return;
     e.preventDefault();
   }
@@ -472,7 +474,35 @@
     if (!name || name === f.name) return;
     if (childrenOf(parentOf(f)).some((x) => x.id !== f.id && x.name.toLowerCase() === name.toLowerCase()))
       return ui.alert(`Folder "${name}" sudah ada di tempat yang sama.`, { title: 'Ubah nama folder' });
+    const old = f.name;
     await putFolder({ ...$state.snapshot(f), name });
+    await refresh();
+    offerUndo(`Folder "${old}" diubah namanya menjadi "${name}"`, async () => {
+      const cur = byId.get(f.id);
+      if (cur) await putFolder({ ...$state.snapshot(cur), name: old });
+      await refresh();
+      onnotify('Ubah nama dibatalkan');
+    });
+  }
+  /** Ubah nama SOP: judul entri dan nama SOP di dalam dokumennya. SOP yang terbuka di tab diubah namanya di halaman. */
+  async function renameSop(e) {
+    if (openIds.includes(e.id)) return ui.alert('SOP ini sedang terbuka di tab. Ubah namanya langsung di halaman, lalu simpan.', { title: 'Ubah nama SOP' });
+    const name = (await ui.prompt('Nama SOP', e.title ?? '', { title: 'Ubah nama SOP', ok: 'Simpan' }))?.trim().replace(/\s+/g, ' ');
+    if (!name || name === e.title) return;
+    const old = e.title ?? '';
+    await setSopName(e.id, name);
+    offerUndo(`Nama SOP diubah menjadi "${name}"`, async () => {
+      if (openIds.includes(e.id)) return ui.alert('SOP ini sudah terbuka di tab, jadi namanya tidak dikembalikan.', { title: 'Urungkan' });
+      await setSopName(e.id, old);
+      onnotify('Ubah nama dibatalkan');
+    });
+  }
+  async function setSopName(id, name) {
+    const cur = entries.find((x) => x.id === id);
+    if (!cur) return;
+    const d = JSON.parse(cur.json);
+    d.header.namaSop = name;
+    await patchEntry(id, { title: name, json: JSON.stringify(d) });
     await refresh();
   }
   const removeFolder = (f) => removeMany([entryOf(f, true)]);
@@ -498,11 +528,18 @@
     ].filter(Boolean);
     if (!(await ui.confirm(`Hapus ${what}? ${parts.join(' ')}`, { title: 'Hapus folder', ok: 'Hapus', danger: true }))) return;
     const now = Date.now();
+    const saved = [...tree].map((id) => byId.get(id)).filter(Boolean).map((f) => $state.snapshot(f));
+    const ids = inside.map((e) => e.id);
     for (const e of inside) await patchEntry(e.id, { deleted: now, fromPath: pathText(folderOf(e)) });
     await deleteFolders([...tree]);
     if (tree.has(at)) here = parentOf(fs.find((f) => subtree(f.id).has(at)));
     await refresh();
-    onnotify(inside.length ? `Folder dihapus, ${inside.length} SOP dipindahkan ke Baru dihapus` : 'Folder dihapus');
+    offerUndo(inside.length ? `Folder dihapus, ${inside.length} SOP dipindahkan ke Baru dihapus` : 'Folder dihapus', async () => {
+      for (const f of saved) await putFolder(f);
+      for (const id of ids) await patchEntry(id, { deleted: undefined, fromPath: undefined });
+      await refresh();
+      onnotify('Penghapusan dibatalkan');
+    });
   }
 
   // ---- Pindah: lewat dialog, potong-tempel, atau seret ke folder (pohon, jalur, atau baris folder) ----
@@ -526,19 +563,50 @@
   async function moveTo(ids, fids, target) {
     target = byId.has(target) ? target : null;
     if (fids.some((id) => subtree(id).has(target))) return ui.alert('Folder tidak bisa dipindahkan ke dalam dirinya sendiri.', { title: 'Pindahkan' });
-    let n = 0;
+    const done = []; // { id, isFolder, from }
     for (const id of ids) {
       const e = entries.find((x) => x.id === id);
-      if (e && folderOf(e) !== target) await patchEntry(id, { folder: target }), n++;
+      if (e && folderOf(e) !== target) await patchEntry(id, { folder: target }), done.push({ id, isFolder: false, from: folderOf(e) });
     }
     for (const id of fids) {
       const f = byId.get(id);
-      if (f && parentOf(f) !== target) await putFolder({ ...$state.snapshot(f), parent: target }), n++;
+      if (f && parentOf(f) !== target) await putFolder({ ...$state.snapshot(f), parent: target }), done.push({ id, isFolder: true, from: parentOf(f) });
     }
     selected.clear();
     if (target) expanded.add(target);
     await refresh();
-    if (n) onnotify(`${n} item dipindahkan ke ${pathText(target)}`);
+    if (done.length) offerUndo(`${done.length} item dipindahkan ke ${pathText(target)}`, () => undoMove(done));
+  }
+  async function undoMove(done) {
+    for (const d of [...done].reverse()) {
+      const back = byId.has(d.from) ? d.from : null;
+      if (!d.isFolder) await patchEntry(d.id, { folder: back });
+      else if (byId.has(d.id) && !subtree(d.id).has(back)) await putFolder({ ...$state.snapshot(byId.get(d.id)), parent: back });
+    }
+    await refresh();
+    onnotify('Pemindahan dibatalkan');
+  }
+
+  // ---- Urungkan (tombol di pesan atau Ctrl+Z selama pesannya masih tampil) ----
+  let undoFn = null;
+  let undoAt = 0;
+  function offerUndo(msg, fn) {
+    let used = false;
+    const run = () => {
+      if (used) return;
+      used = true;
+      undoFn = null;
+      fn();
+    };
+    undoFn = run;
+    undoAt = Date.now();
+    onnotify(msg, { label: 'Urungkan', run });
+  }
+  function undoLast() {
+    if (!undoFn || Date.now() - undoAt > 8000) return false;
+    onnotify('');
+    undoFn();
+    return true;
   }
   function submitMove(ev) {
     ev.preventDefault();
@@ -625,7 +693,15 @@
     for (const e of list) await patchEntry(e.id, { deleted: now, fromPath: pathText(folderOf(e)) });
     selected.clear();
     await refresh();
-    onnotify((list.length === 1 ? `"${titleOf(list[0])}" dipindahkan ke Baru dihapus` : `${list.length} SOP dipindahkan ke Baru dihapus`) + note);
+    const ids = list.map((e) => e.id);
+    offerUndo((list.length === 1 ? `"${titleOf(list[0])}" dipindahkan ke Baru dihapus` : `${list.length} SOP dipindahkan ke Baru dihapus`) + note, async () => {
+      for (const id of ids) {
+        const e = entries.find((x) => x.id === id);
+        if (e?.deleted) await patchEntry(id, { deleted: undefined, fromPath: undefined, folder: byId.has(e.folder) ? e.folder : null });
+      }
+      await refresh();
+      onnotify('Penghapusan dibatalkan');
+    });
   }
   async function restore(list) {
     let lost = 0;
@@ -1103,6 +1179,7 @@
       { label: 'Buka', icon: 'open', hint: 'Enter', run: () => pick(e) },
       { label: 'Pratinjau', icon: 'eye', run: () => (previewOf = e) },
       { sep: true },
+      { label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => renameSop(e), disabled: isOpen, title: isOpen ? 'Terbuka di tab: ubah namanya di halaman' : undefined },
       { label: 'Duplikat', icon: 'copy', run: () => duplicate(e) },
       { label: 'Unduh berkas .sop', icon: 'download', run: () => downloadSop(e) },
       { label: 'Riwayat', icon: 'history', run: () => toggleHistory(e) },
@@ -1351,6 +1428,7 @@
               </button>
               <span class="acts" role="group" aria-label="Tindakan SOP">
                 {@render ib('eye', 'Pratinjau tanpa membuka', () => (previewOf = e), { label: `Pratinjau ${titleOf(e)}` })}
+                {@render ib('pencil', 'Ubah nama', () => renameSop(e), { label: `Ubah nama ${titleOf(e)}` })}
                 {@render ib('copy', 'Duplikat', () => duplicate(e), { label: `Duplikat ${titleOf(e)}` })}
                 {@render ib('history', 'Riwayat versi', () => toggleHistory(e), { on: history?.id === e.id, expanded: history?.id === e.id, label: `Riwayat ${titleOf(e)}` })}
                 {@render ib('tag', 'Label', () => editTags(e), { on: tagEdit === e.id, expanded: tagEdit === e.id, label: `Label ${titleOf(e)}` })}
