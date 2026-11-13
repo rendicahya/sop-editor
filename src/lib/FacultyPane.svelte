@@ -1268,7 +1268,7 @@
               <nav class="grow" aria-label="Lokasi folder">
                 <button class="crumb" class:drop={dropAt === null} aria-current={here ? undefined : 'location'} onclick={() => select(null)} {...dropzone(null)} oncontextmenu={(e) => openMenu(e, hereItems(null))}>Utama</button>
                 {#each crumbs as c (c.id)}
-                  <span class="sep" aria-hidden="true">/</span>
+                  <span class="crumb-sep" aria-hidden="true">/</span>
                   <button class="crumb" class:drop={dropAt === c.id} aria-current={c.id === here ? 'location' : undefined} onclick={() => select(c.id)} {...dropzone(c.id)} oncontextmenu={(e) => openMenu(e, folderMenu(c))}>{c.name}</button>
                 {/each}
               </nav>
@@ -1772,7 +1772,7 @@
     color: var(--text);
     font-weight: 600;
   }
-  .sep {
+  .crumb-sep {
     color: var(--muted);
   }
   .list {
