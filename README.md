@@ -95,6 +95,14 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   tidak masuk ke isi SOP dan tidak membuat versi baru (hak edit diperlukan). Daftar SOP hanya menampilkan kapan terakhir
   diubah ("3 jam yang lalu"); klik kanan › **Detail** menampilkan nama, kode, nomor, lokasi, hak akses, pembuat,
   penyunting terakhir, revisi, dan ukuran.
+- **Filter Pustaka Daring** (tombol corong di atas daftar): menyaring SOP di semua folder menurut pemilik, hak akses
+  (semua anggota, grup tertentu, atau private), waktu terakhir diubah, dan ada/tidaknya kode pustaka. Bisa digabung
+  dengan pencarian, Perlu ditinjau, dan Ada komentar.
+- **Daftar induk SOP** (tombol tabel di atas daftar): mengunduh XLSX berisi kode, nama, nomor, folder, tanggal
+  pembuatan/revisi/efektif, jatuh tempo dan status tinjauan, pemilik, perubahan terakhir, dan hak akses, diurutkan
+  menurut kode lalu nama. Isinya hasil yang tampil saat mencari atau menyaring; selain itu folder yang dibuka beserta
+  subfoldernya (di Utama: seluruh pustaka yang bisa Anda lihat). Baris judul kolom dibekukan, berfilter, dan diulang
+  di tiap halaman cetak (A4 mendatar).
 - **PDF gabungan (buku SOP)**: beberapa SOP digabung menjadi satu PDF, diawali halaman daftar isi (nomor, nama, dan
   halaman tiap SOP; klik untuk melompat) dan bookmark per SOP. Dari Pustaka Daring: pilih SOP atau folder lalu
   **Gabung PDF** (isi folder dan subfoldernya ikut), atau klik kanan folder › **Gabung isinya jadi satu PDF…**. Dari

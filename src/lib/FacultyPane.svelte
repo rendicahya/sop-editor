@@ -15,8 +15,10 @@
   import VersionDiffDialog from './VersionDiffDialog.svelte';
   import LinkMapDialog from './LinkMapDialog.svelte';
   import SopInfoDialog from './SopInfoDialog.svelte';
-  import { review, setReviewYears, REVIEW_CHOICES, reviewSince, isReviewDue } from './review.svelte.js';
-  import { formatTanggal } from './model.js';
+  import { review, setReviewYears, REVIEW_CHOICES, reviewSince, reviewDue, isReviewDue } from './review.svelte.js';
+  import { formatTanggal, todayIso } from './model.js';
+  import { registerXlsx } from './register.js';
+  import { downloadBlob } from './files.js';
     import { notes, copyLink, markMentionsSeen, unseenMentions } from './comments.svelte.js';
 
   /**
@@ -51,6 +53,19 @@
   let mapOpen = $state(false);
   let only = $state(''); // '' | 'due' (perlu ditinjau) | 'notes' (ada komentar terbuka): dari semua folder
   let groups = $state([]); // untuk nama grup di lencana hak akses
+  // Filter daftar SOP (berlaku di semua folder, bersama pencarian). '' = tidak menyaring.
+  const NO_FILTER = { owner: '', access: '', changed: '', code: '' };
+  let filt = $state({ ...NO_FILTER });
+  let filterOpen = $state(false);
+  const filtering = $derived(Object.values(filt).some(Boolean));
+  const resetFilters = () => Object.assign(filt, NO_FILTER);
+  const CHANGED = [
+    ['7', 'dalam 7 hari terakhir'],
+    ['30', 'dalam 30 hari terakhir'],
+    ['90', 'dalam 3 bulan terakhir'],
+    ['365', 'dalam 1 tahun terakhir'],
+    ['old', 'lebih dari 1 tahun lalu']
+  ];
 
   const admin = $derived(faculty.status === 'in' && faculty.role === 'admin');
 
@@ -62,6 +77,8 @@
       query = '';
       history = null;
       only = '';
+      resetFilters();
+      filterOpen = false;
       view = 'sops';
       // Dibuka dari angka sebutan baru di tombol Pustaka: langsung ke daftar "Menyebut saya".
       untrack(() => {
@@ -120,13 +137,37 @@
       header = d.header ?? {};
       links = Array.isArray(d.links) ? d.links : [];
     } catch {}
-    return { ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName, s.code] }), since: reviewSince(header), links };
+    const dates = { tglPembuatan: header.tglPembuatan ?? '', tglRevisi: header.tglRevisi ?? '', tglEfektif: header.tglEfektif ?? '' };
+    return { ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName, s.code] }), since: reviewSince(header), dates, links };
   }
 
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   const isDue = (s) => isReviewDue(s.since, review.years);
-  const matches = (s) => words.every((w) => s.text.includes(w)) && (!only || (only === 'due' ? isDue(s) : openCount(s) > 0));
-  const searching = $derived(words.length > 0 || !!only);
+  const DAY = 86400000;
+  function passFilter(s) {
+    const f = filt;
+    if (f.owner && s.createdByEmail !== f.owner) return false;
+    if (f.access) {
+      const readers = s.readers ?? [];
+      if (f.access === 'private' ? F.isShared(s) : !readers.includes(f.access)) return false;
+    }
+    if (f.changed) {
+      const age = Date.now() - s.updatedAt;
+      if (f.changed === 'old' ? age <= 365 * DAY : age > Number(f.changed) * DAY) return false;
+    }
+    if (f.code && (f.code === 'with') !== !!s.code) return false;
+    return true;
+  }
+  const matchText = (s) => words.every((w) => s.text.includes(w));
+  const matches = (s) => matchText(s) && (!only || (only === 'due' ? isDue(s) : openCount(s) > 0)) && passFilter(s);
+  const searching = $derived(words.length > 0 || !!only || filtering);
+  /** Pilihan filter Pemilik: pembuat SOP yang terlihat, akun ini paling atas. */
+  const owners = $derived.by(() => {
+    const m = new Map();
+    for (const s of live) if (s.createdByEmail && !m.has(s.createdByEmail)) m.set(s.createdByEmail, s.createdByName || s.createdByEmail);
+    const me = faculty.user?.email;
+    return [...m].sort(([a, x], [b, y]) => (b === me) - (a === me) || x.localeCompare(y, 'id'));
+  });
   const dueCount = $derived(live.filter(isDue).length);
 
   // ---- Komentar terbuka per SOP (dihitung sekali tiap daftar dimuat; SOP di tab aktif mengikuti panel komentar) ----
@@ -153,7 +194,7 @@
   const mentions = $derived([...notes.mine].sort((a, b) => b.at - a.at));
   const sopById = $derived(new Map(live.map((s) => [s.id, s])));
   const shortText = (t, n = 160) => (t.length > n ? t.slice(0, n) + '…' : t);
-  const shownBin = $derived(bin.filter(matches));
+  const shownBin = $derived(bin.filter(matchText));
 
   // ---- Folder ----
   const byId = $derived(new Map(folders.map((f) => [f.id, f])));
@@ -238,7 +279,7 @@
   });
   const shownFolders = $derived(
     sorted(
-      only ? [] : searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))) : childrenOf(here),
+      only || filtering ? [] : searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))) : childrenOf(here),
       librarySort.by,
       (f) => f.name,
       (f) => activity.get(f.id) ?? 0
@@ -281,7 +322,7 @@
   const selRows = $derived(rows.filter((r) => selected.has(r.key)));
   // Pilihan dikosongkan setiap pindah folder, tampilan, atau pencarian.
   $effect(() => {
-    view, here, query, only;
+    view, here, query, only, filt.owner, filt.access, filt.changed, filt.code;
     untrack(() => {
       selected.clear();
       anchor = null;
@@ -465,6 +506,7 @@
     folderId = id;
     query = '';
     only = '';
+    resetFilters();
     history = null;
     for (const f of pathOf(id)) expanded.add(f.id);
   }
@@ -1133,6 +1175,64 @@
     return rtf.format(-Math.floor(v), unit);
   }
 
+  /** SOP di folder `id` beserta subfoldernya; null = semua. */
+  function within(s, id) {
+    if (!id) return true;
+    for (let f = folderOf(s), n = 0; f && n < 100; f = parents.get(f), n++) if (f === id) return true;
+    return false;
+  }
+  /**
+   * Daftar induk SOP (XLSX). Saat mencari atau menyaring: hasil yang tampil. Selain itu: folder ini beserta
+   * subfoldernya (di Utama berarti seluruh pustaka yang bisa dilihat akun ini).
+   */
+  function exportRegister() {
+    const list = sorted(searching ? shownLive : live.filter((s) => within(s, here)), 'name-asc', titleOf, (s) => s.updatedAt);
+    if (!list.length) return ui.alert('Tidak ada SOP untuk dimasukkan ke daftar induk.', { title: 'Daftar induk SOP' });
+    const scope = searching ? 'Hasil pencarian atau filter' : here ? `Folder ${pathText(here)} beserta subfoldernya` : 'Seluruh Pustaka Daring';
+    const date = (v) => (v ? formatTanggal(v) : '');
+    const columns = [
+      { label: 'No.', width: 5 },
+      { label: 'Kode', width: 9 },
+      { label: 'Nama SOP', width: 42 },
+      { label: 'Nomor SOP', width: 26 },
+      { label: 'Folder', width: 24 },
+      { label: 'Tanggal pembuatan', width: 16 },
+      { label: 'Tanggal revisi', width: 16 },
+      { label: 'Tanggal efektif', width: 16 },
+      { label: `Jatuh tempo tinjauan (${review.years} tahun)`, width: 18 },
+      { label: 'Status tinjauan', width: 15 },
+      { label: 'Pemilik', width: 22 },
+      { label: 'Terakhir diubah', width: 19 },
+      { label: 'Diubah oleh', width: 22 },
+      { label: 'Hak akses', width: 24 }
+    ];
+    const rows = list.map((s, i) => [
+      i + 1,
+      s.code ?? '',
+      s.title || 'SOP tanpa judul',
+      s.nomor ?? '',
+      folderOf(s) ? pathText(folderOf(s)) : 'Utama',
+      date(s.dates?.tglPembuatan),
+      date(s.dates?.tglRevisi),
+      date(s.dates?.tglEfektif),
+      date(reviewDue(s.since)),
+      !s.since ? 'Tanggal belum diisi' : isDue(s) ? 'Perlu ditinjau' : 'Berlaku',
+      s.createdByName ?? '',
+      when(s.updatedAt),
+      s.updatedByName ?? '',
+      accessTags(s).join(', ')
+    ]);
+    const blob = registerXlsx({
+      title: 'Daftar Induk SOP',
+      note: `${scope} · ${list.length} SOP · diunduh ${when(Date.now())} oleh ${faculty.user.name}`,
+      columns,
+      rows,
+      author: faculty.user.name
+    });
+    downloadBlob(blob, `Daftar-Induk-SOP-${todayIso()}.xlsx`);
+    onnotify(`Daftar induk ${list.length} SOP diunduh`);
+  }
+
   /** Isi dialog Detail. Diambil dari `live` agar ikut terbarui (mis. setelah kodenya diubah). */
   const info = $derived.by(() => {
     const s = infoOf && live.find((x) => x.id === infoOf);
@@ -1328,7 +1428,7 @@
                 <button type="button" class="link" onclick={() => (only = '')}>Tampilkan semua</button>
               </span>
             {:else if searching}
-              <span class="muted grow">Hasil pencarian di semua folder</span>
+              <span class="muted grow">{words.length ? 'Hasil pencarian' : 'Hasil filter'} di semua folder · {shownLive.length} SOP</span>
             {:else}
               <nav class="grow" aria-label="Lokasi folder">
                 <button class="crumb" class:drop={dropAt === null} aria-current={here ? undefined : 'location'} onclick={() => select(null)} {...dropzone(null)} oncontextmenu={(e) => openMenu(e, hereItems(null))}>Utama</button>
@@ -1338,7 +1438,9 @@
                 {/each}
               </nav>
             {/if}
+            {@render ib('filter', filtering ? 'Filter (aktif)' : 'Filter', () => (filterOpen = !filterOpen), { on: filterOpen || filtering, expanded: filterOpen || filtering })}
             <SortSelect />
+            {@render ib('table', searching ? 'Unduh daftar induk SOP (XLSX) dari hasil yang tampil' : here ? 'Unduh daftar induk SOP (XLSX) folder ini beserta subfoldernya' : 'Unduh daftar induk SOP (XLSX) seluruh pustaka', exportRegister)}
             {#if here && !searching}
               {@render ib('users', accessTip(byId.get(here)), () => openAccess('folders', byId.get(here)))}
             {/if}
@@ -1347,6 +1449,42 @@
             {@render ib('upload', uploadTip, () => onupload(here), { disabled: !!uploadBlocked })}
             {@render ib('refresh', 'Muat ulang daftar', refresh)}
           </div>
+          {#if filterOpen || filtering}
+            <div class="filters" role="group" aria-label="Filter SOP">
+              <label>
+                <span>Pemilik</span>
+                <select bind:value={filt.owner}>
+                  <option value="">Semua</option>
+                  {#each owners as [email, name] (email)}<option value={email}>{email === faculty.user.email ? `${name} (Anda)` : name}</option>{/each}
+                </select>
+              </label>
+              <label>
+                <span>Hak akses</span>
+                <select bind:value={filt.access}>
+                  <option value="">Semua</option>
+                  <option value={F.EVERYONE}>Semua anggota</option>
+                  {#each [...groups].sort((a, b) => a.name.localeCompare(b.name, 'id')) as g (g.id)}<option value={g.id}>Grup {g.name}</option>{/each}
+                  <option value="private">Private</option>
+                </select>
+              </label>
+              <label>
+                <span>Diubah</span>
+                <select bind:value={filt.changed}>
+                  <option value="">Kapan saja</option>
+                  {#each CHANGED as [v, label] (v)}<option value={v}>{label}</option>{/each}
+                </select>
+              </label>
+              <label>
+                <span>Kode pustaka</span>
+                <select bind:value={filt.code}>
+                  <option value="">Semua</option>
+                  <option value="with">Sudah ada kode</option>
+                  <option value="without">Belum ada kode</option>
+                </select>
+              </label>
+              {#if filtering}<button type="button" class="link" onclick={resetFilters}>Hapus filter</button>{/if}
+            </div>
+          {/if}
           {#if importing}<p class="progress" role="status">Mengunggah {importing.done + 1 > importing.total ? importing.total : importing.done + 1} dari {importing.total} SOP…</p>{/if}
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           {#if !drag && dropAt !== undefined}
@@ -1837,6 +1975,38 @@
   .crumb[aria-current] {
     color: var(--text);
     font-weight: 600;
+  }
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.4rem 0.75rem;
+    padding: 0.5rem 0.6rem;
+    margin-bottom: 0.4rem;
+    border-radius: 8px;
+    background: var(--surface-2);
+    font-size: 0.82rem;
+  }
+  .filters label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    color: var(--muted);
+  }
+  .filters select {
+    min-width: 9rem;
+    max-width: 16rem;
+    width: auto;
+    padding: 0.25rem 0.35rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+  }
+  .filters .link {
+    align-self: center;
+    margin-left: auto;
   }
   .crumb-sep {
     color: var(--muted);
