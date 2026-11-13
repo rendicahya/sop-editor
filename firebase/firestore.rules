@@ -619,6 +619,21 @@ service cloud.firestore {
       allow create, update: if isAdmin() && validDefaults(request.resource.data);
       allow delete: if isAdmin();
     }
+    // ---- Bawaan RPS baru (nama universitas dan fakultas) untuk RPS Editor ----
+    // Batas panjang sama dengan DEFAULT_FIELDS di appDefaults.svelte.js milik RPS Editor.
+    function validRpsDefaults(d) {
+      return d.keys().hasOnly(['universitas', 'fakultas', 'updatedAt', 'updatedBy', 'updatedByName'])
+        && shortText(d.universitas, 200)
+        && shortText(d.fakultas, 200)
+        && d.updatedAt == request.time
+        && d.updatedBy == uid()
+        && shortText(d.updatedByName, 120);
+    }
+    match /config/rps {
+      allow read: if isMember();
+      allow create, update: if isAdmin() && validRpsDefaults(request.resource.data);
+      allow delete: if isAdmin();
+    }
 
     match /curricula/{id} {
       allow read: if isMember();

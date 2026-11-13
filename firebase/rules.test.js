@@ -1145,6 +1145,28 @@ describe('bawaan SOP baru', () => {
   });
 });
 
+describe('bawaan RPS baru', () => {
+  const ref = (u) => doc(as(u), 'config/rps');
+  const vals = (u, patch = {}) => ({
+    universitas: 'UNIVERSITAS X', fakultas: 'FAKULTAS Y',
+    updatedAt: serverTimestamp(), updatedBy: u, updatedByName: USERS[u].name, ...patch
+  });
+  it('admin bisa mengatur; anggota hanya membaca; bukan anggota tidak bisa membaca', async () => {
+    await assertSucceeds(setDoc(ref('adm'), vals('adm')));
+    await assertSucceeds(getDoc(ref('ali')));
+    await assertFails(getDoc(ref('out')));
+    await assertFails(setDoc(ref('ali'), vals('ali')));
+    await assertFails(deleteDoc(ref('ali')));
+    await assertSucceeds(deleteDoc(ref('adm')));
+  });
+  it('isian divalidasi: kunci, tipe, panjang, dan pencatat', async () => {
+    await assertFails(setDoc(ref('adm'), vals('adm', { nomor: 'x' })));
+    await assertFails(setDoc(ref('adm'), vals('adm', { fakultas: 5 })));
+    await assertFails(setDoc(ref('adm'), vals('adm', { universitas: 'x'.repeat(201) })));
+    await assertFails(setDoc(ref('adm'), vals('adm', { updatedBy: 'ali' })));
+  });
+});
+
 describe('katalog kurikulum', () => {
   const cat = (u, patch = {}) => ({
     nama: 'Teknik Informatika', departemen: 'Teknik Informatika', managers: ['bud@ub.ac.id'], cpl: [], cpmk: [],
