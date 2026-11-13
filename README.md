@@ -191,7 +191,7 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
 
 - Hanya akun yang didaftarkan admin (@ub.ac.id atau @gmail.com) yang bisa masuk. **Semua anggota** berarti semua akun terdaftar itu, dan semua anggota bisa melihat daftar email anggota untuk memilih kepada siapa file dibagikan.
 - **Hak akses** diberikan per anggota atau per grup, sebagai Lihat atau Edit, pada file maupun folder. Pilihan **Semua anggota** tersedia untuk yang dipakai bersama. Pemilik selalu bisa melihat dan mengedit.
-- **Grup** (mis. per prodi atau unit) dibuat dan diisi oleh admin di halaman **Admin › Grup** (panel kiri). Anggota baru bisa langsung dimasukkan ke grup saat didaftarkan. Hak yang diberikan ke grup berlaku untuk semua anggotanya: yang ditambahkan ke grup langsung mendapatkannya, dan yang dikeluarkan langsung kehilangan. Menghapus grup tidak menghapus anggotanya. Tombol **Duplikat** membuat grup baru dengan anggota yang sama; hak akses SOP grup asal tidak ikut disalin.
+- **Grup** (mis. per prodi atau unit) dibuat dan diisi oleh admin di dialog **Admin › Grup** (tombol Admin di toolbar). Anggota baru bisa langsung dimasukkan ke grup saat didaftarkan. Hak yang diberikan ke grup berlaku untuk semua anggotanya: yang ditambahkan ke grup langsung mendapatkannya, dan yang dikeluarkan langsung kehilangan. Menghapus grup tidak menghapus anggotanya. Tombol **Duplikat** membuat grup baru dengan anggota yang sama; hak akses SOP grup asal tidak ikut disalin.
 - File dan subfolder **mengikuti folder induknya** secara bawaan, termasuk pemilik folder itu. Pilihan **Khusus** pada file atau subfolder menggantikan hak dari induk sepenuhnya. File baru di tingkat utama hanya bisa dilihat pemiliknya.
 - Daftar hak disalin ke setiap dokumen karena kueri Firestore tidak bisa menelusuri rantai folder. Aplikasi menyebarkan perubahan ke isi folder dan menyelesaikannya saat daftar dimuat berikutnya bila terputus; aturan server hanya menerima salinan yang sama persis dengan daftar folder induk.
 - **Folder** bertingkat tanpa batas kedalaman. Semua anggota bisa membuat folder di tingkat utama; isi sebuah folder hanya bisa ditambah pemiliknya dan admin. Dokumen diunggah ke folder yang sedang dipilih, dan pencarian mencakup semua yang bisa dilihat.
@@ -233,7 +233,7 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
   ada yang bisa mengambil alih kunci sebelum itu, termasuk admin. Bila kunci ternyata dipegang orang lain, tab yang belum
   berubah ditutup, sedangkan tab berisi perubahan dilepas dari Pustaka Daring agar isinya tidak hilang.
 - Pemakaian dan batas penyimpanan hanya tampil untuk admin. Angkanya perkiraan dari ukuran JSON, belum termasuk indeks Firestore.
-- **Bawaan SOP baru** diatur admin di halaman **Admin › Bawaan SOP baru** (panel kiri): kop instansi, awalan nomor SOP, serta jabatan, nama, dan NIP pengesah
+- **Bawaan SOP baru** diatur admin di dialog **Admin › Bawaan SOP baru** (tombol Admin di toolbar, hanya tampil untuk admin): kop instansi, awalan nomor SOP, serta jabatan, nama, dan NIP pengesah
   (mis. saat dekan berganti). Isian ini dipakai setiap SOP baru dan oleh Asisten AI (termasuk pilihan "perbarui kop dan
   pengesah" saat mengimpor SOP lama), langsung berlaku bagi semua anggota tanpa memuat ulang, dan diingat di browser agar
   tetap berlaku saat luring. SOP yang sudah ada tidak berubah. Sebelum diatur, isian ini kosong (tidak ada nilai di kode). Disimpan di Firestore `config/sop`: semua anggota bisa
@@ -251,7 +251,7 @@ npx firebase deploy --only firestore:rules,firestore:indexes
 Indeks di `firebase/firestore.indexes.json` dibutuhkan daftar **Menyebut saya** (kueri `mentions` lintas SOP);
 pasang ulang dengan `npm run deploy:indexes` bila berubah.
 
-Lalu di Firebase Console, buat dokumen `members/<email-admin>` berisi kolom `role` = `admin`. Anggota lain didaftarkan dari halaman **Admin › Anggota** di aplikasi; banyak email bisa ditempel sekaligus, dipisah koma, spasi,
+Lalu di Firebase Console, buat dokumen `members/<email-admin>` berisi kolom `role` = `admin`. Anggota lain didaftarkan dari dialog **Admin › Anggota** (tombol Admin di toolbar); banyak email bisa ditempel sekaligus, dipisah koma, spasi,
 titik koma, atau baris baru (format "Nama &lt;email&gt;" juga diterima). Email yang sudah terdaftar tidak diubah perannya,
 hanya dimasukkan ke grup yang dipilih; alamat yang tidak sah dilewati setelah konfirmasi.
 
@@ -284,7 +284,8 @@ Struktur utama:
 | `src/lib/library.js` | Pustaka dokumen di IndexedDB: simpan per tab (id tab = id entri), daftar, hapus |
 | `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, label, duplikat |
 | `src/lib/faculty.svelte.js` | Pustaka Daring: login, baca/tulis Firestore, riwayat, keterangan sedang diedit; Firebase dimuat saat pertama dipakai |
-| `src/lib/FacultyDialog.svelte` | Dialog Pustaka Daring: pohon folder, daftar file, menu klik kanan, Recycle bin, halaman Admin (Bawaan SOP baru, Anggota, Grup, Penyimpanan) |
+| `src/lib/AdminDialog.svelte` | Dialog Admin (tombol di toolbar, khusus admin): Bawaan SOP baru, Anggota, Grup, Penyimpanan |
+| `src/lib/FacultyDialog.svelte` | Dialog Pustaka Daring: pohon folder, daftar file, menu klik kanan, Recycle bin |
 | `src/lib/AccessDialog.svelte` | Dialog hak akses file dan folder |
 | `src/lib/FacultyConflict.svelte` | Pilihan saat penyimpanan bertabrakan |
 | `firebase/firestore.rules` | Aturan akses Pustaka Daring, diuji oleh `firebase/rules.test.js` di emulator |

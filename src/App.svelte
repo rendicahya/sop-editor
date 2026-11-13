@@ -29,6 +29,7 @@
   import * as ui from './lib/ask.svelte.js';
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
+  import AdminDialog from './lib/AdminDialog.svelte';
   import { applyDefaults } from './lib/appDefaults.svelte.js';
   import LinkSopDialog from './lib/LinkSopDialog.svelte';
   import DocMetaDialog from './lib/DocMetaDialog.svelte';
@@ -576,6 +577,8 @@
 
   // Dialog Pustaka, bertab Lokal dan Daring. Tab terakhir diingat di browser ini.
   let libraryOpen = $state(false);
+  let adminOpen = $state(false);
+  const isAdmin = $derived(faculty.status === 'in' && faculty.role === 'admin');
   let libraryTab = $state(
     (() => {
       try {
@@ -1360,6 +1363,7 @@
         {/if}
       </div>
       <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP baru, impor SOP lama (PDF/Word), atau revisi SOP ini dengan bantuan asisten AI"><Icon name="sparkle" size={15} />Asisten AI</button>
+      {#if isAdmin}<button class="btn ghost adm-btn" onclick={() => (adminOpen = true)} aria-haspopup="dialog" aria-label="Admin" title="Admin: bawaan SOP baru, anggota, grup, dan penyimpanan"><Icon name="settings" size={15} /><span class="lbl">Admin</span></button>{/if}
       <span class="sep"></span>
       <button class="icon" onclick={undo} disabled={!canUndo} title="Urungkan (Ctrl+Z)" aria-label="Urungkan"><Icon name="undo" /></button>
       <button class="icon" onclick={redo} disabled={!canRedo} title="Ulangi (Ctrl+Y)" aria-label="Ulangi"><Icon name="redo" /></button>
@@ -1627,6 +1631,7 @@
   {#if tabMenu}<ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenu.items} onclose={() => (tabMenu = null)} />{/if}
   <CheckPanel bind:open={checkOpen} {issues} {duration} steps={app.doc.steps} onjump={jumpTo} />
 
+  <AdminDialog bind:open={adminOpen} onnotify={notify} />
   <LibraryDialog
     bind:open={libraryOpen}
     bind:tab={libraryTab}

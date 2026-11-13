@@ -117,6 +117,12 @@ textarea {
   gap: 0.3rem;
   flex-wrap: wrap;
 }
+/* Label Admin disembunyikan di layar sedang agar toolbar tetap satu baris dengan judul aplikasi. */
+@media (max-width: 1500px) {
+  .toolbar .adm-btn .lbl {
+    display: none;
+  }
+}
 /* Tab dokumen */
 .tabbar {
   display: flex;
