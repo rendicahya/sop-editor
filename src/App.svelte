@@ -8,7 +8,6 @@
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
   import { saveJson, openJsonFile, slug, sopName, downloadBlob } from './lib/files.js';
   import Preview from './lib/Preview.svelte';
-  import AiDialog from './lib/AiDialog.svelte';
   import FormatBar from './lib/FormatBar.svelte';
   import PdfPreviewDialog from './lib/PdfPreviewDialog.svelte';
   import FindPanel from './lib/FindPanel.svelte';
@@ -21,7 +20,6 @@
   import { checkDocument } from './lib/validate.js';
   import { review } from './lib/review.svelte.js';
   import { connectHistory } from './lib/history.js';
-  import LibraryDialog from './lib/LibraryDialog.svelte';
   import { saveDoc, isBlank, getEntry } from './lib/library.js';
   import FacultyConflict from './lib/FacultyConflict.svelte';
   import CloseConfirm from './lib/CloseConfirm.svelte';
@@ -29,7 +27,6 @@
   import * as ui from './lib/ask.svelte.js';
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
-  import AdminDialog from './lib/AdminDialog.svelte';
   import { applyDefaults } from './lib/appDefaults.svelte.js';
   import LinkSopDialog from './lib/LinkSopDialog.svelte';
   import DocMetaDialog from './lib/DocMetaDialog.svelte';
@@ -632,6 +629,27 @@
 
   // Jawaban AI yang ditempel: dokumen baru tanpa berkas.
   let aiOpen = $state(false);
+
+  // Dialog besar (Pustaka, Admin, AI) baru dimuat saat pertama kali dibuka agar aplikasi lebih cepat tampil.
+  // Setelah dimuat dialog tetap terpasang, jadi isiannya (folder, filter, dsb.) tidak hilang saat ditutup.
+  let LibraryDialog = $state(null);
+  let AdminDialog = $state(null);
+  let AiDialog = $state(null);
+  function loadDialog(load, set, close) {
+    load().then((m) => set(m.default)).catch(() => {
+      close();
+      notify('Bagian aplikasi ini gagal dimuat. Periksa koneksi internet, lalu coba lagi.');
+    });
+  }
+  $effect(() => {
+    if (libraryOpen && !LibraryDialog) loadDialog(() => import('./lib/LibraryDialog.svelte'), (c) => (LibraryDialog = c), () => (libraryOpen = false));
+  });
+  $effect(() => {
+    if (adminOpen && !AdminDialog) loadDialog(() => import('./lib/AdminDialog.svelte'), (c) => (AdminDialog = c), () => (adminOpen = false));
+  });
+  $effect(() => {
+    if (aiOpen && !AiDialog) loadDialog(() => import('./lib/AiDialog.svelte'), (c) => (AiDialog = c), () => (aiOpen = false));
+  });
   // `revise`: jawaban menggantikan dokumen aktif (bisa di-Undo); jalur manual dipulihkan.
   function loadPasted(text, revise = false) {
     try {
@@ -1607,7 +1625,7 @@
     </div>
   {/if}
 
-  <AiDialog bind:open={aiOpen} docKey={tabs.active} onpaste={loadPasted} />
+  {#if AiDialog}<AiDialog bind:open={aiOpen} docKey={tabs.active} onpaste={loadPasted} />{/if}
   <PdfPreviewDialog
     bind:pdf={pdfDoc}
     bind:printNow={pdfPrint}
@@ -1631,8 +1649,8 @@
   {#if tabMenu}<ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenu.items} onclose={() => (tabMenu = null)} />{/if}
   <CheckPanel bind:open={checkOpen} {issues} {duration} steps={app.doc.steps} onjump={jumpTo} />
 
-  <AdminDialog bind:open={adminOpen} onnotify={notify} />
-  <LibraryDialog
+  {#if AdminDialog}<AdminDialog bind:open={adminOpen} onnotify={notify} />{/if}
+  {#if LibraryDialog}<LibraryDialog
     bind:open={libraryOpen}
     bind:tab={libraryTab}
     local={{
@@ -1670,7 +1688,7 @@
         openComment(sopId, cid);
       }
     }}
-  />
+  />{/if}
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />
   <LinkSopDialog bind:req={linkPick} />
