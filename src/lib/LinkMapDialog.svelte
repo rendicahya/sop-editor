@@ -1,4 +1,5 @@
 <script>
+  import Icon from './Icon.svelte';
   import { tick } from 'svelte';
   import { dismiss } from './dismiss.js';
   import { linkGraph, layoutGraph, NODE_W, NODE_H } from './linkMap.js';
@@ -107,7 +108,7 @@
         <button type="button" class="btn ghost" onclick={() => setZoom(zoom / 1.2)} aria-label="Perkecil">−</button>
         <span class="zoom">{Math.round(zoom * 100)}%</span>
         <button type="button" class="btn ghost" onclick={() => setZoom(zoom * 1.2)} aria-label="Perbesar">+</button>
-        <button type="button" class="btn ghost" onclick={fit}>Pas layar</button>
+        <button type="button" class="btn ghost" onclick={fit}><Icon name="selectAll" size={15} />Pas layar</button>
         <button type="button" class="btn" onclick={() => (open = false)}>Tutup</button>
       </div>
     </header>
@@ -189,7 +190,7 @@
           <span class="lbl">Dirujuk oleh</span>
           {#each ins as n (n.id)}<button type="button" class="chip" onclick={() => (picked = n.id)}>{n.title}</button>{:else}<span class="none">—</span>{/each}
         </div>
-        <button type="button" class="btn primary" onclick={() => onopen(pickedNode.sop)}>Buka SOP</button>
+        <button type="button" class="btn primary" onclick={() => onopen(pickedNode.sop)}><Icon name="open" size={15} />Buka SOP</button>
       </footer>
     {:else if layout.nodes.length}
       <footer class="hint">Arahkan ke SOP untuk menyorot tautannya · klik untuk melihat rinciannya · klik dua kali untuk membuka · Ctrl+gulir untuk memperbesar</footer>

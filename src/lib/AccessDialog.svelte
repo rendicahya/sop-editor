@@ -181,7 +181,7 @@
       <footer>
         {#if manage}
           <button type="button" class="btn" onclick={onclose}>Batal</button>
-          <button class="btn primary">Simpan</button>
+          <button class="btn primary"><Icon name="save" size={15} />Simpan</button>
         {:else}
           <button type="button" class="btn" onclick={onclose}>Tutup</button>
         {/if}

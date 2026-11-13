@@ -1617,16 +1617,16 @@
     <div class="gate">
       {#if faculty.status === 'out'}
         <p>Pustaka Daring menyimpan SOP bersama secara daring. Masuk dengan akun Google <strong>@ub.ac.id</strong> atau <strong>@gmail.com</strong> yang sudah didaftarkan admin.</p>
-        <button class="btn primary" onclick={() => F.signIn().catch((e) => ui.alert(e.message))}>Masuk dengan Google</button>
+        <button class="btn primary" onclick={() => F.signIn().catch((e) => ui.alert(e.message))}><Icon name="login" size={15} />Masuk dengan Google</button>
       {:else if faculty.status === 'domain'}
         <p><strong>{faculty.user.email}</strong> tidak bisa dipakai. Pustaka Daring hanya untuk akun @ub.ac.id atau @gmail.com.</p>
-        <button class="btn" onclick={() => F.signOut().then(() => F.signIn()).catch((e) => ui.alert(e.message))}>Ganti akun</button>
+        <button class="btn" onclick={() => F.signOut().then(() => F.signIn()).catch((e) => ui.alert(e.message))}><Icon name="users" size={15} />Ganti akun</button>
       {:else if faculty.status === 'notMember'}
         <p><strong>{faculty.user.email}</strong> belum terdaftar sebagai anggota. Minta admin Pustaka Daring mendaftarkan akun ini.</p>
-        <button class="btn" onclick={() => F.recheck()}>Periksa lagi</button>
+        <button class="btn" onclick={() => F.recheck()}><Icon name="refresh" size={15} />Periksa lagi</button>
       {:else if faculty.status === 'error'}
         <p class="error">{faculty.error}</p>
-        <button class="btn" onclick={() => (faculty.user ? F.recheck() : F.start())}>Coba lagi</button>
+        <button class="btn" onclick={() => (faculty.user ? F.recheck() : F.start())}><Icon name="refresh" size={15} />Coba lagi</button>
       {:else}
         <p>Memuat…</p>
       {/if}
@@ -1652,7 +1652,7 @@
       {#if moving.entries.some((d) => !d.item.custom)}<small class="muted">Hak aksesnya akan mengikuti folder tujuan.</small>{/if}
       <footer class="end">
         <button type="button" class="btn" onclick={() => (moving = null)}>Batal</button>
-        <button class="btn primary">Pindahkan</button>
+        <button class="btn primary"><Icon name="move" size={15} />Pindahkan</button>
       </footer>
     </form>
   {/if}

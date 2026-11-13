@@ -526,7 +526,7 @@ textarea:focus {
   right: 0;
   top: calc(100% + 4px);
   z-index: 50;
-  min-width: 15rem;
+  min-width: 18rem;
   padding: 0.3rem;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -563,6 +563,29 @@ textarea:focus {
 .export-menu small {
   color: var(--muted);
   font-size: 0.75rem;
+}
+/* Item menu berikon: ikon di kiri, judul dan keterangan di kanannya. */
+.export-menu button:has(> svg) {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.6rem;
+  row-gap: 0.1rem;
+  align-items: start;
+}
+.export-menu button > svg {
+  grid-row: 1 / span 2;
+  margin-top: 0.1rem;
+  color: var(--muted);
+}
+.export-menu button:hover > svg,
+.export-menu button:focus-visible > svg {
+  color: var(--accent);
+}
+.export-menu button > :not(svg) {
+  grid-column: 2;
+}
+.export-menu button > strong {
+  white-space: nowrap;
 }
 
 .icon {

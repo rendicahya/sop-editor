@@ -103,7 +103,7 @@
       </div>
       <footer>
         <button type="button" class="btn" onclick={() => finish(null)}>Batal</button>
-        <button class="btn primary" disabled={!chosen || !sops.some((s) => s.id === chosen)}>Tautkan</button>
+        <button class="btn primary" disabled={!chosen || !sops.some((s) => s.id === chosen)}><Icon name="link" size={15} />Tautkan</button>
       </footer>
     </form>
   {/if}
