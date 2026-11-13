@@ -31,6 +31,8 @@
   import LinkSopDialog from './lib/LinkSopDialog.svelte';
   import DocMetaDialog from './lib/DocMetaDialog.svelte';
   import { connectLinks } from './lib/sopLinks.js';
+  import Tour from './lib/Tour.svelte';
+  import { TOUR_STEPS } from './lib/tourSteps.js';
 
   let toast = $state(null); // { msg, action, n }
   let toastTimer;
@@ -1277,6 +1279,24 @@
     if (!signedIn) untrack(() => (libraryOpen = false));
   });
 
+  // Tur pengenalan: muncul sekali untuk pengguna baru di browser ini, bisa dibuka lagi dari tombol "?".
+  let tourOpen = $state(false);
+  $effect(() => {
+    if (!signedIn || getPref('tourDone')) return;
+    let timer;
+    const tryStart = () => {
+      // Tunggu sampai tidak ada dialog lain yang terbuka (mis. pemulihan sesi).
+      if (document.querySelector('dialog[open]')) timer = setTimeout(tryStart, 1000);
+      else tourOpen = true;
+    };
+    timer = setTimeout(tryStart, 700);
+    return () => clearTimeout(timer);
+  });
+  function startTour() {
+    exportOpen = saveOpen = false;
+    tourOpen = true;
+  }
+
   onMount(() => {
     Faculty.start();
     const session = loadSession();
@@ -1378,11 +1398,11 @@
       </div>
     </div>
     <nav class="toolbar">
-      <button class="btn ghost" onclick={newDoc} title="Dokumen baru"><Icon name="filePlus" size={15} />Baru</button>
+      <button class="btn ghost" data-tour="new" onclick={newDoc} title="Dokumen baru"><Icon name="filePlus" size={15} />Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .sop (Ctrl+O)"><Icon name="folder" size={15} />Buka</button>
       {@render libraryButton('btn ghost')}
       <div class="export">
-        <button class="btn ghost" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka Lokal, Pustaka Daring, atau sebagai berkas .sop">
+        <button class="btn ghost" data-tour="save" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka Lokal, Pustaka Daring, atau sebagai berkas .sop">
           <Icon name="save" size={15} />
           Simpan
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
@@ -1410,7 +1430,7 @@
           </div>
         {/if}
       </div>
-      <button class="btn ghost" onclick={() => (aiOpen = true)} title="Susun SOP baru, impor SOP lama (PDF/Word), atau revisi SOP ini dengan bantuan asisten AI"><Icon name="sparkle" size={15} />Asisten AI</button>
+      <button class="btn ghost" data-tour="ai" onclick={() => (aiOpen = true)} title="Susun SOP baru, impor SOP lama (PDF/Word), atau revisi SOP ini dengan bantuan asisten AI"><Icon name="sparkle" size={15} />Asisten AI</button>
       {#if isAdmin}<button class="btn ghost adm-btn" onclick={() => (adminOpen = true)} aria-haspopup="dialog" aria-label="Admin" title="Admin: bawaan SOP baru, anggota, grup, dan penyimpanan"><Icon name="settings" size={15} /><span class="lbl">Admin</span></button>{/if}
       <span class="sep"></span>
       <button class="icon" onclick={undo} disabled={!canUndo} title="Urungkan (Ctrl+Z)" aria-label="Urungkan"><Icon name="undo" /></button>
@@ -1423,6 +1443,7 @@
           {#if fullscreen}<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />{:else}<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />{/if}
         </svg>
       </button>
+      <button class="icon" data-tour="tour" onclick={startTour} title="Tur pengenalan aplikasi" aria-label="Tur aplikasi"><Icon name="help" /></button>
       <button class="icon" onclick={toggleTheme} title={theme === 'dark' ? 'Mode terang' : 'Mode gelap'} aria-label="Ganti tema">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           {#if theme === 'dark'}<circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />{:else}<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" />{/if}
@@ -1456,7 +1477,7 @@
         {#if openNotes}<span class="badge note">{openNotes}</span>{/if}
       </button>
       <div class="export">
-        <button class="btn primary" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
+        <button class="btn primary" data-tour="export" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
           <Icon name="export" size={15} />
           {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
@@ -1625,7 +1646,7 @@
           </span>
         </div>
       {:else}
-        <div class="preview-scroll" bind:this={previewScroll}>
+        <div class="preview-scroll" data-tour="page" bind:this={previewScroll}>
           <Preview {pages} {zoom} />
         </div>
       {/if}
@@ -1726,6 +1747,7 @@
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />
   <LinkSopDialog bind:req={linkPick} />
   <DocMetaDialog doc={app.doc} bind:open={metaOpen} onsave={saveMeta} />
+  <Tour bind:open={tourOpen} steps={TOUR_STEPS} ondone={() => setPref('tourDone', '1')} />
 
   {#if toast}
     {#key toast.n}

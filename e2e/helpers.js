@@ -10,7 +10,10 @@ const DOCS = `${FIRESTORE}/v1/projects/${PROJECT}/databases/(default)/documents/
 
 /** `page` yang gagal bila ada galat JavaScript di halaman. */
 export const test = base.extend({
-  page: async ({ page }, use) => {
+  // Tur pengenalan otomatis hanya untuk uji tur (test.use({ tour: true })).
+  tour: [false, { option: true }],
+  page: async ({ page, tour }, use) => {
+    if (!tour) await page.addInitScript(() => localStorage.setItem('sop-editor:tourDone', '1'));
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await use(page);

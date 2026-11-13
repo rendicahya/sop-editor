@@ -14,6 +14,9 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   SOP, dan pengesah (jabatan, nama, NIP) sesuai **Bawaan SOP baru** yang diatur admin, serta tanggal pembuatan dan
   tanggal efektif hari ini. Tidak ada nilai bawaan yang ditulis di kode; sebelum admin mengaturnya, isian itu kosong.
   Semuanya tetap bisa diubah per SOP.
+- **Tur pengenalan**: saat pertama kali masuk di sebuah browser, tur singkat menyorot bagian-bagian utama aplikasi satu
+  per satu (bisa dilewati, juga dengan Esc; panah kiri/kanan untuk berpindah). Tur bisa dibuka lagi kapan saja lewat
+  tombol **?** di toolbar.
 - **Halaman 1 diedit langsung di pratinjau (WYSIWYG)**: klik teks di halaman untuk mengetik nama instansi, nomor,
   tanggal pembuatan/revisi/efektif (date picker), pengesahan, dan setiap butir ketentuan. Tanda tangan dibubuhkan pejabat pada hasil cetak, di ruang kosong bagian pengesahan.
 - Bagian Dasar Hukum, Kualifikasi Pelaksana, Keterkaitan, Peralatan/Perlengkapan, Peringatan, serta
