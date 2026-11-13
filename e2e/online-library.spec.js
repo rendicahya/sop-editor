@@ -65,7 +65,8 @@ test('salin SOP terpilih ke folder Daring yang dipilih', async ({ page }) => {
     await F.createFolder('Tujuan', null);
   });
   const local = await openLibrary(page);
-  await local.locator('.selbar input.pick').click();
+  await local.locator('.list li').first().locator('input.pick').click();
+  await local.locator('.selbar .pickall input').click();
   await local.locator('.selbar').getByRole('button', { name: 'Salin ke Daring' }).click();
   await copyDialog(page).locator('select').selectOption({ label: 'Tujuan' });
   await copyDialog(page).getByRole('button', { name: 'Salin', exact: true }).click();

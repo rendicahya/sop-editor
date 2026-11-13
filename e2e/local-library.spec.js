@@ -2,7 +2,10 @@ import { unzipSync, zipSync, strToU8 } from 'fflate';
 import fs from 'node:fs';
 import { test, expect, resetCloud, signIn, seedLocal, resaveLocal, openLibrary, answer, download, top } from './helpers.js';
 
-const names = (pane) => pane.locator('.list li:not(.folder):not(.empty) .main strong').evaluateAll((els) => els.map((e) => e.firstChild.textContent.trim()));
+const names = (pane) =>
+  pane.locator('.list li:not(.folder):not(.empty) .main strong').evaluateAll((els) => els.map((e) => [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim()));
+const binButton = (pane) => pane.locator('aside nav').getByRole('button', { name: /Baru dihapus/ });
+const toRoot = (pane) => pane.locator('.tree .tname', { hasText: 'Utama' }).click();
 const folderNames = (pane) => pane.locator('.list li.folder .main strong').allInnerTexts().then((l) => l.map((x) => x.trim()));
 
 test.beforeEach(async ({ page }) => {
@@ -39,7 +42,7 @@ test('folder: buat, pindah lewat dialog dan seret, cari lintas folder', async ({
   await pane.locator('li.folder', { hasText: 'Skripsi' }).dragTo(pane.locator('.crumbs button', { hasText: 'Utama' }));
   await expect.poll(() => folderNames(pane)).toEqual([]);
   await pane.locator('.crumbs button', { hasText: 'Utama' }).click();
-  await expect.poll(() => folderNames(pane)).toEqual(['Akademik', 'Skripsi']);
+  await expect.poll(async () => (await folderNames(pane)).sort()).toEqual(['Akademik', 'Skripsi']);
   await pane.getByRole('button', { name: 'Pindahkan folder Skripsi' }).click();
   const opts = await top(page).locator('select option').allInnerTexts();
   expect(opts.map((o) => o.trim())).not.toContain('Skripsi');
@@ -86,29 +89,65 @@ test('pratinjau, Baru dihapus, hapus folder, dan pulihkan', async ({ page }) => 
 
   await pane.locator('.list li', { hasText: 'SOP B' }).getByRole('button', { name: 'Hapus' }).click();
   await expect.poll(() => names(pane)).toEqual([]);
-  await expect(pane.getByRole('button', { name: 'Baru dihapus' })).toHaveText('1');
-  await pane.getByRole('button', { name: 'Baru dihapus' }).click();
+  await expect(binButton(pane).locator('small')).toHaveText('1');
+  await binButton(pane).click();
   await expect(pane.locator('.list li small')).toContainText('terhapus permanen dalam 30 hari');
   await pane.getByRole('button', { name: 'Pulihkan' }).first().click();
-  await pane.getByRole('button', { name: 'Kembali ke pustaka' }).click();
+  await toRoot(pane);
   await expect.poll(() => names(pane)).toEqual(['SOP B']);
 
   await pane.getByRole('button', { name: 'Hapus folder Akademik' }).click();
   await expect(top(page)).toContainText('1 SOP di dalamnya dipindahkan ke Baru dihapus');
   await answer(page, 'Hapus');
   await expect.poll(() => folderNames(pane)).toEqual([]);
-  await pane.getByRole('button', { name: 'Baru dihapus' }).click();
+  await expect(pane.locator('.tree')).not.toContainText('Akademik');
+  await binButton(pane).click();
   await expect(pane.locator('.list li small')).toContainText('dari Akademik / Skripsi');
-  await pane.locator('.selbar input.pick').click();
+  await expect(pane.locator('.selbar')).toHaveCount(0);
+  await pane.locator('.list li').first().locator('input.pick').click();
   await pane.locator('.selbar').getByRole('button', { name: 'Pulihkan' }).click();
-  await pane.getByRole('button', { name: 'Kembali ke pustaka' }).click();
+  await toRoot(pane);
   await expect.poll(async () => (await names(pane)).sort()).toEqual(['SOP A', 'SOP B']);
 
   await pane.locator('.list li', { hasText: 'SOP A' }).getByRole('button', { name: 'Hapus' }).click();
-  await pane.getByRole('button', { name: 'Baru dihapus' }).click();
+  await binButton(pane).click();
   await pane.getByRole('button', { name: 'Kosongkan' }).click();
   await answer(page, 'Hapus permanen');
   await expect(pane.locator('.list li.empty')).toContainText('Tidak ada SOP yang baru dihapus');
+});
+
+test('tampilan seperti Pustaka Daring: pohon folder, label lewat filter, menu klik kanan, potong-tempel', async ({ page }) => {
+  await seedLocal(page, [
+    { id: 'a1', name: 'SOP A' },
+    { id: 'b1', name: 'SOP B' }
+  ], [{ id: 'f-k', name: 'Keuangan' }]);
+  const pane = await openLibrary(page);
+  await expect(pane.locator('aside .tree')).toContainText('Keuangan');
+
+  // Label diatur dari tombol Label, lalu dipakai di filter.
+  await pane.getByRole('button', { name: 'Label SOP A' }).click();
+  await pane.getByRole('textbox', { name: 'Label baru' }).fill('Akademik');
+  await pane.getByRole('button', { name: 'Tambah' }).click();
+  await expect(pane.locator('.list li', { hasText: 'SOP A' }).locator('em')).toHaveText('Akademik');
+  await pane.getByRole('button', { name: 'Filter' }).click();
+  await pane.locator('.filters select').first().selectOption({ label: 'Akademik (1)' });
+  await expect.poll(() => names(pane)).toEqual(['SOP A']);
+  await pane.getByRole('button', { name: 'Hapus filter' }).click();
+  await expect.poll(async () => (await names(pane)).sort()).toEqual(['SOP A', 'SOP B']);
+
+  // Klik kanan → Potong, buka folder di pohon, Ctrl+V.
+  await pane.locator('.list li', { hasText: 'SOP B' }).locator('.main').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: /Potong/ }).click();
+  await pane.locator('.tree .tname', { hasText: 'Keuangan' }).click();
+  await page.keyboard.press('Control+v');
+  await expect.poll(() => names(pane)).toEqual(['SOP B']);
+  await expect(pane.locator('.tree .tname', { hasText: 'Keuangan' }).locator('small')).toHaveText('1');
+
+  // Ctrl+klik memilih tanpa membuka; bilah pilihan muncul.
+  await toRoot(pane);
+  await pane.locator('.list li', { hasText: 'SOP A' }).locator('.main').click({ modifiers: ['Control'] });
+  await expect(pane.locator('.selbar')).toContainText('1 dipilih');
+  await expect(page.locator('dialog[open]')).toHaveCount(1);
 });
 
 test('impor ZIP: folder di dalam ZIP ikut dibuat', async ({ page }, info) => {

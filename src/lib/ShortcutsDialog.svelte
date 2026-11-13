@@ -49,7 +49,7 @@
     ],
     ['Komentar', [['Ctrl+Enter', 'Kirim komentar atau balasan']]],
     [
-      'Daftar Pustaka Daring',
+      'Daftar Pustaka (Lokal dan Daring)',
       [
         ['Ctrl+F', 'Cari'],
         ['↑ · ↓ · Home · End', 'Pindah baris'],
@@ -60,10 +60,10 @@
         ['Ctrl+klik · Shift+klik', 'Pilih satu per satu atau rentang'],
         ['Enter', 'Buka SOP atau folder'],
         ['Backspace · Alt+↑', 'Ke folder induk'],
-        ['F2', 'Ubah nama'],
-        ['Delete', 'Hapus (ke Recycle bin)'],
+        ['F2', 'Ubah nama (di Lokal: folder)'],
+        ['Delete', 'Hapus (ke Recycle bin / Baru dihapus)'],
         ['Ctrl+X · Ctrl+V', 'Potong, lalu tempel di folder lain untuk memindahkan'],
-        ['Ctrl+Z', 'Urungkan tindakan terakhir'],
+        ['Ctrl+Z', 'Urungkan tindakan terakhir (Daring)'],
         ['Shift+F10', 'Menu baris'],
         ['Esc', 'Batal pilih']
       ]

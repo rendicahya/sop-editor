@@ -75,12 +75,17 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
 - **Pustaka Lokal**: SOP yang disimpan ke Pustaka Lokal berada di browser (IndexedDB) dan bisa dibuka lagi kapan saja.
   Isinya hanya berubah saat disimpan. Pustaka bisa dicari (nama, nomor, label, dan seluruh isi SOP),
   dan dokumennya bisa diduplikasi.
+  Tampilannya sama dengan Pustaka Daring: pohon folder di kiri (lebarnya bisa digeser), daftar khusus (Perlu ditinjau,
+  Baru dihapus), tombol ringkas di atas daftar, Filter (label, waktu diubah), tombol tindakan yang muncul saat baris
+  disorot, pilihan dengan Ctrl/Shift+klik, menu klik kanan, potong-tempel (Ctrl+X/Ctrl+V), dan pintasan keyboard yang
+  sama. Yang hanya ada di Daring (hak akses, komentar, kunci edit, peta keterkaitan) tidak ada di sini.
   **Riwayat versi**: setiap kali SOP disimpan, isi sebelumnya dicatat (20 versi terakhir). Versi lama bisa dipratinjau,
   dibandingkan, dikembalikan (bila SOP terbuka di tab, versinya dimuat ke tab dan bisa di-Urungkan), atau dihapus.
   **Salin ke Pustaka Daring**: SOP terpilih, atau satu folder beserta subfoldernya, diunggah ke folder Daring pilihan
   dengan susunan folder yang sama; folder Daring bernama sama di tujuan dipakai lagi.
   **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen: satu entri boleh berlabel lebih dari satu,
-  daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
+  daftar bisa disaring per label atau "Tanpa label" (di Filter), dan label bisa diganti nama atau dihapus sekaligus di
+  semua entri.
   Seperti Pustaka Daring, Pustaka Lokal juga punya saringan **Perlu ditinjau**, **daftar induk SOP (XLSX)**, **cadangan
   ZIP** (seluruh/hasil yang tampil/pilihan, atau satu berkas .sop), **Gabung PDF** dari pilihan, dan **impor** berkas
   .sop/.zip (tombol unggah atau lepas berkas di daftar). SOP yang terbuka di tab boleh dipilih untuk PDF/ZIP/pindah,

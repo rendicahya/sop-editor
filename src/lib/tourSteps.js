@@ -83,19 +83,23 @@ export const LOCAL_TOUR = [
     title: 'Pustaka Lokal',
     text: 'SOP di sini tersimpan di browser ini saja, tidak ikut ke perangkat lain. Data hilang bila data situs browser dihapus, jadi sesekali unduh cadangannya.'
   },
-  { target: `${L} .search`, title: 'Cari', text: 'Cari nama, nomor, label, atau isi SOP di semua folder.' },
-  { target: `${L} .tagbar`, title: 'Saring dengan label', text: 'Tampilkan SOP berlabel tertentu atau yang perlu ditinjau. Label diatur dari tombol Label pada tiap SOP.' },
-  { target: `${L} .crumbs`, title: 'Lokasi folder', text: 'Klik nama folder untuk naik ke atas. SOP dan folder bisa diseret ke sini untuk dipindahkan.' },
+  { target: `${L} .search`, title: 'Cari', text: 'Cari nama, nomor, label, atau isi SOP di semua folder (Ctrl+F).' },
+  { target: `${L} aside .tree`, title: 'Folder', text: 'Klik untuk membuka folder. Seret SOP atau folder ke sini untuk memindah. Klik kanan untuk menu folder.' },
+  { target: `${L} aside nav`, title: 'Daftar khusus', text: 'Perlu ditinjau (SOP yang sudah lama berlaku) dan Baru dihapus (disimpan 30 hari sebelum dihapus permanen).' },
   {
-    target: `${L} .selbar`,
-    title: 'Pilih dan kelola',
-    text: 'Centang beberapa SOP untuk menggabung PDF, mengunduh ZIP, memindah, menyalin ke Pustaka Daring, atau menghapus. Di kanan: folder baru, impor .sop/.zip, daftar induk (XLSX), cadangan (ZIP), Baru dihapus, dan urutan.'
+    target: `${L} .crumbs`,
+    title: 'Lokasi dan tombol',
+    text: 'Filter (label, waktu diubah), urutan, daftar induk (XLSX), cadangan (ZIP), folder baru, simpan dokumen yang dibuka ke sini, dan impor .sop/.zip.'
   },
-  { target: `${L} .list`, title: 'Daftar SOP', text: 'Klik untuk membuka di tab. Seret ke folder untuk memindah. Berkas .sop atau .zip bisa dilepas di sini untuk diimpor.' },
   {
-    target: `${L} .list > li:not(.folder) .acts`,
+    target: `${L} .list`,
+    title: 'Daftar SOP',
+    text: 'Klik untuk membuka. Ctrl+klik atau Shift+klik memilih beberapa (gabung PDF, ZIP, pindah, salin ke Pustaka Daring, hapus), klik kanan membuka menu. Berkas .sop atau .zip bisa dilepas di sini untuk diimpor.'
+  },
+  {
+    target: `${L} .list > li:not(.folder):has(.acts)`,
     title: 'Tindakan per SOP',
-    text: 'Pratinjau tanpa membuka, riwayat versi (bisa dibandingkan dan dipulihkan), label, duplikat, pindah, unduh .sop, dan hapus. Yang dihapus disimpan 30 hari di Baru dihapus.'
+    text: 'Arahkan mouse ke baris untuk melihat tombolnya: pratinjau, duplikat, riwayat versi, label, unduh .sop, salin ke Pustaka Daring, pindah, dan hapus.'
   }
 ];
 

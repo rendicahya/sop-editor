@@ -94,7 +94,7 @@
   }}
 >
   <div class="pane" id="libpane-local" data-pane="local" role="tabpanel" aria-label="Pustaka Lokal" hidden={tab !== 'local'}>
-    <LocalPane {open} active={tab === 'local'} {tabs} onclose={close} {...local} />
+    <LocalPane {open} active={tab === 'local'} host={dialog} {tabs} onclose={close} {...local} />
   </div>
   <div class="pane" id="libpane-faculty" data-pane="faculty" role="tabpanel" aria-label="Pustaka Daring" hidden={tab !== 'faculty'}>
     <FacultyPane {open} active={tab === 'faculty'} host={dialog} {tabs} onclose={close} {...faculty} />
