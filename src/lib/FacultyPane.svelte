@@ -1601,7 +1601,7 @@
             <textarea
               bind:value={newEmail}
               rows={newEmail.includes('\n') || emailCount > 1 ? 4 : 1}
-              placeholder="nama@ub.ac.id atau nama@gmail.com; beberapa email dipisah koma, spasi, atau baris"
+              placeholder="Email anggota baru (boleh beberapa)" title="Akun @ub.ac.id atau @gmail.com. Beberapa email bisa dipisah koma, spasi, titik koma, atau baris baru."
               aria-label="Email anggota baru"
               onkeydown={(e) => {
                 // Enter menambahkan; Shift+Enter untuk baris baru (menempel daftar email tetap bisa).
@@ -1621,7 +1621,7 @@
                 {#each groups as g (g.id)}<option value={g.id}>{g.name}</option>{/each}
               </select>
             {/if}
-            <button class="ib" aria-label="Tambah anggota" data-tip={emailCount > 1 ? `Tambah ${emailCount} anggota` : 'Tambah anggota'} disabled={!newEmail.trim()}><Icon name="plus" /></button>
+            <button class="btn primary add-btn" disabled={!newEmail.trim()}><Icon name="plus" size={15} />{emailCount > 1 ? `Tambah ${emailCount}` : 'Tambah'}</button>
           </form>
           {#if emailCount > 1}<small class="muted">{emailCount} email akan ditambahkan.</small>{/if}
           <ul class="members">
@@ -1644,7 +1644,7 @@
           <small>Grup bisa dipilih di Hak akses seperti email, sehingga semua anggotanya mendapat hak yang sama sekaligus. Anggota yang ditambahkan ke grup langsung mendapat hak grup itu.</small>
           <form onsubmit={addGroup} class="row">
             <input bind:value={groupName} maxlength="80" placeholder="Nama grup baru, mis. Prodi Informatika" aria-label="Nama grup baru" />
-            <button class="ib" aria-label="Buat grup" data-tip="Buat grup" disabled={!groupName.trim()}><Icon name="plus" /></button>
+            <button class="btn primary add-btn" disabled={!groupName.trim()}><Icon name="plus" size={15} />Buat grup</button>
           </form>
           {#if groups.length}
             <ul class="members">
@@ -2351,6 +2351,14 @@
   }
   .admin section {
     flex: none;
+  }
+  .add-btn {
+    flex: none;
+    white-space: nowrap;
+  }
+  .add-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .defaults {
     display: grid;
