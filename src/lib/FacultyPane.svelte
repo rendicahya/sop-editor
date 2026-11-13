@@ -14,6 +14,7 @@
   import SortSelect from './SortSelect.svelte';
   import VersionDiffDialog from './VersionDiffDialog.svelte';
   import LinkMapDialog from './LinkMapDialog.svelte';
+  import SopInfoDialog from './SopInfoDialog.svelte';
   import { review, setReviewYears, REVIEW_CHOICES, reviewSince, isReviewDue } from './review.svelte.js';
   import { formatTanggal } from './model.js';
     import { notes, copyLink, markMentionsSeen, unseenMentions } from './comments.svelte.js';
@@ -40,6 +41,7 @@
   const expanded = new SvelteSet();
   let moving = $state(null); // { item, isFolder, target }
   let accessTarget = $state(null);
+  let infoOf = $state(null); // SOP yang detailnya sedang ditampilkan
   let menu = $state(null); // { x, y, items }
   let query = $state('');
   let busy = $state(false);
@@ -118,7 +120,7 @@
       header = d.header ?? {};
       links = Array.isArray(d.links) ? d.links : [];
     } catch {}
-    return { ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName] }), since: reviewSince(header), links };
+    return { ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName, s.code] }), since: reviewSince(header), links };
   }
 
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
@@ -744,7 +746,22 @@
     await refresh();
   }
 
-  const titleOf = (s) => s.title || 'SOP tanpa judul';
+  /** Nama di pustaka: kode pustaka (bila ada) lalu Nama SOP. Kodenya tidak ikut ke isi SOP. */
+  const titleOf = (s) => [s.code, s.title || 'SOP tanpa judul'].filter(Boolean).join(' ');
+
+  async function changeCode(s) {
+    const raw = await ui.prompt('Kode hanya tampil di pustaka sebagai awalan nama, misalnya A.1, dan tidak tampil di dokumen SOP. Kosongkan untuk menghapus kode.', s.code ?? '', { title: 'Kode pustaka', ok: 'Simpan', maxlength: 40 });
+    if (raw == null) return;
+    const code = raw.trim().replace(/\s+/g, ' ').slice(0, 40);
+    if (code === (s.code ?? '')) return;
+    try {
+      await F.setSopCode(s.id, code);
+      live = live.map((x) => (x.id === s.id ? { ...x, code } : x));
+      onnotify(code ? 'Kode pustaka disimpan' : 'Kode pustaka dihapus');
+    } catch (e) {
+      ui.alert(e.message);
+    }
+  }
   const isOpen = (s) => openIds.includes(s.id);
 
   /** SOP kosong dibuat di `folder` lalu langsung dibuka di tab baru. */
@@ -1065,13 +1082,14 @@
     return [
       { label: 'Buka', icon: 'open', hint: 'Enter', run: () => openSop(s) },
       { sep: true },
+      { label: 'Detail', icon: 'info', run: () => (infoOf = s.id) },
       { label: 'Duplikat', icon: 'copy', run: () => duplicate(s) },
       { label: 'Riwayat', icon: 'history', run: () => toggleHistory(s) },
       { label: 'Bandingkan versi…', icon: 'compare', run: () => compareVersions(s) },
       { label: 'Salin tautan', icon: 'link', run: async () => onnotify(await copyLink(s.id)) },
       ...(manage ? [{ label: 'Hapus riwayat lama…', icon: 'trash', run: () => pruneOld(s) }] : []),
       { label: accessTip(s), icon: 'users', run: () => openAccess('sops', s) },
-      ...(canEdit(s) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => rename(s) }] : []),
+      ...(canEdit(s) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => rename(s) }, { label: 'Ubah kode pustaka…', icon: 'pencil', run: () => changeCode(s) }] : []),
       ...(manage
         ? [
             { label: 'Pindahkan', icon: 'move', run: () => moveSop(s) },
@@ -1094,6 +1112,53 @@
 
   const size = (n) => (n >= 1e6 ? `${(n / 1e6).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB` : `${Math.ceil(n / 1000).toLocaleString('id-ID')} KB`);
   const when = (ms) => new Date(ms).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+  // "5 menit yang lalu" dan seterusnya; `now` diperbarui tiap menit selama pustaka terbuka.
+  let now = $state(Date.now());
+  $effect(() => {
+    if (!open) return;
+    now = Date.now();
+    const t = setInterval(() => (now = Date.now()), 60000);
+    return () => clearInterval(t);
+  });
+  const rtf = new Intl.RelativeTimeFormat('id', { numeric: 'always' });
+  function ago(ms) {
+    let v = Math.max(0, now - ms) / 60000;
+    if (v < 1) return 'baru saja';
+    let unit = 'minute';
+    for (const [n, u] of [[60, 'minute'], [24, 'hour'], [7, 'day'], [365.25 / 12 / 7, 'week'], [12, 'month'], [Infinity, 'year']]) {
+      unit = u;
+      if (v < n) break;
+      v /= n;
+    }
+    return rtf.format(-Math.floor(v), unit);
+  }
+
+  /** Isi dialog Detail. Diambil dari `live` agar ikut terbarui (mis. setelah kodenya diubah). */
+  const info = $derived.by(() => {
+    const s = infoOf && live.find((x) => x.id === infoOf);
+    if (!s) return null;
+    const who = (uid, name) => (uid === faculty.user.uid ? `Anda (${name})` : name);
+    const editors = namesEditing(s);
+    return {
+      name: titleOf(s),
+      rows: [
+        ['Nama SOP', s.title || '—'],
+        ['Kode pustaka', s.code || '—', 'Hanya tampil di pustaka, tidak di dokumen SOP'],
+        ['Nomor SOP', s.nomor || '—'],
+        ['Lokasi', folderOf(s) ? pathText(folderOf(s)) : 'Utama'],
+        ['Hak akses', accessTags(s).join(', ') + (s.custom && folderOf(s) ? ' (khusus)' : '')],
+        ['Hak Anda', canManage(s) ? 'Mengelola' : canEdit(s) ? 'Edit' : 'Hanya lihat'],
+        ['Dibuat oleh', who(s.createdBy, s.createdByName), s.createdByEmail],
+        ['Dibuat', s.createdAt ? when(s.createdAt) : '—'],
+        ['Terakhir diubah', `${when(s.updatedAt)} (${ago(s.updatedAt)}) oleh ${who(s.updatedBy, s.updatedByName)}`],
+        ['Revisi', String(s.rev)],
+        ...(s.since ? [['Berlaku sejak', formatTanggal(s.since), 'Tanggal efektif atau revisi terakhir di dokumen']] : []),
+        ['Ukuran', `Isi ${size(s.size)}, termasuk riwayat ${size(s.totalBytes)}`],
+        ...(openCount(s) ? [['Komentar terbuka', String(openCount(s))]] : []),
+        ...(editors ? [['Sedang diedit', editors]] : [])
+      ]
+    };
+  });
   const namesEditing = (s) => (faculty.editing[s.id] ?? []).map((m) => m.name).join(', ');
 </script>
 
@@ -1321,8 +1386,8 @@
                     {#if isDue(s)}<em class="due" title={`Berlaku sejak ${formatTanggal(s.since)}, lebih dari ${review.years} tahun`}>Perlu ditinjau</em>{/if}
                     {#if openCount(s)}<em class="notes" title="Komentar yang belum ditandai selesai">{openCount(s)} komentar</em>{/if}
                   </strong>
-                  <small title={s.createdByEmail}>
-                    {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, only === 'due' && `acuan ${formatTanggal(s.since)}`, s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `diubah ${s.updatedByName}, ${when(s.updatedAt)}`].filter(Boolean).join(' · ')}
+                  <small title={`Terakhir diubah ${when(s.updatedAt)}`}>
+                    {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, only === 'due' && `acuan ${formatTanggal(s.since)}`, `diubah ${ago(s.updatedAt)}`].filter(Boolean).join(' · ')}
                   </small>
                   {#if editors}<small class="editing">🔒 Terkunci, sedang diedit oleh {editors}</small>{/if}
                 </button>
@@ -1406,7 +1471,7 @@
                 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
                 <div class="main static" tabindex="0" onclick={(e) => rowClick(e, row, () => {})} onfocus={() => (cursor = row.key)}>
                   <strong><Icon name="file" size={15} /> {titleOf(s)}</strong>
-                  <small>{[s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `dihapus ${when(s.deletedAt)}`, size(s.totalBytes)].filter(Boolean).join(' · ')}</small>
+                  <small title={`Dihapus ${when(s.deletedAt)}`}>{[`dihapus ${ago(s.deletedAt)}`, size(s.totalBytes)].join(' · ')}</small>
                 </div>
                 <span class="acts" role="group" aria-label="Tindakan SOP">
                   {@render ib('restore', 'Pulihkan', () => restoreFromBin(s))}
@@ -1465,6 +1530,7 @@
   {/if}
 </dialog>
 
+<SopInfoDialog {info} oncode={info && canEdit(live.find((x) => x.id === infoOf)) ? () => changeCode(live.find((x) => x.id === infoOf)) : undefined} onclose={() => (infoOf = null)} />
 <AccessDialog target={accessTarget} onsave={saveAccess} onclose={() => (accessTarget = null)} />
 
 {#if compare}

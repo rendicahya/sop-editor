@@ -90,6 +90,11 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   Pilihan **Halaman** menentukan isi PDF: bagian depan dan diagram (bawaan), **bagian depan saja** (identitas,
   pengesahan, dan ketentuan), atau **diagram saja**. Pilihan ini diingat per browser; PDF sebagian tetap membawa data
   SOP yang utuh sehingga bisa dibuka lagi di editor.
+- **Kode pustaka dan Detail SOP** di Pustaka Daring: klik kanan SOP › **Ubah kode pustaka…** untuk memberi awalan
+  seperti `A.1`. Kode hanya tampil di pustaka ("A.1 Penetapan Komisi Promotor") dan ikut diurutkan serta dicari, tetapi
+  tidak masuk ke isi SOP dan tidak membuat versi baru (hak edit diperlukan). Daftar SOP hanya menampilkan kapan terakhir
+  diubah ("3 jam yang lalu"); klik kanan › **Detail** menampilkan nama, kode, nomor, lokasi, hak akses, pembuat,
+  penyunting terakhir, revisi, dan ukuran.
 - **PDF gabungan (buku SOP)**: beberapa SOP digabung menjadi satu PDF, diawali halaman daftar isi (nomor, nama, dan
   halaman tiap SOP; klik untuk melompat) dan bookmark per SOP. Dari Pustaka Daring: pilih SOP atau folder lalu
   **Gabung PDF** (isi folder dan subfoldernya ikut), atau klik kanan folder › **Gabung isinya jadi satu PDF…**. Dari

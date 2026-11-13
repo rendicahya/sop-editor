@@ -514,6 +514,12 @@ export async function renameSop(id, title) {
   }).catch(failed);
 }
 
+/** Kode pustaka (mis. "A.1"): hanya tampil di pustaka, tidak masuk isi SOP, jadi tidak membuat versi baru. '' = tanpa kode. */
+export async function setSopCode(id, code) {
+  const { F, db } = await load();
+  await F.updateDoc(F.doc(db, 'sops', id), { code }).catch(failed);
+}
+
 /** Isi versi lama menjadi isi terkini (isi saat ini tetap tersimpan di riwayat); namanya tidak ikut mundur. */
 export async function restoreVersion(id, version) {
   const { F, db } = await load();

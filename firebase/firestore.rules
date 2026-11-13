@@ -241,8 +241,18 @@ service cloud.firestore {
         && (r.deletedBy == uid() || isAdmin());
     }
 
+    // Kode pustaka (mis. "A.1"): awalan nama yang hanya tampil di pustaka, tidak ada di isi SOP, jadi bukan versi baru.
+    function isCodeChange(d, r) {
+      return changed().hasOnly(['code'])
+        && d.code is string && d.code.size() <= 40
+        && r.deletedBy == null
+        && isMember()
+        && canEdit(r);
+    }
+
     function canUpdateDoc(k, id) {
       return isContentSave(k, id, request.resource.data, resource.data)
+        || isCodeChange(request.resource.data, resource.data)
         || isHistoryPrune(k, id, request.resource.data, resource.data)
         || isAccessChange(k, request.resource.data, resource.data)
         || isAccessSync(k, request.resource.data, resource.data)

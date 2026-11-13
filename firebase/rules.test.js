@@ -308,6 +308,28 @@ describe('rename', () => {
   });
 });
 
+describe('kode pustaka', () => {
+  it('pemegang hak edit bisa mengubahnya tanpa versi baru; hak lihat tidak cukup', async () => {
+    await given('ali', 's');
+    await updateDoc(doc(as('ali'), 'sops/s'), custom('ali', [USERS.bud.email]));
+    await assertFails(updateDoc(doc(as('bud'), 'sops/s'), { code: 'A.1' }));
+    await assertSucceeds(updateDoc(doc(as('ali'), 'sops/s'), { code: 'A.1' }));
+    await assertSucceeds(updateDoc(doc(as('adm'), 'sops/s'), { code: '' }));
+    assert.equal((await read('s')).rev, 1);
+  });
+  it('panjangnya dibatasi dan tidak bisa sekalian mengubah isi', async () => {
+    await given('ali', 's');
+    await assertFails(updateDoc(doc(as('ali'), 'sops/s'), { code: 'x'.repeat(41) }));
+    await assertFails(updateDoc(doc(as('ali'), 'sops/s'), { code: 1 }));
+    await assertFails(updateDoc(doc(as('ali'), 'sops/s'), { code: 'A.1', title: 'Lain' }));
+  });
+  it('SOP di Recycle bin tidak bisa diubah kodenya', async () => {
+    await given('ali', 's');
+    await toBin(as('ali'), 'ali', 's');
+    await assertFails(updateDoc(doc(as('ali'), 'sops/s'), { code: 'A.1' }));
+  });
+});
+
 describe('recycle bin', () => {
   it('hanya pembuat dan admin yang bisa menghapus', async () => {
     await given('ali', 's', 'public');
