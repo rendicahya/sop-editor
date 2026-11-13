@@ -1111,7 +1111,8 @@
   // Spasi di tepi dibuang; kop tetap boleh beberapa baris.
   const tidyDefaults = (d) =>
     Object.fromEntries(DEFAULT_FIELDS.map(([k, , max]) => [k, (k === 'institution' ? d[k].split('\n').map((l) => l.trim()).filter(Boolean).join('\n') : d[k].trim()).slice(0, max)]));
-  const dfltDirty = $derived(DEFAULT_FIELDS.some(([k]) => tidyDefaults(dflt)[k] !== DEFAULTS[k]));
+  // Belum pernah disimpan ke server: tetap bisa disimpan walau isinya sama dengan bawaan aplikasi.
+  const dfltDirty = $derived(!defaultsMeta.custom || DEFAULT_FIELDS.some(([k]) => tidyDefaults(dflt)[k] !== DEFAULTS[k]));
   async function saveDefaults(e) {
     e?.preventDefault();
     if (!dfltDirty || dfltBusy) return;
