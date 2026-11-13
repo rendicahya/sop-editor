@@ -895,8 +895,13 @@
 
   // Komentar dari SOP mana pun yang menyebut akun ini.
   $effect(() => {
-    if (faculty.status !== 'in') return void (notes.mine = []);
-    return Faculty.watchMentions((list) => (notes.mine = list));
+    if (faculty.status !== 'in') {
+      notes.mine = [];
+      return;
+    }
+    return Faculty.watchMentions((list) => {
+      notes.mine = list;
+    });
   });
   // Bawaan SOP baru (kop, nomor, pengesah) yang diatur admin; tetap memakai salinan di browser saat luring.
   $effect(() => {
@@ -975,9 +980,10 @@
   /**
    * Versi lama dari Riwayat dimuat ke tab yang membuka SOP `id` sebagai satu langkah suntingan: bisa di-Undo, dan baru
    * menjadi isi terkini di Pustaka Daring setelah disimpan. Nama SOP tidak ikut mundur, sama seperti Kembalikan biasa.
+   * `local`: `id` adalah id tab (= id entri Pustaka Lokal).
    */
-  function restoreIntoTab(id, json) {
-    const t = tabs.list.find((x) => x.remote?.id === id);
+  function restoreIntoTab(id, json, local = false) {
+    const t = tabs.list.find((x) => (local ? x.id === id : x.remote?.id === id));
     if (!t) return;
     let doc;
     try {
@@ -990,7 +996,7 @@
     doc.header.namaSop = app.doc.header.namaSop;
     app.doc = doc;
     checkpoint();
-    notify('Versi lama dimuat. Simpan ke Pustaka Daring untuk menerapkannya, atau Urungkan (Ctrl+Z).');
+    notify(`Versi lama dimuat. Simpan ke ${local ? 'Pustaka Lokal' : 'Pustaka Daring'} untuk menerapkannya, atau Urungkan (Ctrl+Z).`);
   }
 
   /** Tab tertaut ke `remote`, dan isi yang baru tersimpan tidak lagi dianggap perubahan. */
@@ -1684,7 +1690,9 @@
       onsave: saveToLibrary,
       cansave: !empty,
       onnotify: notify,
-      onbook: makeBook
+      onbook: makeBook,
+      tabjson: (id) => (tabs.list.some((t) => t.id === id) ? tabJson(id) : null),
+      onrestoretab: (id, json) => restoreIntoTab(id, json, true)
     }}
     faculty={{
       openIds: openRemoteIds,

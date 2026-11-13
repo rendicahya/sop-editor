@@ -10,29 +10,38 @@
     patchEntry,
     deleteEntry,
     cleanTags,
-    haystack,
+    searchParts,
     listFolders,
     putFolder,
     deleteFolders,
     cleanFolderName,
     binDaysLeft,
-    BIN_DAYS
+    BIN_DAYS,
+    KEEP_VERSIONS,
+    listVersions,
+    deleteVersion,
+    restoreVersion as restoreLocalVersion
   } from './library.js';
+  import MatchSnippet from './MatchSnippet.svelte';
+  import VersionDiffDialog from './VersionDiffDialog.svelte';
+  import * as F from './faculty.svelte.js';
+  import { faculty } from './faculty.svelte.js';
   import { librarySort, sorted } from './librarySort.svelte.js';
   import SortSelect from './SortSelect.svelte';
   import { readSopFiles } from './sopFiles.js';
   import { sopZip, sopText, safeName } from './sopZip.js';
   import { registerXlsx } from './register.js';
   import { downloadBlob } from './files.js';
-  import { formatTanggal, todayIso, uid } from './model.js';
+  import { formatTanggal, todayIso, uid, parseDocumentText } from './model.js';
   import { review, reviewSince, reviewDue, isReviewDue } from './review.svelte.js';
 
   /**
    * openIds: id tab yang sedang terbuka (= id entri pustaka), current: id tab aktif.
    * Panel di dialog Pustaka: open = dialognya terbuka, active = tab Lokal yang tampil, tabs = pemilih tab di kepala panel,
    * onclose() menutup dialog. onbook(entries, title): menggabungkan entri menjadi satu PDF.
+   * tabjson(id): isi tab entri `id` (boleh belum tersimpan) atau null; onrestoretab(id, json): memuat versi lama ke tab itu.
    */
-  let { open = false, active = false, tabs, onclose, openIds = [], current, onopen, onsave, cansave = true, onnotify, onbook } = $props();
+  let { open = false, active = false, tabs, onclose, openIds = [], current, onopen, onsave, cansave = true, onnotify, onbook, tabjson, onrestoretab } = $props();
 
   let entries = $state([]); // semua entri, termasuk yang ada di "Baru dihapus"
   let folders = $state([]);
@@ -45,6 +54,8 @@
   let picked = $state([]); // id entri yang dicentang untuk tindakan sekaligus
   let due = $state(false); // hanya yang perlu ditinjau
   let previewOf = $state(null); // entri yang sedang dipratinjau
+  let history = $state(null); // { id, versions } riwayat yang sedang dibuka
+  let compare = $state(null); // dialog Bandingkan versi
 
   // Tiap kali dialog dibuka, pencarian, pilihan, dan tampilan "Baru dihapus" dikosongkan; folder yang dibuka diingat.
   let wasOpen = false;
@@ -55,6 +66,7 @@
       picked = [];
       due = false;
       bin = false;
+      history = null;
     }
     wasOpen = open;
   });
@@ -73,8 +85,10 @@
           header = JSON.parse(e.json).header ?? {};
         } catch {}
         const dates = { tglPembuatan: header.tglPembuatan ?? '', tglRevisi: header.tglRevisi ?? '', tglEfektif: header.tglEfektif ?? '' };
-        return { ...e, tags: e.tags ?? [], text: haystack(e), since: reviewSince(header), dates };
+        const parts = searchParts(e);
+        return { ...e, tags: e.tags ?? [], parts, text: parts.map((p) => p.text).join('\n').toLowerCase(), since: reviewSince(header), dates };
       });
+      if (history) history = { id: history.id, versions: await listVersions(history.id) };
     } catch {
       entries = [];
       folders = [];
@@ -123,9 +137,8 @@
   }
 
   const shownFolders = $derived(bin || searching ? [] : childrenOf(at));
+  const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   const shown = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    const words = q ? q.split(/\s+/) : [];
     const match = (e) => words.every((w) => e.text.includes(w));
     if (bin) return binned.filter(match);
     const byTag = (e) => tag === null || (tag === '' ? !e.tags.length : e.tags.includes(tag));
@@ -532,11 +545,132 @@
     bin = false;
     await refresh();
   }
+
+  // ---- Riwayat versi: isi yang tertimpa setiap kali disimpan (KEEP_VERSIONS terbaru) ----
+  const when = (ms) => new Date(ms).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+  async function toggleHistory(e) {
+    if (history?.id === e.id) return (history = null);
+    history = { id: e.id, versions: await listVersions(e.id) };
+  }
+  function compareVersions(e, v = null) {
+    const versions = history?.id === e.id ? history.versions : [];
+    if (!versions.length) return;
+    const tab = openIds.includes(e.id) ? tabjson?.(e.id) : null;
+    const sources = [
+      ...(tab && tab !== e.json ? [{ key: 'tab', label: 'Isi di tab (belum disimpan)', json: tab }] : []),
+      { key: 'cur', label: `Isi tersimpan · ${when(e.updated)}`, json: e.json },
+      ...versions.map((x) => ({ key: x.key, label: when(x.at), json: x.json }))
+    ];
+    compare = { title: titleOf(e), sources, left: (v ?? versions[0]).key, right: 'cur' };
+  }
+  async function restoreVersion(e, v) {
+    if (openIds.includes(e.id)) {
+      const msg = `Muat isi versi ${when(v.at)} ke tab "${titleOf(e)}" yang sedang terbuka?\n\nIsi tab diganti, tetapi bisa dibatalkan dengan Urungkan (Ctrl+Z). Simpan (Ctrl+S) untuk menjadikannya isi terkini.`;
+      if (!(await ui.confirm(msg, { title: 'Kembalikan versi', ok: 'Muat ke tab' }))) return;
+      history = null;
+      onclose();
+      onrestoretab(e.id, v.json);
+      return;
+    }
+    if (!(await ui.confirm(`Kembalikan isi "${titleOf(e)}" ke versi ${when(v.at)}? Isi saat ini tetap tersimpan di riwayat.`, { title: 'Kembalikan versi', ok: 'Kembalikan' }))) return;
+    try {
+      await restoreLocalVersion(e.id, v);
+    } catch (err) {
+      return ui.alert(err.message);
+    }
+    await refresh();
+    onnotify('Versi lama dikembalikan');
+  }
+  async function dropVersions(e, list) {
+    const what = list.length === 1 ? `versi ${when(list[0].at)}` : `${list.length} versi lama`;
+    if (!(await ui.confirm(`Hapus ${what} dari riwayat "${titleOf(e)}"? Isi saat ini tetap utuh. Tindakan ini tidak bisa dibatalkan.`, { title: 'Hapus riwayat', ok: 'Hapus', danger: true }))) return;
+    for (const v of list) await deleteVersion(v.key);
+    await refresh();
+  }
+
+  // ---- Salin ke Pustaka Daring: SOP dan folder (beserta subfoldernya) dengan susunan yang sama ----
+  let copying = $state(null); // { ids, fids, target, targets, busy, done, total }
+  let copyDialog;
+  $effect(() => {
+    if (copying && !copyDialog.open) copyDialog.showModal();
+    else if (!copying && copyDialog?.open) copyDialog.close();
+  });
+  /** Banyaknya SOP yang akan disalin: entri terpilih ditambah isi folder (dan subfoldernya). */
+  const copyList = (ids, fids) => {
+    const set = new Set(ids);
+    for (const fid of fids) for (const e of live) if (inFolder(e, subtree(fid))) set.add(e.id);
+    return live.filter((e) => set.has(e.id));
+  };
+  let cloud = { folders: [], parents: new Map() };
+  const cloudPath = (id) => {
+    const out = [];
+    for (let f = cloud.folders.find((x) => x.id === id); f && out.length < 50; f = cloud.folders.find((x) => x.id === cloud.parents.get(f.id))) out.unshift(f.name);
+    return out.join(' / ');
+  };
+  async function startCopy(ids, fids = []) {
+    if (!copyList(ids, fids).length) return ui.alert('Tidak ada SOP untuk disalin.', { title: 'Salin ke Pustaka Daring' });
+    await F.start();
+    if (faculty.status !== 'in') return ui.alert('Masuk ke Pustaka Daring dulu untuk menyalin SOP ke sana.', { title: 'Salin ke Pustaka Daring' });
+    let list;
+    try {
+      list = await F.listFolders();
+    } catch (err) {
+      return ui.alert(err.message, { title: 'Salin ke Pustaka Daring' });
+    }
+    cloud = { folders: list, parents: F.resolveParents(list) };
+    const targets = list
+      .filter((f) => F.canManage(f))
+      .map((f) => ({ id: f.id, label: cloudPath(f.id) }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'id', { numeric: true }));
+    copying = { ids, fids, target: '', targets, busy: false, done: 0, total: copyList(ids, fids).length };
+  }
+  async function submitCopy(ev) {
+    ev.preventDefault();
+    const c = copying;
+    c.busy = true;
+    const me = faculty.user.uid;
+    const made = [];
+    // Folder Daring bernama sama di tempat yang sama (dan bisa diisi akun ini) dipakai lagi.
+    const folderIn = async (name, parent) => {
+      const same = [...cloud.folders, ...made].find((f) => (cloud.parents.has(f.id) ? cloud.parents.get(f.id) : f.parent) === parent && f.name.toLowerCase() === name.toLowerCase() && (f.createdBy === me || F.canManage(f)));
+      if (same) return same.id;
+      const id = await F.createFolder(name, parent);
+      made.push({ id, name, parent, createdBy: me });
+      return id;
+    };
+    const put = async (e, folder) => {
+      await F.uploadSop(parseDocumentText(e.json), undefined, folder);
+      c.done++;
+    };
+    const walk = async (fid, parent) => {
+      const f = byId.get(fid);
+      const id = await folderIn(f.name, parent);
+      for (const e of sorted(live.filter((x) => folderOf(x) === fid), 'name-asc', titleOf, (x) => x.updated ?? 0)) await put(e, id);
+      for (const sub of childrenOf(fid)) await walk(sub.id, id);
+    };
+    const target = c.target || null;
+    const where = target ? `folder ${cloudPath(target)}` : 'tingkat utama';
+    try {
+      for (const id of c.ids) {
+        const e = live.find((x) => x.id === id);
+        if (e) await put(e, target);
+      }
+      for (const fid of c.fids) await walk(fid, target);
+    } catch (err) {
+      faculty.stale = true;
+      copying = null;
+      return ui.alert(`Penyalinan berhenti setelah ${c.done} dari ${c.total} SOP: ${err.message}`, { title: 'Salin ke Pustaka Daring' });
+    }
+    faculty.stale = true;
+    copying = null;
+    picked = [];
+    onnotify(`${c.done} SOP disalin ke Pustaka Daring (${where})${made.length ? `, ${made.length} folder dibuat` : ''}`);
+  }
 </script>
 
   <header>
     {@render tabs()}
-    <input class="search" type="search" bind:value={query} placeholder={bin ? 'Cari di Baru dihapus…' : 'Cari nama, nomor, label, pelaksana, atau kegiatan…'} />
+    <input class="search" type="search" bind:value={query} placeholder={bin ? 'Cari di Baru dihapus…' : 'Cari nama, nomor, label, atau isi SOP…'} />
     <button class="ib x" onclick={onclose} aria-label="Tutup" data-tip="Tutup"><Icon name="x" /></button>
   </header>
   <p class="hint">
@@ -603,6 +737,7 @@
       <button class="btn small" onclick={() => makeBook(chosen)} title="Gabungkan SOP yang dipilih menjadi satu PDF berdaftar isi"><Icon name="book" size={14} />Gabung PDF</button>
       <button class="btn small" onclick={() => downloadZip(zipFiles(chosen), 'SOP-terpilih')} title="Unduh SOP yang dipilih sebagai berkas .sop dalam ZIP"><Icon name="download" size={14} />Unduh ZIP</button>
       <button class="btn small" onclick={() => startMove(chosen.map((e) => e.id))} title="Pindahkan ke folder lain"><Icon name="move" size={14} />Pindahkan</button>
+      <button class="btn small" onclick={() => startCopy(chosen.map((e) => e.id))} title="Salin SOP yang dipilih ke Pustaka Daring"><Icon name="cloud" size={14} />Salin ke Daring</button>
       <button
         class="btn small danger"
         onclick={removePicked}
@@ -643,6 +778,7 @@
           <button class="btn small" onclick={() => renameFolder(f)} title="Ubah nama folder" aria-label={`Ubah nama folder ${f.name}`}><Icon name="pencil" size={14} /></button>
           <button class="btn small" onclick={() => startMove([], [f.id])} title="Pindahkan folder" aria-label={`Pindahkan folder ${f.name}`}><Icon name="move" size={14} /></button>
           <button class="btn small" onclick={() => folderZip(f)} title="Unduh isinya sebagai ZIP" aria-label={`Unduh isi folder ${f.name} sebagai ZIP`}><Icon name="download" size={14} /></button>
+          <button class="btn small" onclick={() => startCopy([], [f.id])} title="Salin folder ini beserta isinya ke Pustaka Daring" aria-label={`Salin folder ${f.name} ke Pustaka Daring`}><Icon name="cloud" size={14} /></button>
           <button class="btn small danger" onclick={() => removeFolder(f)} title="Hapus folder" aria-label={`Hapus folder ${f.name}`}><Icon name="trash" size={14} /></button>
         </span>
       </li>
@@ -671,12 +807,21 @@
             <small>
               {[searching && `di ${pathText(folderOf(e))}`, e.nomor, e.fileName, 'diubah ' + ago(e.updated)].filter(Boolean).join(' · ')}
             </small>
+            {#if words.length}<MatchSnippet parts={e.parts} {words} />{/if}
             {#if e.tags.length}
               <span class="tags">{#each e.tags as t (t)}<i>{t}</i>{/each}</span>
             {/if}
           </button>
           <span class="acts">
             <button class="btn small" onclick={() => (previewOf = e)} title="Pratinjau tanpa membuka" aria-label={`Pratinjau ${titleOf(e)}`}><Icon name="eye" size={14} /></button>
+            <button
+              class="btn small"
+              class:on={history?.id === e.id}
+              aria-expanded={history?.id === e.id}
+              onclick={() => toggleHistory(e)}
+              title="Riwayat versi"
+              aria-label={`Riwayat ${titleOf(e)}`}><Icon name="history" size={14} /></button
+            >
             <button
               class="btn small"
               class:on={tagEdit === e.id}
@@ -694,6 +839,37 @@
               title={isOpen ? 'Tutup tabnya dulu untuk menghapus' : 'Pindahkan ke Baru dihapus'}
             >Hapus</button>
           </span>
+        {/if}
+        {#if history?.id === e.id && !bin}
+          <div class="history">
+            {#if history.versions.length}
+              <div class="hhead">
+                <span class="muted">{history.versions.length} versi lama · {KEEP_VERSIONS} terakhir disimpan</span>
+                <span class="hacts">
+                  <button type="button" class="link cmp" onclick={() => compareVersions(e)}>Bandingkan versi…</button>
+                  <button type="button" class="link" onclick={() => dropVersions(e, history.versions)}>Hapus semua riwayat…</button>
+                </span>
+              </div>
+            {/if}
+            {#each history.versions as v (v.key)}
+              <div>
+                <span>{when(v.at)}{v.title !== e.title ? ` · ${v.title || 'tanpa nama'}` : ''}</span>
+                <span class="hacts">
+                  <button class="btn small" onclick={() => (previewOf = { ...e, json: v.json, versionAt: v.at })} title="Pratinjau versi ini" aria-label={`Pratinjau versi ${when(v.at)}`}><Icon name="eye" size={14} /></button>
+                  <button class="btn small" onclick={() => compareVersions(e, v)} title="Bandingkan dengan isi tersimpan" aria-label={`Bandingkan versi ${when(v.at)}`}><Icon name="compare" size={14} /></button>
+                  <button
+                    class="btn small"
+                    onclick={() => restoreVersion(e, v)}
+                    title={openIds.includes(e.id) ? 'Muat versi ini ke tab yang terbuka (simpan untuk menerapkannya)' : 'Kembalikan versi ini'}
+                    aria-label={`Kembalikan versi ${when(v.at)}`}><Icon name="restore" size={14} /></button
+                  >
+                  <button class="btn small danger" onclick={() => dropVersions(e, [v])} title="Hapus versi ini dari riwayat" aria-label={`Hapus versi ${when(v.at)}`}><Icon name="trash" size={14} /></button>
+                </span>
+              </div>
+            {:else}
+              <span class="muted">Belum ada versi lama. Setiap kali SOP ini disimpan, isi sebelumnya dicatat di sini.</span>
+            {/each}
+          </div>
         {/if}
         {#if tagEdit === e.id}
           <div class="tag-edit">
@@ -737,8 +913,12 @@
   </footer>
 
 <SopPreviewDialog
-  item={previewOf && { title: titleOf(previewOf), json: previewOf.json, where: previewOf.deleted ? `Dihapus dari ${previewOf.fromPath || 'Utama'}` : `Folder ${pathText(folderOf(previewOf))}` }}
-  onopen={previewOf && !previewOf.deleted
+  item={previewOf && {
+    title: titleOf(previewOf),
+    json: previewOf.json,
+    where: previewOf.versionAt ? `Versi ${when(previewOf.versionAt)}` : previewOf.deleted ? `Dihapus dari ${previewOf.fromPath || 'Utama'}` : `Folder ${pathText(folderOf(previewOf))}`
+  }}
+  onopen={previewOf && !previewOf.deleted && !previewOf.versionAt
     ? () => {
         const e = previewOf;
         previewOf = null;
@@ -775,6 +955,47 @@
     </form>
   {/if}
 </dialog>
+
+<dialog
+  bind:this={copyDialog}
+  class="move-dialog"
+  use:dismiss
+  oncancel={(ev) => copying?.busy && ev.preventDefault()}
+  onclose={() => !copying?.busy && (copying = null)}
+  aria-labelledby="local-copy-title"
+>
+  {#if copying}
+    <form onsubmit={submitCopy}>
+      <h2 id="local-copy-title">Salin ke Pustaka Daring</h2>
+      <p class="muted">
+        {copying.total} SOP{copying.fids.length ? ` dari folder ${copying.fids.map((id) => byId.get(id)?.name).join(', ')} beserta subfoldernya` : ''} diunggah sebagai SOP baru milik Anda.
+        {copying.fids.length ? 'Susunan foldernya ikut dibuat; folder Daring bernama sama di tempat tujuan dipakai lagi.' : ''}
+        Isi Pustaka Lokal tidak berubah.
+      </p>
+      <label>
+        <span>Ke folder Daring</span>
+        <select bind:value={copying.target} disabled={copying.busy}>
+          <option value="">Utama (tingkat teratas)</option>
+          {#each copying.targets as t (t.id)}
+            <option value={t.id}>{t.label}</option>
+          {/each}
+        </select>
+      </label>
+      {#if copying.busy}
+        <progress max={copying.total} value={copying.done}></progress>
+        <p class="muted">Mengunggah {copying.done} dari {copying.total} SOP…</p>
+      {/if}
+      <footer>
+        <button type="button" class="btn" onclick={() => (copying = null)} disabled={copying.busy}>Batal</button>
+        <button class="btn primary" disabled={copying.busy}><Icon name="cloud" size={15} />Salin</button>
+      </footer>
+    </form>
+  {/if}
+</dialog>
+
+{#if compare}
+  <VersionDiffDialog open={true} title={compare.title} sources={compare.sources} bind:left={compare.left} bind:right={compare.right} onclose={() => (compare = null)} />
+{/if}
 
 <style>
   header {
@@ -1140,5 +1361,51 @@
   }
   .move-dialog footer {
     justify-content: flex-end;
+  }
+  .move-dialog progress {
+    width: 100%;
+    margin-top: 0.8rem;
+  }
+  .history {
+    flex-basis: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-size: 0.82rem;
+  }
+  .history div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .history .hhead {
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .history .hacts {
+    display: flex;
+    gap: 0.25rem;
+  }
+  .history .hhead .hacts {
+    gap: 0.9rem;
+  }
+  .history .link {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--danger);
+    font: inherit;
+    cursor: pointer;
+  }
+  .history .link.cmp {
+    color: var(--accent);
+  }
+  .history .link:hover {
+    text-decoration: underline;
   }
 </style>

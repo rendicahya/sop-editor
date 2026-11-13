@@ -5,6 +5,7 @@
   "description": "Security Rules Pustaka Fakultas dan pengujiannya. Terpisah agar alat ini tidak ikut terpasang saat aplikasi di-build.",
   "scripts": {
     "test": "firebase emulators:exec --only firestore --project demo-sop-editor \"node --test rules.test.js\"",
+    "e2e": "firebase emulators:exec --only auth,firestore --project demo-sop-editor \"npm --prefix .. run e2e:run\"",
     "deploy:rules": "firebase deploy --only firestore:rules",
     "deploy:indexes": "firebase deploy --only firestore:indexes"
   },

@@ -7,33 +7,98 @@
 // Folder: { id, name, parent } di simpanan terpisah; parent null = Utama.
 
 import { plainText } from './richtext.js';
+import { SECTION_DEFS } from './model.js';
 
 export const BIN_DAYS = 30;
+export const KEEP_VERSIONS = 20;
 const DAY = 86400000;
 
-/** Teks yang dicari: nama, nomor, berkas, label, pelaksana, kegiatan, dan butir ketentuan. */
-export function haystack(e) {
-  const parts = [e.title, e.nomor, e.fileName, ...(e.tags ?? [])];
+const STEP_FIELDS = [
+  ['kegiatan', ''],
+  ['kelengkapan', 'kelengkapan'],
+  ['output', 'output'],
+  ['keterangan', 'keterangan']
+];
+const sectionTitle = (key) => {
+  const t = SECTION_DEFS.find((s) => s.key === key)?.title ?? key;
+  return t.charAt(0) + t.slice(1).toLowerCase();
+};
+
+/**
+ * Bagian teks SOP yang bisa dicari, masing-masing dengan tempatnya: [{ where, text, meta }]. `meta` menandai nama,
+ * nomor, berkas, dan label yang sudah tampil di baris pustaka (tidak perlu dicuplik).
+ */
+export function searchParts(e) {
+  const out = [];
+  const put = (where, text, meta = false) => {
+    if (typeof text === 'string' && text.trim()) out.push({ where, text, meta });
+  };
+  put('Nama', e.title, true);
+  put('Nomor', e.nomor, true);
+  put('Berkas', e.fileName, true);
+  for (const t of e.tags ?? []) put('Label', t, true);
   try {
     const d = JSON.parse(e.json);
-    parts.push(...d.actors.map((a) => a.name), ...d.steps.map((s) => plainText(s.kegiatan)));
-    for (const s of Object.values(d.sections)) parts.push(...s.items.map((i) => plainText(i.text ?? i)));
+    for (const a of d.actors ?? []) put('Pelaksana', a.name);
+    (d.steps ?? []).forEach((s, i) => {
+      for (const [k, label] of STEP_FIELDS) put(`Langkah ${i + 1}${label ? ' · ' + label : ''}`, plainText(s[k] ?? ''));
+    });
+    for (const [key, s] of Object.entries(d.sections ?? {})) for (const it of s.items ?? []) put(sectionTitle(key), plainText(it.text ?? it));
   } catch {}
-  return parts.filter((p) => typeof p === 'string').join('\n').toLowerCase();
+  return out;
+}
+
+/** Teks pencarian dalam huruf kecil (gabungan searchParts). */
+export const haystack = (e) => searchParts(e).map((p) => p.text).join('\n').toLowerCase();
+
+/**
+ * Cuplikan isi tempat kata pencarian ditemukan, untuk ditampilkan di bawah hasil: { where, pieces: [{ text, hit }] }
+ * atau null bila semua kata sudah cocok di nama, nomor, berkas, atau label.
+ */
+export function matchSnippet(parts, words, width = 110) {
+  if (!words.length || !parts) return null;
+  const low = (p) => p.text.toLowerCase();
+  if (words.every((w) => parts.some((p) => p.meta && low(p).includes(w)))) return null;
+  const body = parts.filter((p) => !p.meta);
+  const score = (p) => words.filter((w) => low(p).includes(w)).length;
+  let best = null;
+  for (const p of body) if (score(p) && (!best || score(p) > score(best))) best = p;
+  if (!best) return null;
+  const text = best.text.replace(/\s+/g, ' ').trim();
+  const lower = text.toLowerCase();
+  const first = Math.min(...words.map((w) => lower.indexOf(w)).filter((i) => i >= 0));
+  let start = Math.max(0, first - Math.floor(width / 3));
+  if (start > 0) start = lower.lastIndexOf(' ', start) + 1 || start;
+  const end = Math.min(text.length, start + width);
+  const cut = text.slice(start, end);
+  const pieces = [];
+  const re = new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi');
+  let last = 0;
+  for (const m of cut.matchAll(re)) {
+    if (m.index > last) pieces.push({ text: cut.slice(last, m.index), hit: false });
+    pieces.push({ text: m[0], hit: true });
+    last = m.index + m[0].length;
+  }
+  if (last < cut.length) pieces.push({ text: cut.slice(last), hit: false });
+  if (start > 0) pieces.unshift({ text: '…', hit: false });
+  if (end < text.length) pieces.push({ text: '…', hit: false });
+  return { where: best.where, pieces };
 }
 
 const DB = 'sop-editor-library';
 const STORE = 'docs';
 const FOLDERS = 'folders';
+const VERSIONS = 'versions'; // { key: `${entry}:${at}`, entry, at, title, nomor, json }
 
 let dbPromise;
 function db() {
   dbPromise ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 2);
+    const req = indexedDB.open(DB, 3);
     req.onupgradeneeded = () => {
       const d = req.result;
       if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE, { keyPath: 'id' });
       if (!d.objectStoreNames.contains(FOLDERS)) d.createObjectStore(FOLDERS, { keyPath: 'id' });
+      if (!d.objectStoreNames.contains(VERSIONS)) d.createObjectStore(VERSIONS, { keyPath: 'key' }).createIndex('entry', 'entry');
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -56,7 +121,19 @@ export const getEntry = async (id) => {
   const e = await run('readonly', (s) => s.get(id));
   return e && !e.deleted ? e : undefined;
 };
-export const deleteEntry = (id) => run('readwrite', (s) => s.delete(id));
+/** Hapus permanen, riwayat versinya ikut. */
+export async function deleteEntry(id) {
+  const d = await db();
+  await new Promise((resolve, reject) => {
+    const tx = d.transaction([STORE, VERSIONS], 'readwrite');
+    tx.objectStore(STORE).delete(id);
+    const vs = tx.objectStore(VERSIONS);
+    const req = vs.index('entry').getAllKeys(id);
+    req.onsuccess = () => req.result.forEach((k) => vs.delete(k));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
 export const putEntry = (entry) => run('readwrite', (s) => s.put(entry));
 
 /** Mengubah sebagian kolom entri dalam satu transaksi (tidak bertabrakan dengan penyimpanan dokumen). */
@@ -90,7 +167,7 @@ export async function listEntries() {
   const all = (await run('readonly', (s) => s.getAll())) ?? [];
   const limit = Date.now() - BIN_DAYS * DAY;
   const old = all.filter((e) => e.deleted && e.deleted < limit);
-  if (old.length) await run('readwrite', (s) => old.forEach((e) => s.delete(e.id)));
+  for (const e of old) await deleteEntry(e.id);
   return all.filter((e) => !old.includes(e)).sort((a, b) => b.updated - a.updated);
 }
 
@@ -115,11 +192,17 @@ export function isBlank(doc) {
   return !doc.header.namaSop && doc.steps.length <= 2 && Object.values(doc.sections).every((s) => !s.items.length);
 }
 
-/** Menyimpan dokumen tab `id`; dilewati bila isinya sama dengan yang tersimpan atau dokumen baru masih kosong. */
+/**
+ * Menyimpan dokumen tab `id`; dilewati bila isinya sama dengan yang tersimpan atau dokumen baru masih kosong.
+ * Isi yang tertimpa masuk ke riwayat versi entri itu (KEEP_VERSIONS terbaru disimpan).
+ */
 export async function saveDoc(id, json, fileName = null) {
   const doc = JSON.parse(json);
+  const d = await db();
   // Baca dan tulis dalam satu transaksi agar label/folder yang baru diubah di dialog Pustaka tidak tertimpa.
-  await run('readwrite', (s) => {
+  await new Promise((resolve, reject) => {
+    const tx = d.transaction([STORE, VERSIONS], 'readwrite');
+    const s = tx.objectStore(STORE);
     const req = s.get(id);
     req.onsuccess = () => {
       // Entri di "Baru dihapus" yang disimpan lagi dari tabnya kembali menjadi entri biasa.
@@ -138,7 +221,38 @@ export async function saveDoc(id, json, fileName = null) {
         tags: old?.tags ?? [],
         folder: old?.folder ?? null
       });
+      if (old && old.json !== json) keepVersion(tx.objectStore(VERSIONS), old);
     };
-    return req;
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
+}
+
+/** Mencatat isi `old` di riwayat lalu membuang versi tertua di luar KEEP_VERSIONS (di dalam transaksi pemanggil). */
+function keepVersion(vs, old) {
+  const at = old.updated ?? Date.now();
+  vs.put({ key: `${old.id}:${at}`, entry: old.id, at, title: old.title ?? '', nomor: old.nomor ?? '', json: old.json });
+  const req = vs.index('entry').getAll(old.id);
+  req.onsuccess = () => {
+    const extra = req.result.sort((a, b) => b.at - a.at).slice(KEEP_VERSIONS);
+    for (const v of extra) vs.delete(v.key);
+  };
+}
+
+/** Versi lama entri `id`, terbaru dulu: [{ key, at, title, nomor, json }]. */
+export async function listVersions(id) {
+  const list = (await run('readonly', (s) => s.index('entry').getAll(id), VERSIONS)) ?? [];
+  return list.sort((a, b) => b.at - a.at);
+}
+
+/** Menghapus satu versi (`key`) atau semua versi entri dari riwayat. */
+export const deleteVersion = (key) => run('readwrite', (s) => s.delete(key), VERSIONS);
+
+/** Isi versi lama menjadi isi terkini entri `id`; isi saat ini masuk riwayat. Nama SOP tidak ikut mundur. */
+export async function restoreVersion(id, version) {
+  const e = await getEntry(id);
+  if (!e) throw new Error('SOP ini sudah tidak ada di Pustaka Lokal.');
+  const doc = JSON.parse(version.json);
+  doc.header.namaSop = JSON.parse(e.json).header?.namaSop ?? doc.header.namaSop;
+  await saveDoc(id, JSON.stringify(doc), e.fileName ?? null);
 }

@@ -68,8 +68,12 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   asalnya (Pustaka Daring, Pustaka Lokal, atau berkas) lalu titiknya hilang. Menutup tab bertanda ini menampilkan pilihan
   menyimpan, menutup tanpa menyimpan, atau tidak jadi menutup.
 - **Pustaka Lokal**: SOP yang disimpan ke Pustaka Lokal berada di browser (IndexedDB) dan bisa dibuka lagi kapan saja.
-  Isinya hanya berubah saat disimpan. Pustaka bisa dicari (nama, nomor, pelaksana, kegiatan, butir ketentuan),
+  Isinya hanya berubah saat disimpan. Pustaka bisa dicari (nama, nomor, label, dan seluruh isi SOP),
   dan dokumennya bisa diduplikasi.
+  **Riwayat versi**: setiap kali SOP disimpan, isi sebelumnya dicatat (20 versi terakhir). Versi lama bisa dipratinjau,
+  dibandingkan, dikembalikan (bila SOP terbuka di tab, versinya dimuat ke tab dan bisa di-Urungkan), atau dihapus.
+  **Salin ke Pustaka Daring**: SOP terpilih, atau satu folder beserta subfoldernya, diunggah ke folder Daring pilihan
+  dengan susunan folder yang sama; folder Daring bernama sama di tujuan dipakai lagi.
   **Label** (mis. Akademik, Keuangan) mengelompokkan dokumen: satu entri boleh berlabel lebih dari satu,
   daftar bisa disaring per label atau "Tanpa label", dan label bisa diganti nama atau dihapus sekaligus di semua entri.
   Seperti Pustaka Daring, Pustaka Lokal juga punya saringan **Perlu ditinjau**, **daftar induk SOP (XLSX)**, **cadangan
@@ -86,6 +90,8 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
 - **Pratinjau SOP di pustaka**: tombol mata di baris SOP (Pustaka Lokal, Pustaka Daring, dan Baru dihapus) menampilkan
   halaman SOP persis seperti cetakannya tanpa membukanya di tab, lengkap dengan nomor, tanggal efektif, jumlah langkah,
   dan foldernya; **Buka di tab** membukanya.
+- **Cuplikan hasil pencarian**: di kedua pustaka, kata yang ditemukan di isi SOP (pelaksana, kegiatan, kelengkapan,
+  output, keterangan, butir ketentuan) ditampilkan di bawah hasilnya beserta tempatnya, mis. "Langkah 3 · keterangan".
 - **Pemeriksaan sebelum ekspor, cetak, dan unggah pertama ke Pustaka Daring**: bila panel Periksa masih menemukan
   kesalahan atau peringatan (mis. nomor SOP belum lengkap, tanggal efektif kosong, keputusan tanpa cabang), daftar
   singkatnya ditampilkan dengan pilihan **Perbaiki dulu** (membuka panel Periksa) atau **Tetap ekspor/cetak/unggah**.
@@ -301,7 +307,14 @@ npm run dev       # http://localhost:5173/sop-editor/
 npm run build     # hasil di dist/
 npm run preview
 npm run icons     # buat ulang ikon PWA dari public/favicon.svg
+npm run test:e2e  # uji ujung-ke-ujung (Playwright + emulator Firebase; perlu Java dan `npm install` di firebase/)
 ```
+
+Uji ujung-ke-ujung ada di `e2e/`. Perintah di atas menyalakan emulator Auth dan Firestore (dengan aturan dari
+`firebase/firestore.rules`) serta server Vite dalam mode emulator, lalu menjalankan browser Chromium terhadapnya.
+Sekali saja sebelumnya: `npx playwright install chromium`. Di GitHub Actions, uji aturan Firestore dan uji
+ujung-ke-ujung dijalankan sebelum build; bila ada yang gagal, situs tidak diperbarui dan laporan ujinya diunggah
+sebagai artefak `laporan-uji`.
 
 Struktur utama:
 
@@ -317,7 +330,8 @@ Struktur utama:
 | `src/lib/png.js` | Ekspor PNG: tiap halaman digambar ke canvas lalu dikemas ZIP |
 | `src/lib/validate.js` | Pemeriksa dokumen: alur diagram dan isian penting |
 | `src/lib/duration.js` | Estimasi total waktu: membaca kolom Waktu dan menjumlahkannya di jalur utama |
-| `src/lib/library.js` | Pustaka Lokal di IndexedDB: simpan per tab (id tab = id entri), daftar, folder, Baru dihapus (30 hari) |
+| `src/lib/library.js` | Pustaka Lokal di IndexedDB: simpan per tab (id tab = id entri), daftar, folder, riwayat versi, Baru dihapus (30 hari), teks pencarian dan cuplikannya |
+| `src/lib/MatchSnippet.svelte` | Cuplikan isi SOP tempat kata pencarian ditemukan |
 | `src/lib/SopPreviewDialog.svelte` | Pratinjau halaman SOP dari pustaka tanpa membukanya di tab |
 | `src/lib/LibraryDialog.svelte` | Dialog Pustaka: cari, label, duplikat |
 | `src/lib/faculty.svelte.js` | Pustaka Daring: login, baca/tulis Firestore, riwayat, keterangan sedang diedit; Firebase dimuat saat pertama dipakai |
@@ -334,7 +348,7 @@ Struktur utama:
 
 ## Deploy ke GitHub Pages
 
-Workflow `.github/workflows/deploy.yml` membangun dan men-deploy setiap push ke `main`.
+Workflow `.github/workflows/deploy.yml` menguji, membangun, dan men-deploy setiap push ke `main`.
 Aktifkan sekali di **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 
 Base path diambil dari nama repositori. Untuk domain kustom, build dengan `BASE_PATH=/`.

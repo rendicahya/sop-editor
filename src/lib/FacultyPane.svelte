@@ -1,7 +1,8 @@
 <script>
   import { tick, untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { haystack } from './library.js';
+  import { searchParts } from './library.js';
+  import MatchSnippet from './MatchSnippet.svelte';
   import * as F from './faculty.svelte.js';
   import { faculty, canManage, canEdit } from './faculty.svelte.js';
   import AccessDialog from './AccessDialog.svelte';
@@ -100,8 +101,9 @@
   });
   $effect(() => {
     if (faculty.status !== 'in') loaded = false;
-    else if (open && active && !loaded) {
+    else if (open && active && (!loaded || faculty.stale)) {
       loaded = true;
+      faculty.stale = false;
       refresh();
     }
   });
@@ -141,7 +143,8 @@
       links = Array.isArray(d.links) ? d.links : [];
     } catch {}
     const dates = { tglPembuatan: header.tglPembuatan ?? '', tglRevisi: header.tglRevisi ?? '', tglEfektif: header.tglEfektif ?? '' };
-    return { ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName, s.code] }), since: reviewSince(header), dates, links };
+    const parts = searchParts({ ...s, fileName: null, tags: [s.createdByName, s.code] });
+    return { ...s, parts, text: parts.map((p) => p.text).join('\n').toLowerCase(), since: reviewSince(header), dates, links };
   }
 
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
@@ -1417,7 +1420,7 @@
   <header>
     {@render tabs()}
     {#if faculty.status === 'in'}
-      <input class="search" type="search" bind:this={search} bind:value={query} onkeydown={(e) => e.key === 'ArrowDown' && rows.length && (e.preventDefault(), focusRow(rows[0].key))} placeholder="Cari nama, nomor, pembuat, pelaksana, atau kegiatan…" />
+      <input class="search" type="search" bind:this={search} bind:value={query} onkeydown={(e) => e.key === 'ArrowDown' && rows.length && (e.preventDefault(), focusRow(rows[0].key))} placeholder="Cari nama, nomor, pembuat, atau isi SOP…" />
     {:else}
       <span class="grow"></span>
     {/if}
@@ -1616,6 +1619,7 @@
                   <small title={`Terakhir diubah ${when(s.updatedAt)}`}>
                     {#if searching && folderOf(s)}<span>di {pathText(folderOf(s))}</span>{/if}{#if only === 'due'}<span>acuan {formatTanggal(s.since)}</span>{/if}<span>Diubah {ago(s.updatedAt)}</span>
                   </small>
+                  {#if words.length}<MatchSnippet parts={s.parts} {words} />{/if}
                   {#if editors}<small class="editing">🔒 Terkunci, sedang diedit oleh {editors}</small>{/if}
                 </button>
                 <span class="acts" role="group" aria-label="Tindakan SOP">
