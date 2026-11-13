@@ -33,7 +33,15 @@
   let { open = false, active = false, host, tabs, onclose, openIds = [], cansave = true, onopen, onupload, oncreate, onloaded, onrenamed, onbinned, onnotify, tabjson, onrestoretab, onbook, onopencomment } = $props();
 
   let moveDialog;
-  let view = $state('sops'); // sops | bin | admin
+  let view = $state('sops'); // sops | mentions | bin | salah satu ADMIN_PAGES
+  // Halaman khusus admin, tampil di bawah navigasi kiri. Data admin dibaca sekali saat masuk ke salah satunya.
+  const ADMIN_PAGES = [
+    ['defaults', 'Bawaan SOP baru', 'filePlus', 'Kop, awalan nomor, dan pengesah untuk SOP baru'],
+    ['members', 'Anggota', 'user', 'Daftarkan anggota dan atur perannya'],
+    ['groups', 'Grup', 'users', 'Kelompok anggota untuk memberi hak akses sekaligus'],
+    ['storage', 'Penyimpanan', 'gauge', 'Pemakaian dan batas penyimpanan']
+  ];
+  const inAdmin = $derived(ADMIN_PAGES.some(([v]) => v === view));
   let live = $state([]);
   let bin = $state([]);
   let folders = $state([]);
@@ -93,7 +101,7 @@
   });
 
   $effect(() => {
-    if (open && active && faculty.status === 'in' && view === 'admin') refreshAdmin();
+    if (open && active && faculty.status === 'in' && inAdmin) refreshAdmin();
   });
 
   $effect(() => {
@@ -457,7 +465,7 @@
     const t = e.target;
     const typing = t.matches?.('input:not(.pick), textarea, select, [contenteditable]');
     const ctrl = e.ctrlKey || e.metaKey;
-    if (ctrl && e.key === 'f' && view !== 'admin') {
+    if (ctrl && e.key === 'f' && !inAdmin) {
       search?.focus();
       search?.select();
     } else if (typing) return;
@@ -1309,15 +1317,10 @@
 
   <header>
     {@render tabs()}
-    {#if faculty.status === 'in' && view !== 'admin'}
+    {#if faculty.status === 'in' && !inAdmin}
       <input class="search" type="search" bind:this={search} bind:value={query} onkeydown={(e) => e.key === 'ArrowDown' && rows.length && (e.preventDefault(), focusRow(rows[0].key))} placeholder="Cari nama, nomor, pembuat, pelaksana, atau kegiatan…" />
     {:else}
       <span class="grow"></span>
-    {/if}
-    {#if admin}
-      <button type="button" class="adm" class:on={view === 'admin'} aria-pressed={view === 'admin'} data-tip={view === 'admin' ? 'Kembali ke daftar SOP' : 'Bawaan SOP baru, anggota, grup, dan penyimpanan'} onclick={() => (view = view === 'admin' ? 'sops' : 'admin')}>
-        <Icon name="settings" size={15} /><span>Admin</span>
-      </button>
     {/if}
     {#if faculty.user}
       <small class="who" title={faculty.user.email}>{faculty.user.name}{admin ? ' · Admin' : ''}</small>
@@ -1393,6 +1396,14 @@
           <button type="button" class="tname nav" class:sel={view === 'bin'} onclick={() => (view = 'bin')}>
             <Icon name="trash" size={15} /><span>Recycle bin</span>{#if bin.length}<small>{bin.length}</small>{/if}
           </button>
+          {#if admin}
+            <span class="nav-head">Admin</span>
+            {#each ADMIN_PAGES as [v, label, icon, tip] (v)}
+              <button type="button" class="tname nav" class:sel={view === v} aria-current={view === v ? 'page' : undefined} title={tip} onclick={() => (view = v)}>
+                <Icon name={icon} size={15} /><span>{label}</span>
+              </button>
+            {/each}
+          {/if}
         </nav>
       </aside>
 
@@ -1568,8 +1579,9 @@
               <li class="empty">{busy ? 'Memuat…' : query.trim() ? 'Tidak ada yang cocok.' : 'Recycle bin kosong.'}</li>
             {/each}
           </ul>
-        {:else if admin}
+        {:else if admin && inAdmin}
       <div class="admin">
+        {#if view === 'storage'}
         <section>
           <h3>Penyimpanan</h3>
           {#if usage}
@@ -1587,6 +1599,7 @@
             <small>Memuat…</small>
           {/if}
         </section>
+        {:else if view === 'defaults'}
         <section>
           <h3>Bawaan SOP baru</h3>
           <small>
@@ -1610,6 +1623,7 @@
             </div>
           </form>
         </section>
+        {:else if view === 'members'}
         <section>
           <h3>Anggota <span class="muted">{members.length}</span></h3>
           <form onsubmit={addMember} class="row add-members">
@@ -1654,6 +1668,7 @@
             {/each}
           </ul>
         </section>
+        {:else}
         <section>
           <h3>Grup <span class="muted">{groups.length}</span></h3>
           <small>Grup bisa dipilih di Hak akses seperti email, sehingga semua anggotanya mendapat hak yang sama sekaligus. Anggota yang ditambahkan ke grup langsung mendapat hak grup itu.</small>
@@ -1686,6 +1701,7 @@
             </ul>
           {/if}
         </section>
+        {/if}
       </div>
         {/if}
       </section>
@@ -1794,29 +1810,6 @@
     flex: 1;
     min-width: 0;
     margin: 0 0.5rem;
-  }
-  .adm {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    height: 1.95rem;
-    padding: 0 0.7rem;
-    border: 1px solid var(--line);
-    border-radius: 7px;
-    background: none;
-    color: var(--text);
-    font: inherit;
-    font-size: 0.82rem;
-    cursor: pointer;
-  }
-  .adm:hover:not(.on) {
-    background: var(--surface-2);
-  }
-  .adm.on {
-    border-color: transparent;
-    background: var(--accent-soft);
-    color: var(--accent);
   }
   .who {
     flex: none;
@@ -2007,6 +2000,14 @@
   }
   .tname.nav:hover:not(.sel) {
     background: var(--line);
+  }
+  .nav-head {
+    margin: 0.55rem 0.6rem 0.15rem;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
   .content {
     position: relative;
