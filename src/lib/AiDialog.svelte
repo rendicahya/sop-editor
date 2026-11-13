@@ -5,6 +5,8 @@
   import { DEFAULTS, hasDefaults } from './appDefaults.svelte.js';
   import { app } from './store.svelte.js';
   import { dismiss } from './dismiss.js';
+  import TourButton from './TourButton.svelte';
+  import { AI_TOUR } from './tourSteps.js';
 
   /** onpaste(text, revise) → true bila jawaban berhasil dibuka. */
   let { open = $bindable(false), docKey, onpaste } = $props();
@@ -72,9 +74,11 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="dialog" use:dismiss onclose={() => (open = false)}>
+<dialog bind:this={dialog} class="dialog" data-help="ai" use:dismiss onclose={() => (open = false)}>
   <header>
     <h2>SOP dengan bantuan AI</h2>
+    <span class="grow"></span>
+    <TourButton steps={AI_TOUR} label="Tur singkat Asisten AI" />
     <button type="button" class="x" onclick={() => (open = false)} aria-label="Tutup"><Icon name="x" size={14} /></button>
   </header>
   <div class="seg" role="tablist" aria-label="Jenis">
@@ -96,7 +100,7 @@
     </p>
   {/if}
 
-  <section>
+  <section data-help="step1">
     <h3><span class="num">1</span><span>{#if draft.mode === 'import'}Lampirkan SOP lama ke AI{:else if draft.mode === 'revise'}Tulis instruksi revisi{:else}Tulis nama dan deskripsi SOP{/if}</span></h3>
     {#if draft.mode === 'revise'}
       <label class="field">
@@ -120,7 +124,7 @@
     {/if}
   </section>
 
-  <section>
+  <section data-help="step2">
     <h3><span class="num">2</span><span>Salin prompt</span></h3>
     <div class="row">
       <button type="button" class="btn primary" onclick={copy}>{copied ? 'Berhasil disalin ✓' : 'Salin'}</button>
@@ -131,14 +135,14 @@
     </div>
   </section>
 
-  <section>
+  <section data-help="step3">
     <h3><span class="num">3</span><span>Masukkan prompt yang sudah disalin ke AI</span></h3>
     {#if draft.mode === 'import'}
       <small class="hint">Kirim di chat yang sama dengan lampiran SOP lama.</small>
     {/if}
   </section>
 
-  <section>
+  <section data-help="step4">
     <h3><span class="num">4</span><span>Tempel jawaban dari AI</span></h3>
     <label class="field">
       <textarea rows="5" class="mono" aria-label="Jawaban AI" bind:value={draft.answer} placeholder={'{ "format": "sop-editor", … }'}></textarea>
@@ -178,9 +182,11 @@
   header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 0.5rem;
     margin-bottom: 0.6rem;
+  }
+  .grow {
+    flex: 1;
   }
   h2 {
     margin: 0;

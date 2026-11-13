@@ -3,6 +3,10 @@ import { test, expect, resetCloud, signIn } from './helpers.js';
 test.use({ tour: true });
 
 const tour = (page) => page.locator('dialog.tour[open]');
+const openTour = async (page) => {
+  await page.getByRole('button', { name: 'Bantuan' }).click();
+  await page.getByRole('menuitem', { name: /Tur pengenalan/ }).click();
+};
 
 test.beforeEach(async ({ page }) => {
   await resetCloud();
@@ -24,26 +28,26 @@ test('tur muncul sekali untuk pengguna baru dan bisa dibuka lagi', async ({ page
 
   // Dilewati berarti tidak muncul lagi saat dimuat ulang.
   await page.reload();
-  await page.getByRole('button', { name: 'Tur aplikasi' }).waitFor();
+  await page.getByRole('button', { name: 'Bantuan' }).waitFor();
   await page.waitForTimeout(1500);
   await expect(tour(page)).toHaveCount(0);
 
   // Dibuka lagi dari tombol dengan SOP terbuka, sampai selesai.
   await page.locator('.no-doc').getByRole('button', { name: 'Baru' }).click();
-  await page.getByRole('button', { name: 'Tur aplikasi' }).click();
+  await openTour(page);
   await expect(tour(page)).toContainText('Selamat datang');
   await tour(page).locator('.next').click();
   await expect(tour(page)).toContainText('Ketik langsung di halaman');
   await tour(page).getByRole('button', { name: 'Kembali' }).click();
   const count = await tour(page).locator('.dots span').count();
   for (let k = 1; k < count; k++) await tour(page).locator('.next').click();
-  await expect(tour(page)).toContainText('Buka tur lagi');
+  await expect(tour(page)).toContainText('Bantuan');
   await expect(tour(page).locator('.next')).toHaveText('Selesai');
   await tour(page).locator('.next').click();
   await expect(tour(page)).toHaveCount(0);
 
   // Esc juga menutup tur.
-  await page.getByRole('button', { name: 'Tur aplikasi' }).click();
+  await openTour(page);
   await expect(tour(page)).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(tour(page)).toHaveCount(0);

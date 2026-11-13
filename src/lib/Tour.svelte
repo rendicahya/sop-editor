@@ -1,8 +1,9 @@
 <script>
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
 
   // Tur pengenalan: menyorot bagian aplikasi satu per satu. Langkah tanpa `target`, atau yang targetnya
   // tidak tampil (mis. halaman saat tidak ada SOP terbuka), ditampilkan di tengah / dilewati.
+  // Langkah: { title, text, target?: selektor CSS, before?: fungsi yang dijalankan sebelum langkah tampil }.
   let { open = $bindable(false), steps = [], ondone } = $props();
 
   let dlg = $state();
@@ -26,16 +27,22 @@
 
   $effect(() => {
     if (!open || !dlg) return;
-    shown = steps.filter((s) => !s.target || visible(targetOf(s)));
-    i = 0;
-    if (!dlg.open) dlg.showModal();
-    place();
+    // Hanya bergantung pada `open`: place() membaca langkah aktif, yang tidak boleh memicu efek ini lagi.
+    untrack(() => {
+      // Langkah dengan `before` (mis. pindah halaman dialog) baru menampilkan targetnya saat langkah itu dibuka.
+      shown = steps.filter((s) => !s.target || s.before || visible(targetOf(s)));
+      i = 0;
+      if (!dlg.open) dlg.showModal();
+      place();
+    });
   });
 
   async function place() {
+    step?.before?.();
     await tick();
     const el = targetOf(step);
     if (el) {
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // mis. bagian bawah dialog yang panjang
       const r = el.getBoundingClientRect();
       rect = { left: r.left - PAD, top: r.top - PAD, width: r.width + PAD * 2, height: r.height + PAD * 2 };
     } else rect = null;

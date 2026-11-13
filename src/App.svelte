@@ -33,6 +33,7 @@
   import { connectLinks } from './lib/sopLinks.js';
   import Tour from './lib/Tour.svelte';
   import { TOUR_STEPS } from './lib/tourSteps.js';
+  import ShortcutsDialog from './lib/ShortcutsDialog.svelte';
 
   let toast = $state(null); // { msg, action, n }
   let toastTimer;
@@ -589,7 +590,7 @@
   );
   /** Membuka dialog Pustaka di tab `t` (bawaan: tab terakhir). */
   function openLibrary(t = libraryTab) {
-    exportOpen = saveOpen = false;
+    exportOpen = saveOpen = helpOpen = false;
     libraryTab = t;
     libraryOpen = true;
   }
@@ -715,7 +716,7 @@
   let saveOpen = $state(false);
   let inLibrary = $state(false);
   async function toggleSaveMenu() {
-    exportOpen = false;
+    exportOpen = helpOpen = false;
     if (saveOpen) return (saveOpen = false);
     inLibrary = !!(await getEntry(tabs.active).catch(() => null));
     saveOpen = true;
@@ -1231,6 +1232,11 @@
     }
     if (!(e.ctrlKey || e.metaKey)) return;
     const k = e.key.toLowerCase();
+    if ((k === '/' || e.code === 'Slash') && !e.altKey) {
+      e.preventDefault();
+      if (!document.querySelector('dialog[open]')) showShortcuts();
+      return;
+    }
     if (empty && (k === 's' || k === 'p' || k === 'f' || k === 'h')) return e.preventDefault();
     if (k === 's') {
       e.preventDefault();
@@ -1293,8 +1299,16 @@
     return () => clearTimeout(timer);
   });
   function startTour() {
-    exportOpen = saveOpen = false;
+    exportOpen = saveOpen = helpOpen = false;
     tourOpen = true;
+  }
+
+  // Menu Bantuan (tombol ?): tur pengenalan dan daftar pintasan keyboard (juga Ctrl+/).
+  let helpOpen = $state(false);
+  let shortcutsOpen = $state(false);
+  function showShortcuts() {
+    exportOpen = saveOpen = helpOpen = false;
+    shortcutsOpen = true;
   }
 
   onMount(() => {
@@ -1347,7 +1361,7 @@
   onkeydown={(e) => {
     if (!signedIn) return;
     if (e.key === 'Escape') {
-      exportOpen = saveOpen = false;
+      exportOpen = saveOpen = helpOpen = false;
     }
     onKey(e);
   }}
@@ -1355,6 +1369,7 @@
     if (e.target.closest?.('.export')) return;
     exportOpen = false;
     saveOpen = false;
+    helpOpen = false;
   }}
 />
 
@@ -1443,7 +1458,30 @@
           {#if fullscreen}<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />{:else}<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />{/if}
         </svg>
       </button>
-      <button class="icon" data-tour="tour" onclick={startTour} title="Tur pengenalan aplikasi" aria-label="Tur aplikasi"><Icon name="help" /></button>
+      <div class="export">
+        <button
+          class="icon"
+          class:on={helpOpen}
+          data-tour="tour"
+          onclick={() => ((exportOpen = saveOpen = false), (helpOpen = !helpOpen))}
+          aria-haspopup="menu"
+          aria-expanded={helpOpen}
+          title="Bantuan: tur pengenalan dan pintasan keyboard"
+          aria-label="Bantuan"><Icon name="help" /></button
+        >
+        {#if helpOpen}
+          <div class="export-menu" role="menu">
+            <button role="menuitem" onclick={startTour}>
+              <Icon name="help" />
+              <strong>Tur pengenalan</strong><small>Kenali bagian-bagian aplikasi langkah demi langkah</small>
+            </button>
+            <button role="menuitem" onclick={showShortcuts}>
+              <Icon name="keyboard" />
+              <strong>Pintasan keyboard</strong><small>Daftar semua pintasan · Ctrl+/</small>
+            </button>
+          </div>
+        {/if}
+      </div>
       <button class="icon" onclick={toggleTheme} title={theme === 'dark' ? 'Mode terang' : 'Mode gelap'} aria-label="Ganti tema">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           {#if theme === 'dark'}<circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />{:else}<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" />{/if}
@@ -1477,7 +1515,7 @@
         {#if openNotes}<span class="badge note">{openNotes}</span>{/if}
       </button>
       <div class="export">
-        <button class="btn primary" data-tour="export" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
+        <button class="btn primary" data-tour="export" onclick={() => ((saveOpen = helpOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
           <Icon name="export" size={15} />
           {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
@@ -1510,7 +1548,7 @@
                 <strong>PDF gabungan semua tab…</strong><small>{tabs.list.length} SOP dalam satu PDF berdaftar isi</small>
               </button>
             {/if}
-            <button role="menuitem" class="sep" onclick={() => ((exportOpen = false), (metaOpen = true))}>
+            <button role="menuitem" class="divided" onclick={() => ((exportOpen = false), (metaOpen = true))}>
               <Icon name="info" />
               <strong>Properti dokumen…</strong><small>Judul, penulis, subjek, dan kata kunci berkas</small>
             </button>
@@ -1748,6 +1786,7 @@
   <LinkSopDialog bind:req={linkPick} />
   <DocMetaDialog doc={app.doc} bind:open={metaOpen} onsave={saveMeta} />
   <Tour bind:open={tourOpen} steps={TOUR_STEPS} ondone={() => setPref('tourDone', '1')} />
+  <ShortcutsDialog bind:open={shortcutsOpen} />
 
   {#if toast}
     {#key toast.n}

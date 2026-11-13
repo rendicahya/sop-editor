@@ -16,7 +16,9 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   Semuanya tetap bisa diubah per SOP.
 - **Tur pengenalan**: saat pertama kali masuk di sebuah browser, tur singkat menyorot bagian-bagian utama aplikasi satu
   per satu (bisa dilewati, juga dengan Esc; panah kiri/kanan untuk berpindah). Tur bisa dibuka lagi kapan saja lewat
-  tombol **?** di toolbar.
+  menu **?** (Bantuan) di toolbar. Dialog Pustaka (Lokal dan Daring), Asisten AI, dan Admin punya tombol **?** sendiri
+  untuk tur singkat isinya.
+- **Pintasan keyboard**: daftar semua pintasan dibuka dengan **Ctrl+/** atau dari menu Bantuan.
 - **Halaman 1 diedit langsung di pratinjau (WYSIWYG)**: klik teks di halaman untuk mengetik nama instansi, nomor,
   tanggal pembuatan/revisi/efektif (date picker), pengesahan, dan setiap butir ketentuan. Tanda tangan dibubuhkan pejabat pada hasil cetak, di ruang kosong bagian pengesahan.
 - Bagian Dasar Hukum, Kualifikasi Pelaksana, Keterkaitan, Peralatan/Perlengkapan, Peringatan, serta

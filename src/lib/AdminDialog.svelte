@@ -5,6 +5,8 @@
   import Icon from './Icon.svelte';
   import * as ui from './ask.svelte.js';
   import { dismiss } from './dismiss.js';
+  import TourButton from './TourButton.svelte';
+  import { ADMIN_TOUR } from './tourSteps.js';
   import { DEFAULTS, DEFAULT_FIELDS, defaultsMeta, applyDefaults } from './appDefaults.svelte.js';
 
   /** Pengaturan khusus admin: bawaan SOP baru, anggota, grup, dan penyimpanan. onnotify(pesan): toast di App. */
@@ -18,6 +20,8 @@
   ];
   let view = $state('defaults');
   let dialog;
+  // Tur singkat: langkah ber-`page` membuka halaman itu dulu.
+  const tourSteps = ADMIN_TOUR.map((s) => (s.page ? { ...s, before: () => (view = s.page) } : s));
 
   let usage = $state(null);
   let members = $state([]);
@@ -198,9 +202,11 @@
   ><Icon name={icon} size={15} /></button>
 {/snippet}
 
-<dialog bind:this={dialog} class="dialog" use:dismiss onclose={() => (open = false)}>
+<dialog bind:this={dialog} class="dialog" data-help="admin" use:dismiss onclose={() => (open = false)}>
   <header>
     <h2><Icon name="settings" size={18} />Admin</h2>
+    <span class="grow"></span>
+    <TourButton steps={tourSteps} label="Tur singkat Admin" />
     <button type="button" class="x" onclick={() => (open = false)} aria-label="Tutup"><Icon name="x" size={14} /></button>
   </header>
   <div class="body">
@@ -213,7 +219,7 @@
     </nav>
     <div class="admin">
       {#if view === 'storage'}
-      <section>
+      <section data-help="storage">
         <h3>Penyimpanan</h3>
         {#if usage}
           <p class="usage"><strong>{size(usage.bytes)}</strong> dari {size(usage.limit)} terpakai · sisa {size(Math.max(0, usage.limit - usage.bytes))}</p>
@@ -231,7 +237,7 @@
         {/if}
       </section>
       {:else if view === 'defaults'}
-      <section>
+      <section data-help="defaults">
         <h3>Bawaan SOP baru</h3>
         <small>
           Isian awal setiap SOP baru, juga dipakai Asisten AI. SOP yang sudah ada tidak berubah.
@@ -255,7 +261,7 @@
         </form>
       </section>
       {:else if view === 'members'}
-      <section>
+      <section data-help="members">
         <h3>Anggota <span class="muted">{members.length}</span></h3>
         <form onsubmit={addMember} class="row add-members">
           <textarea
@@ -300,7 +306,7 @@
         </ul>
       </section>
       {:else if view === 'groups'}
-      <section>
+      <section data-help="groups">
         <h3>Grup <span class="muted">{groups.length}</span></h3>
         <small>Grup bisa dipilih di Hak akses seperti email, sehingga semua anggotanya mendapat hak yang sama sekaligus. Anggota yang ditambahkan ke grup langsung mendapat hak grup itu.</small>
         <form onsubmit={addGroup} class="row">
@@ -358,8 +364,11 @@
   header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 0.4rem;
     margin-bottom: 0.75rem;
+  }
+  .grow {
+    flex: 1;
   }
   h2 {
     display: flex;
