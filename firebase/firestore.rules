@@ -171,7 +171,7 @@ service cloud.firestore {
     // ---- Kunci edit ----
     // locks/{sopId} { uid, name, at }: SOP yang sedang dibuka untuk diedit. Aplikasi memperbaruinya tiap 2 menit selama
     // pemegangnya aktif; setelah 5 menit tanpa pembaruan kunci dianggap lepas. Selama kunci berlaku, isinya hanya bisa
-    // disimpan pemegang kunci. RPS memakai rpsLocks (belum dipakai aplikasinya, jadi tidak pernah terkunci).
+    // disimpan pemegang kunci. RPS memakai rpsLocks.
     function lockPath(k, id) {
       return /databases/$(database)/documents/$(k == 'sops' ? 'locks' : 'rpsLocks')/$(id);
     }
@@ -531,6 +531,17 @@ service cloud.firestore {
         && (resource == null || resource.data.uid == uid() || !lockFresh(resource.data));
       allow delete: if isMember() && (resource.data.uid == uid() || !lockFresh(resource.data));
     }
+    match /rpsLocks/{id} {
+      allow read: if isMember();
+      allow create, update: if isMember()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'at'])
+        && request.resource.data.uid == uid()
+        && request.resource.data.name is string && request.resource.data.name.size() <= 120
+        && request.resource.data.at == request.time
+        && canEdit(get(sopPath('rps', id)).data)
+        && (resource == null || resource.data.uid == uid() || !lockFresh(resource.data));
+      allow delete: if isMember() && (resource.data.uid == uid() || !lockFresh(resource.data));
+    }
 
     // ---- Ruang penyimpanan ----
     // stats/usage (SOP) dan stats/rpsUsage (RPS): { bytes, limit, lastSop }; lastSop = id dokumen yang terakhir ditulis.
@@ -576,12 +587,13 @@ service cloud.firestore {
     // Satu dokumen per prodi. Admin membuat/menghapus prodi dan menunjuk pengelolanya (managers); pengelola prodi
     // mengedit isi katalog prodinya tanpa bisa mengubah daftar pengelola.
     function validCurriculum(d) {
-      return d.keys().hasOnly(['nama', 'departemen', 'managers', 'cpl', 'cpmk', 'updatedAt', 'updatedBy', 'updatedByName'])
+      return d.keys().hasOnly(['nama', 'departemen', 'managers', 'cpl', 'cpmk', 'mk', 'updatedAt', 'updatedBy', 'updatedByName'])
         && d.nama is string && d.nama.size() > 0 && d.nama.size() <= 120
         && d.departemen is string && d.departemen.size() <= 120
         && d.managers is list && d.managers.size() <= 50
         && d.cpl is list && d.cpl.size() <= 100
         && d.cpmk is list && d.cpmk.size() <= 300
+        && d.get('mk', []) is list && d.get('mk', []).size() <= 300
         && d.updatedAt == request.time
         && d.updatedBy == uid()
         && d.updatedByName is string && d.updatedByName.size() <= 120;

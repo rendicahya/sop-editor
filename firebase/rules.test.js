@@ -1103,6 +1103,21 @@ describe('RPS', () => {
     await assertFails(getDocs(collection(as('gml'), 'rps', 'r', 'comments')));
     await assertSucceeds(deleteDoc(cd('ali', 'r1')));
   });
+  it('kunci edit RPS: hanya pemegang hak edit; selama berlaku hanya pemegang kunci yang menyimpan', async () => {
+    await createRps(as('ali'), 'ali', 'r');
+    await updateDoc(doc(as('ali'), 'rps/r'), custom('ali', [], [BUD]));
+    const ld = (u, coll = 'rpsLocks') => doc(as(u), coll, 'r');
+    const lock = (u, coll) => setDoc(ld(u, coll), { uid: u, name: USERS[u].name, at: serverTimestamp() });
+    await assertFails(lock('gml'));
+    await assertFails(lock('ali', 'locks')); // koleksi kunci SOP tidak menerima id RPS
+    await assertSucceeds(lock('bud'));
+    await assertFails(lock('ali'));
+    await assertFails(saveRps(as('ali'), 'ali', 'r', await readRps('r'), '{"r":2}'));
+    await assertSucceeds(saveRps(as('bud'), 'bud', 'r', await readRps('r'), '{"r":3}'));
+    await assertFails(deleteDoc(ld('ali')));
+    await assertSucceeds(deleteDoc(ld('bud')));
+    await assertSucceeds(saveRps(as('ali'), 'ali', 'r', await readRps('r'), '{"r":4}'));
+  });
 });
 
 describe('bawaan SOP baru', () => {
@@ -1160,5 +1175,10 @@ describe('katalog kurikulum', () => {
     await assertFails(setDoc(doc(as('adm'), 'curricula/tif'), cat('adm', { nama: '' })));
     await assertFails(setDoc(doc(as('adm'), 'curricula/tif'), cat('adm', { lain: 1 })));
     await assertFails(setDoc(doc(as('adm'), 'curricula/tif'), cat('adm', { updatedBy: 'ali' })));
+  });
+  it('daftar mata kuliah (mk) opsional, berupa list, paling banyak 300', async () => {
+    await assertSucceeds(setDoc(doc(as('adm'), 'curricula/tif'), cat('adm', { mk: [{ id: 'm1', kode: 'IF101', nama: 'Algoritma' }] })));
+    await assertFails(setDoc(doc(as('adm'), 'curricula/tif'), cat('adm', { mk: 'IF101' })));
+    await assertFails(setDoc(doc(as('adm'), 'curricula/tif'), cat('adm', { mk: Array.from({ length: 301 }, (_, i) => ({ id: 'm' + i })) })));
   });
 });
