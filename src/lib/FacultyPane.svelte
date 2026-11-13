@@ -16,7 +16,7 @@
   import LinkMapDialog from './LinkMapDialog.svelte';
   import { review, setReviewYears, REVIEW_CHOICES, reviewSince, isReviewDue } from './review.svelte.js';
   import { formatTanggal } from './model.js';
-  import { DEFAULTS, BUILTIN_DEFAULTS, DEFAULT_FIELDS, defaultsMeta, applyDefaults } from './appDefaults.svelte.js';
+  import { DEFAULTS, DEFAULT_FIELDS, defaultsMeta, applyDefaults } from './appDefaults.svelte.js';
   import { notes, copyLink, markMentionsSeen, unseenMentions } from './comments.svelte.js';
 
   /**
@@ -1111,8 +1111,7 @@
   // Spasi di tepi dibuang; kop tetap boleh beberapa baris.
   const tidyDefaults = (d) =>
     Object.fromEntries(DEFAULT_FIELDS.map(([k, , max]) => [k, (k === 'institution' ? d[k].split('\n').map((l) => l.trim()).filter(Boolean).join('\n') : d[k].trim()).slice(0, max)]));
-  // Belum pernah disimpan ke server: tetap bisa disimpan walau isinya sama dengan bawaan aplikasi.
-  const dfltDirty = $derived(!defaultsMeta.custom || DEFAULT_FIELDS.some(([k]) => tidyDefaults(dflt)[k] !== DEFAULTS[k]));
+  const dfltDirty = $derived(DEFAULT_FIELDS.some(([k]) => tidyDefaults(dflt)[k] !== DEFAULTS[k]));
   async function saveDefaults(e) {
     e?.preventDefault();
     if (!dfltDirty || dfltBusy) return;
@@ -1130,9 +1129,9 @@
       dfltBusy = false;
     }
   }
-  function resetDefaultsForm(src) {
-    dflt = pickDefaults(src);
-    dfltEdited = src !== DEFAULTS;
+  function resetDefaultsForm() {
+    dflt = pickDefaults(DEFAULTS);
+    dfltEdited = false;
   }
   const dfltWhen = $derived(defaultsMeta.updatedAt ? new Date(defaultsMeta.updatedAt).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '');
 
@@ -1577,7 +1576,7 @@
           <h3>Bawaan SOP baru</h3>
           <small>
             Isian awal setiap SOP baru, juga dipakai Asisten AI. SOP yang sudah ada tidak berubah.
-            {#if defaultsMeta.custom && dfltWhen}Terakhir diubah {defaultsMeta.updatedByName || 'admin'}, {dfltWhen}.{:else}Saat ini memakai bawaan aplikasi.{/if}
+            {#if defaultsMeta.custom && dfltWhen}Terakhir diubah {defaultsMeta.updatedByName || 'admin'}, {dfltWhen}.{:else}<strong>Belum diatur:</strong> SOP baru dimulai dengan kop, nomor, dan pengesah kosong.{/if}
           </small>
           <form class="defaults" onsubmit={saveDefaults} oninput={() => (dfltEdited = true)}>
             {#each DEFAULT_FIELDS as [k, label, max] (k)}
@@ -1586,16 +1585,13 @@
                 {#if k === 'institution'}
                   <textarea rows="3" maxlength={max} bind:value={dflt[k]} placeholder="Satu baris per tingkat, dari kementerian sampai unit kerja"></textarea>
                 {:else}
-                  <input maxlength={max} bind:value={dflt[k]} placeholder={k === 'disahkanNip' ? 'NIP. …' : k === 'nomor' ? 'mis. UN10/F15/' : ''} />
+                  <input maxlength={max} bind:value={dflt[k]} placeholder={k === 'disahkanNip' ? 'NIP. …' : k === 'nomor' ? 'Bagian awal nomor yang sama untuk semua SOP' : ''} />
                 {/if}
               </label>
             {/each}
             <div class="row">
               <button class="btn small primary" disabled={!dfltDirty || dfltBusy}><Icon name="save" size={14} />{dfltBusy ? 'Menyimpan…' : 'Simpan bawaan'}</button>
-              {#if dfltEdited}<button type="button" class="btn small ghost" onclick={() => resetDefaultsForm(DEFAULTS)}>Batalkan perubahan</button>{/if}
-              <button type="button" class="btn small ghost" onclick={() => resetDefaultsForm(BUILTIN_DEFAULTS)} title="Isi formulir dengan bawaan asli aplikasi; belum tersimpan sampai Anda menekan Simpan">
-                <Icon name="restore" size={14} />Isi dengan bawaan aplikasi
-              </button>
+              {#if dfltEdited}<button type="button" class="btn small ghost" onclick={resetDefaultsForm}>Batalkan perubahan</button>{/if}
             </div>
           </form>
         </section>

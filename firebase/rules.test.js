@@ -1086,7 +1086,7 @@ describe('RPS', () => {
 describe('bawaan SOP baru', () => {
   const ref = (u) => doc(as(u), 'config/sop');
   const vals = (u, patch = {}) => ({
-    institution: 'KEMENTERIAN\nFAKULTAS\nUNIVERSITAS', nomor: 'UN10/F15/', disahkanJabatan: 'DEKAN', disahkanNama: 'Dr. Baru', disahkanNip: 'NIP. 1',
+    institution: 'KEMENTERIAN\nFAKULTAS\nUNIVERSITAS', nomor: 'ABC/01/', disahkanJabatan: 'DEKAN', disahkanNama: 'Dr. Baru', disahkanNip: 'NIP. 1',
     updatedAt: serverTimestamp(), updatedBy: u, updatedByName: USERS[u].name, ...patch
   });
   it('admin bisa mengatur; anggota hanya membaca; bukan anggota tidak bisa membaca', async () => {

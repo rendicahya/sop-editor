@@ -10,9 +10,10 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
 ## Fitur
 
 - **Hanya untuk akun terdaftar.** Aplikasi baru bisa dipakai setelah masuk dengan akun Google (@ub.ac.id atau @gmail.com) yang sudah didaftarkan admin di Pustaka Daring › Anggota. Akun lain hanya melihat pesan "belum terdaftar". Dokumen tetap tersimpan di perangkat dan tidak dikirim ke mana pun hanya karena login. Keanggotaan yang terakhir berhasil diperiksa diingat, jadi aplikasi tetap bisa dibuka saat luring; begitu daring lagi, akun yang sudah dihapus admin langsung tertutup.
-- Format baku SOP Universitas Brawijaya: logo UB selalu tercetak; dokumen baru otomatis berisi kop kementerian sampai
-  "UNIVERSITAS BRAWIJAYA" (kementerian, Fakultas Ilmu Komputer, UB), awalan nomor SOP `UN10/F15/`, pengesah Dekan FILKOM beserta nama dan NIP-nya,
-  serta tanggal pembuatan dan tanggal efektif hari ini. Semuanya tetap bisa diubah.
+- Format baku SOP Universitas Brawijaya: logo UB selalu tercetak; dokumen baru otomatis berisi kop instansi, awalan nomor
+  SOP, dan pengesah (jabatan, nama, NIP) sesuai **Bawaan SOP baru** yang diatur admin, serta tanggal pembuatan dan
+  tanggal efektif hari ini. Tidak ada nilai bawaan yang ditulis di kode; sebelum admin mengaturnya, isian itu kosong.
+  Semuanya tetap bisa diubah per SOP.
 - **Halaman 1 diedit langsung di pratinjau (WYSIWYG)**: klik teks di halaman untuk mengetik nama instansi, nomor,
   tanggal pembuatan/revisi/efektif (date picker), pengesahan, dan setiap butir ketentuan. Tanda tangan dibubuhkan pejabat pada hasil cetak, di ruang kosong bagian pengesahan.
 - Bagian Dasar Hukum, Kualifikasi Pelaksana, Keterkaitan, Peralatan/Perlengkapan, Peringatan, serta
@@ -235,7 +236,7 @@ SOP disimpan di Firestore sebagai teks JSON saja; server menolak isi yang memuat
 - **Bawaan SOP baru** diatur admin di tab **Admin**: kop instansi, awalan nomor SOP, serta jabatan, nama, dan NIP pengesah
   (mis. saat dekan berganti). Isian ini dipakai setiap SOP baru dan oleh Asisten AI (termasuk pilihan "perbarui kop dan
   pengesah" saat mengimpor SOP lama), langsung berlaku bagi semua anggota tanpa memuat ulang, dan diingat di browser agar
-  tetap berlaku saat luring. SOP yang sudah ada tidak berubah. Disimpan di Firestore `config/sop`: semua anggota bisa
+  tetap berlaku saat luring. SOP yang sudah ada tidak berubah. Sebelum diatur, isian ini kosong (tidak ada nilai di kode). Disimpan di Firestore `config/sop`: semua anggota bisa
   membaca, hanya admin yang bisa mengubah.
 
 Menyiapkan proyek Firebase (cukup sekali):
