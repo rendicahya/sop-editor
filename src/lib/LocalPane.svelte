@@ -194,7 +194,6 @@
       {#if chosen.length}
         <span>{chosen.length} dipilih</span>
         <button class="btn small danger" onclick={removePicked}><Icon name="trash" size={14} />Hapus terpilih</button>
-        <button class="link" onclick={() => (picked = [])}>Batal</button>
       {/if}
       <span class="grow"></span>
       <SortSelect />
@@ -382,13 +381,6 @@
     align-items: center;
     gap: 0.35rem;
     padding-left: 0.6rem;
-  }
-  .selbar .link {
-    border: 0;
-    background: none;
-    color: var(--accent);
-    cursor: pointer;
-    font-size: 0.8rem;
   }
   .pick {
     flex: none;

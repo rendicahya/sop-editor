@@ -19,6 +19,7 @@
   import { formatTanggal, todayIso } from './model.js';
   import { registerXlsx } from './register.js';
   import { downloadBlob } from './files.js';
+  import { sopZip, sopText, safeName } from './sopZip.js';
     import { notes, copyLink, markMentionsSeen, unseenMentions } from './comments.svelte.js';
 
   /**
@@ -1050,6 +1051,47 @@
     onbook(sops, title);
   }
 
+  // ---- Cadangan ZIP ----
+  /**
+   * Berkas ZIP dari entri `list`: SOP di akar ZIP, isi folder (dan subfoldernya) di bawah nama folder itu.
+   * Folder kosong tidak ikut karena ZIP hanya memuat berkas .sop.
+   */
+  function zipFiles(list) {
+    const files = [];
+    const seen = new Set();
+    const put = (s, dirs) => {
+      if (seen.has(s.id) || !s.json) return;
+      seen.add(s.id);
+      files.push({ dirs, name: titleOf(s), json: s.json, mtime: s.updatedAt });
+    };
+    const walk = (id, dirs, depth = 0) => {
+      if (depth > 50) return;
+      for (const s of sorted(live.filter((x) => folderOf(x) === id), 'name-asc', titleOf, (x) => x.updatedAt)) put(s, dirs);
+      for (const f of childrenOf(id)) walk(f.id, [...dirs, f.name], depth + 1);
+    };
+    for (const d of list) (d.isFolder ? walk(d.item.id, [d.item.name]) : d.root ? walk(null, []) : put(d.item, d.dirs ?? []));
+    return files;
+  }
+  function downloadZip(list, name) {
+    const files = zipFiles(list);
+    if (!files.length) return ui.alert('Tidak ada SOP untuk diunduh.', { title: 'Unduh ZIP' });
+    try {
+      downloadBlob(sopZip(files), `${safeName(name).replace(/ /g, '-')}-${todayIso()}.zip`);
+      onnotify(`${files.length} SOP diunduh dalam berkas ZIP`);
+    } catch (e) {
+      ui.alert('ZIP gagal dibuat: ' + e.message, { title: 'Unduh ZIP' });
+    }
+  }
+  /** Tombol toolbar: hasil yang tampil saat mencari/menyaring (dengan jalur foldernya), selain itu folder ini atau seluruh pustaka. */
+  function downloadHere() {
+    if (searching) return downloadZip(shownLive.map((s) => ({ item: s, dirs: pathOf(folderOf(s)).map((f) => f.name) })), 'Hasil-pencarian-SOP');
+    if (here) return downloadZip([entryOf(byId.get(here), true)], byId.get(here).name);
+    downloadZip([{ root: true }], 'Pustaka-Daring');
+  }
+  function downloadSop(s) {
+    downloadBlob(new Blob([sopText(s.json)], { type: 'application/json' }), `${safeName(titleOf(s))}.sop`);
+  }
+
   // ---- Hak akses ----
   function openAccess(kind, item) {
     const up = kind === 'folders' ? parents.get(item.id) : folderOf(item);
@@ -1100,6 +1142,7 @@
     return [
       { head: `${list.length} item dipilih` },
       { label: 'Gabung jadi satu PDF…', icon: 'book', run: () => makeBook(list) },
+      { label: 'Unduh sebagai ZIP', icon: 'download', run: () => downloadZip(list, 'SOP-terpilih') },
       ...(withPrefix(list).length ? [{ label: `Pindahkan awalan nama ke kode (${withPrefix(list).length} SOP)…`, icon: 'pencil', run: () => prefixToCode(withPrefix(list)) }] : []),
       { sep: true },
       { label: `Pindahkan ${n} item…`, icon: 'move', run: () => startMove(own), disabled: !n },
@@ -1136,6 +1179,7 @@
       ...hereItems(f.id),
       { sep: true },
       { label: 'Gabung isinya jadi satu PDF…', icon: 'book', run: () => makeBook([entryOf(f, true)]), disabled: !sopsOf([entryOf(f, true)]).length },
+      { label: 'Unduh isinya sebagai ZIP', icon: 'download', run: () => downloadZip([entryOf(f, true)], f.name), disabled: !sopsOf([entryOf(f, true)]).length },
       { label: accessTip(f), icon: 'users', run: () => openAccess('folders', f) },
       ...(canEdit(f) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => renameFolder(f) }] : []),
       ...(manage
@@ -1155,6 +1199,7 @@
       { sep: true },
       { label: 'Detail', icon: 'info', run: () => (infoOf = s.id) },
       { label: 'Duplikat', icon: 'copy', run: () => duplicate(s) },
+      { label: 'Unduh berkas .sop', icon: 'download', run: () => downloadSop(s) },
       { label: 'Riwayat', icon: 'history', run: () => toggleHistory(s) },
       { label: 'Bandingkan versi…', icon: 'compare', run: () => compareVersions(s) },
       { label: 'Salin tautan', icon: 'link', run: async () => onnotify(await copyLink(s.id)) },
@@ -1316,20 +1361,28 @@
   {#if selRows.length}
     {@const own = selRows.filter((d) => canManage(d.item))}
     {@const pre = withPrefix(selRows)}
+    {@const all = rows.every((r) => selected.has(r.key))}
     <div class="selbar" role="toolbar" aria-label="Tindakan untuk yang dipilih">
-      <strong>{selRows.length} dipilih</strong>
+      <label class="pickall" title={all ? 'Batal pilih (Esc)' : 'Pilih semua'}>
+        <input
+          type="checkbox"
+          class="pick"
+          checked={all}
+          indeterminate={!all}
+          onchange={() => (all ? selected.clear() : rows.forEach((r) => selected.add(r.key)))}
+        />
+        <strong>{selRows.length} dipilih</strong>
+      </label>
       {#if view === 'bin'}
         <button type="button" class="btn" onclick={() => restoreMany(selRows.map((d) => d.item))}><Icon name="restore" size={14} /> Pulihkan</button>
         <button type="button" class="btn danger" onclick={() => purgeMany(selRows.map((d) => d.item))}><Icon name="trash" size={14} /> Hapus permanen</button>
       {:else}
         <button type="button" class="btn" onclick={() => makeBook(selRows)} title="Gabungkan SOP yang dipilih (termasuk isi folder) menjadi satu PDF berdaftar isi"><Icon name="book" size={14} /> Gabung PDF</button>
+        <button type="button" class="btn" onclick={() => downloadZip(selRows, 'SOP-terpilih')} title="Unduh SOP yang dipilih (termasuk isi folder) sebagai berkas .sop dalam ZIP"><Icon name="download" size={14} /> Unduh ZIP</button>
         {#if pre.length}<button type="button" class="btn" onclick={() => prefixToCode(pre)} title="Awalan nama seperti B.2 dipindah ke kode pustaka"><Icon name="pencil" size={14} /> Awalan ke kode ({pre.length})</button>{/if}
         <button type="button" class="btn" disabled={!own.length} onclick={() => startMove(own)}><Icon name="move" size={14} /> Pindahkan</button>
         <button type="button" class="btn danger" disabled={!own.length} onclick={() => deleteMany(own)}><Icon name="trash" size={14} /> Hapus</button>
       {/if}
-      <span class="grow"></span>
-      <button type="button" class="link" onclick={() => rows.forEach((r) => selected.add(r.key))}>Pilih semua</button>
-      <button type="button" class="link" onclick={() => selected.clear()}>Batal pilih</button>
     </div>
   {/if}
 {/snippet}
@@ -1473,6 +1526,7 @@
             {@render ib('filter', filtering ? 'Filter (aktif)' : 'Filter', () => (filterOpen = !filterOpen), { on: filterOpen || filtering, expanded: filterOpen || filtering })}
             <SortSelect />
             {@render ib('table', searching ? 'Unduh daftar induk SOP (XLSX) dari hasil yang tampil' : here ? 'Unduh daftar induk SOP (XLSX) folder ini beserta subfoldernya' : 'Unduh daftar induk SOP (XLSX) seluruh pustaka', exportRegister)}
+            {@render ib('download', searching ? 'Unduh cadangan (ZIP) hasil yang tampil' : here ? 'Unduh cadangan (ZIP) folder ini beserta subfoldernya' : 'Unduh cadangan (ZIP) seluruh pustaka', downloadHere)}
             {#if here && !searching}
               {@render ib('users', accessTip(byId.get(here)), () => openAccess('folders', byId.get(here)))}
             {/if}
@@ -2177,7 +2231,13 @@
   }
   .selbar strong {
     color: var(--accent);
+  }
+  .pickall {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
     margin-right: 0.3rem;
+    cursor: pointer;
   }
   .selbar .btn {
     padding: 0.22rem 0.6rem;

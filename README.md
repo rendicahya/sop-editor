@@ -103,6 +103,11 @@ Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase untuk Pu
   menurut kode lalu nama. Isinya hasil yang tampil saat mencari atau menyaring; selain itu folder yang dibuka beserta
   subfoldernya (di Utama: seluruh pustaka yang bisa Anda lihat). Baris judul kolom dibekukan, berfilter, dan diulang
   di tiap halaman cetak (A4 mendatar).
+- **Cadangan ZIP** (tombol unduh di atas daftar): mengunduh SOP sebagai berkas `.sop` dalam ZIP dengan susunan folder
+  yang sama, dari cakupan yang sama dengan daftar induk. Bisa juga dari klik kanan folder › **Unduh isinya sebagai
+  ZIP**, dari pilihan (**Unduh ZIP**), atau satu SOP (klik kanan › **Unduh berkas .sop**). ZIP ini bisa diunggah
+  kembali lewat **Unggah berkas .sop atau .zip**; foldernya ikut dibuat. Kode pustaka, hak akses, riwayat, komentar,
+  dan folder kosong tidak ikut.
 - **PDF gabungan (buku SOP)**: beberapa SOP digabung menjadi satu PDF, diawali halaman daftar isi (nomor, nama, dan
   halaman tiap SOP; klik untuk melompat) dan bookmark per SOP. Dari Pustaka Daring: pilih SOP atau folder lalu
   **Gabung PDF** (isi folder dan subfoldernya ikut), atau klik kanan folder › **Gabung isinya jadi satu PDF…**. Dari
